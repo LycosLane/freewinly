@@ -44,8 +44,10 @@ It proves that everything a modern Windows PC actually needs—keeping all appli
   Reclaims disk space from user and system temp folders, WinGet download caches, and DirectX shader caches—only purging files older than 7 days to prevent application crashes.
 - 🔌 **Extensible Plugin Modules**  
   Add new maintenance routines in seconds! Just drop a numbered `.ps1` file into `modules/`, and FreeWinly automatically discovers it and adds it to the interactive menu.
+- 🩺 **Hardware & Stability Doctor**  
+  Scans Device Manager and Windows Event Logs, translating cryptic codes into human-actionable fixes (e.g. Code 28 driver updates, recurring application crashes, and dirty shutdowns).
 - 🤖 **AI-Native Diagnostic Readiness**  
-  Includes a 100% read-only diagnostic auditor (`scripts/system-audit.ps1`) and `SKILL.md` ready to pair with AI coding assistants (Antigravity, Claude Code, Cursor) to analyze Windows Event Logs and crash dumps into plain language.
+  Includes `SKILL.md` ready to pair with AI coding assistants (Antigravity, Claude Code, Cursor) to analyze system health in 1 single turn (~300 tokens) without burning context.
 
 ---
 
@@ -121,8 +123,11 @@ FreeWinly works seamlessly from PowerShell scripts, CI pipelines, and terminal s
 # 100% read-only hardware, process, and event log diagnostic audit
 .\freewinly.ps1 -Audit
 
+# Run with a custom config JSON file
+.\freewinly.ps1 -ConfigPath "custom-profile.json" -Run
+
 # Run specific modules by name
-.\freewinly.ps1 -Modules 10_software_updates,30_ssd_trim -Run
+.\freewinly.ps1 -Modules 05_hardware_health,10_software_updates -Run
 
 # Show help
 .\freewinly.ps1 -HelpMe
@@ -136,11 +141,14 @@ Every maintenance routine lives in [`modules/`](modules/) as an independent scri
 
 ```text
 FreeWinly/
-├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation)
+├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
 ├── freewinly.cmd                <-- Double-clickable launcher
 ├── install-shortcut.ps1         <-- Start Menu shortcut generator
 ├── config.json                  <-- Exclusions, enabled modules & drive settings
+├── SKILL.md                     <-- AI Agent Playbook
 └── modules/
+    ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
+    ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
     ├── 10_software_updates.ps1  <-- Winget updates
     ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
     ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization

@@ -15,10 +15,13 @@
     Performs a dry-run preview across enabled or specified modules without altering system state.
 
 .PARAMETER Audit
-    Runs the 100% read-only diagnostic system audit (hardware, logs, memory, boot).
+    Alias for -Check. Runs the 100% read-only diagnostic system inspection (hardware, logs, memory, updates, storage).
 
 .PARAMETER Modules
-    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 10_software_updates,30_ssd_trim).
+    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 05_hardware_health,10_software_updates).
+
+.PARAMETER ConfigPath
+    Optional path to a custom configuration JSON file (defaults to .\config.json).
 
 .PARAMETER HelpMe
     Displays CLI usage instructions and examples.
@@ -36,12 +39,8 @@
     Runs all default modules immediately with automatic JIT elevation if needed.
 
 .EXAMPLE
-    .\freewinly.ps1 -Audit
-    Executes the comprehensive read-only system diagnostic auditor.
-
-.EXAMPLE
-    .\freewinly.ps1 -Modules 10_software_updates,30_ssd_trim -Run
-    Runs only the specified modules.
+    .\freewinly.ps1 -ConfigPath "custom-config.json" -Run
+    Runs FreeWinly using a custom configuration file.
 #>
 
 [CmdletBinding()]
@@ -50,6 +49,7 @@ param(
     [switch]$Check,
     [switch]$Audit,
     [string[]]$Modules = $null,
+    [string]$ConfigPath = $null,
     [switch]$HelpMe
 )
 
@@ -57,7 +57,15 @@ $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $projectRoot = $PSScriptRoot
-$configPath  = Join-Path $projectRoot "config.json"
+$configPath  = if ($ConfigPath -and (Test-Path $ConfigPath)) {
+    $ConfigPath
+} elseif ($ConfigPath) {
+    Write-Warning "Specified config file '$ConfigPath' not found. Falling back to default config.json."
+    Join-Path $projectRoot "config.json"
+} else {
+    Join-Path $projectRoot "config.json"
+}
+
 $modulesDir  = Join-Path $projectRoot "modules"
 $logsDir     = Join-Path $projectRoot "logs"
 $logFile     = Join-Path $logsDir "latest-run.log"
@@ -84,33 +92,26 @@ if ($HelpMe) {
     Show-Banner
     Write-Host @"
 CLI Usage:
-  .\freewinly.ps1                   Interactive mode (10s countdown, TUI menu, JIT elevation)
-  .\freewinly.ps1 -Check            Dry-run preview across enabled modules (no changes made)
-  .\freewinly.ps1 -Run              Execute enabled modules immediately
-  .\freewinly.ps1 -Audit            Run 100% read-only system health & hardware audit
-  .\freewinly.ps1 -Modules <list>   Specify modules to run or check (e.g. -Modules 10_software_updates,30_ssd_trim)
-  .\freewinly.ps1 -HelpMe           Show this help message
+  .\freewinly.ps1                      Interactive mode (10s countdown, TUI menu, JIT elevation)
+  .\freewinly.ps1 -Check               Dry-run preview / diagnostic audit (no changes made)
+  .\freewinly.ps1 -Run                 Execute enabled modules immediately
+  .\freewinly.ps1 -Audit               Alias for -Check (100% read-only health & stability audit)
+  .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
+  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 05_hardware_health,10_software_updates)
+  .\freewinly.ps1 -HelpMe              Show this help message
 
 Module CLI Invocations:
   Individual modules in .\modules\ can also be called directly:
-  .\modules\30_ssd_trim.ps1 -Action Info
-  .\modules\30_ssd_trim.ps1 -Action Check
+  .\modules\05_hardware_health.ps1 -Action Check
+  .\modules\06_event_log_health.ps1 -Action Check
   .\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
 "@ -ForegroundColor Yellow
     exit 0
 }
 
-# ------------------------------------------------------------------
-# Diagnostic Audit Direct CLI Shortcut
-# ------------------------------------------------------------------
+# -Audit is a friendly alias for -Check
 if ($Audit) {
-    $auditScript = Join-Path $projectRoot "scripts\system-audit.ps1"
-    if (Test-Path $auditScript) {
-        & $auditScript
-    } else {
-        Write-Host "Audit script not found at: $auditScript" -ForegroundColor Red
-    }
-    exit 0
+    $Check = $true
 }
 
 # ==================================================================
@@ -151,7 +152,11 @@ function Run-OnboardingWizard {
     }
 
     $existingConfig = if (Test-Path $configPath) { Get-Content $configPath -Raw | ConvertFrom-Json } else { $null }
-    $enabled = if ($existingConfig -and $existingConfig.enabledModules) { $existingConfig.enabledModules } else { @('10_software_updates', '20_cache_cleanup', '30_ssd_trim') }
+    $enabled = if ($existingConfig -and $existingConfig.enabledModules) {
+        $existingConfig.enabledModules
+    } else {
+        @('05_hardware_health', '06_event_log_health', '10_software_updates', '20_cache_cleanup', '30_ssd_trim')
+    }
 
     $newConfig = [ordered]@{
         preCommands           = @()
@@ -163,6 +168,7 @@ function Run-OnboardingWizard {
         enabledModules        = @($enabled)
         cleanupTempMinAgeDays = 7
         eventLogLookbackDays  = 7
+        hddDefragMinDays      = 30
     }
 
     $newConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
@@ -230,13 +236,13 @@ foreach ($mf in $moduleFiles) {
 }
 
 # ==================================================================
-# 3. DRY-RUN CHECK MODE (-Check)
+# 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
 # ==================================================================
 if ($Check) {
     Show-Banner
     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
-    Write-Host "No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
+    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
+    Write-Host "100% Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
     foreach ($m in $targetModules) {
         try {
@@ -246,7 +252,7 @@ if ($Check) {
         }
     }
 
-    Write-Host "`n=== Dry-Run Check Completed Successfully ===" -ForegroundColor Green
+    Write-Host "`n=== Diagnostic Audit & Dry-Run Check Completed Successfully ===" -ForegroundColor Green
     exit 0
 }
 
@@ -289,8 +295,7 @@ if (-not $Run) {
         $selectedIndex = 0
         $actions = @(
             @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
-            @{ Label = "[   C   ]  Dry-Run Check Preview (No changes)"; Key = "C" },
-            @{ Label = "[   A   ]  Run System Diagnostic Audit (Read-Only)"; Key = "A" },
+            @{ Label = "[   C   ]  Dry-Run Check / System Audit (No changes)"; Key = "C" },
             @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
             @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
             @{ Label = "[   I   ]  Reinstall Start Menu Shortcut"; Key = "I" },
@@ -344,54 +349,44 @@ if (-not $Run) {
                         # Run All Checked Tasks
                         $running = $false
                     } elseif ($selectedIndex -eq ($discoveredModules.Count + 1)) {
-                        # Dry-Run Check
+                        # Dry-Run Check / Audit
                         Clear-Host
                         Show-Banner
-                        $targetModules = $discoveredModules | Where-Object { $_.Enabled }
-                        Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+                        $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
+                        Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
                         foreach ($m in $targetModules) {
                             try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
                         }
                         Read-Host "`nPress Enter to return to menu"
                     } elseif ($selectedIndex -eq ($discoveredModules.Count + 2)) {
-                        # Audit
-                        Clear-Host
-                        & (Join-Path $projectRoot "scripts\system-audit.ps1")
-                        Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
                         # Save
                         $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
                         $config.enabledModules = @($enabledList)
                         $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
                         Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
                         Start-Sleep -Milliseconds 800
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
                         # Onboarding
                         Run-OnboardingWizard
                         $config = Get-Content $configPath -Raw | ConvertFrom-Json
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
                         # Install shortcut
                         & (Join-Path $projectRoot "install-shortcut.ps1")
                         Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 6)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
                         # Quit
                         Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
                         exit 0
                     }
                 }
-                "C" {
+                { $_ -in @("C", "A") } {
                     Clear-Host
                     Show-Banner
-                    $targetModules = $discoveredModules | Where-Object { $_.Enabled }
-                    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+                    $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
+                    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
                     foreach ($m in $targetModules) {
                         try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
                     }
-                    Read-Host "`nPress Enter to return to menu"
-                }
-                "A" {
-                    Clear-Host
-                    & (Join-Path $projectRoot "scripts\system-audit.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
                 "S" {
@@ -434,7 +429,7 @@ if ($needsAdmin -and -not $isAdmin) {
     Write-Host "`nSelected tasks require Administrator privileges." -ForegroundColor Yellow
     Write-Host "Elevating FreeWinly runner..." -ForegroundColor Cyan
     $selectedNames = ($activeModules | Select-Object -ExpandProperty BaseName) -join ','
-    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run -Modules `"$selectedNames`""
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
     exit 0
 }
 
