@@ -19,6 +19,7 @@ FreeWinly/
 │   ├── 10_software_updates.ps1  <-- Winget updates (respects config exclusions)
 │   ├── 20_cache_cleanup.ps1     <-- Safe temp/cache cleaning (> 7 days)
 │   ├── 30_ssd_trim.ps1          <-- SSD NVMe TRIM ReTrim optimization
+│   ├── 35_hdd_defrag.ps1        <-- Mechanical HDD Defrag (auto-skips on SSD-only PCs)
 │   └── 40_windows_updates.ps1   <-- Native Windows OS & Defender Updates
 ├── scripts/
 │   └── system-audit.ps1         <-- 100% read-only diagnostic audit script

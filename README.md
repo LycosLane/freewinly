@@ -144,6 +144,7 @@ FreeWinly/
     ├── 10_software_updates.ps1  <-- Winget updates
     ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
     ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
+    ├── 35_hdd_defrag.ps1        <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
     └── 40_windows_updates.ps1   <-- Windows Update COM API
 ```
 

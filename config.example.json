@@ -11,5 +11,6 @@
     "30_ssd_trim"
   ],
   "cleanupTempMinAgeDays": 7,
-  "eventLogLookbackDays": 7
+  "eventLogLookbackDays": 7,
+  "hddDefragMinDays": 30
 }

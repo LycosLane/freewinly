@@ -202,6 +202,12 @@ foreach ($mf in $moduleFiles) {
     $defaultVal    = if ($info -and $null -ne $info.Default) { $info.Default } else { $true }
     $requiresAdmin = if ($info -and $null -ne $info.RequiresAdmin) { $info.RequiresAdmin } else { $false }
     $options       = if ($info -and $info.Options) { $info.Options } else { @{} }
+    $isApplicable  = if ($info -and $null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }
+
+    # If the module is not applicable to this system (e.g. HDD defrag on 100% SSD PC), skip unless explicitly called via CLI
+    if (-not $isApplicable -and -not ($Modules -and $Modules -contains $baseName)) {
+        continue
+    }
 
     $isEnabled = if ($Modules) {
         $Modules -contains $baseName
@@ -227,8 +233,8 @@ foreach ($mf in $moduleFiles) {
 # ==================================================================
 if ($Check) {
     Show-Banner
-    $targetModules = $discoveredModules | Where-Object { $_.Enabled }
-    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+    $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
+    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
     Write-Host "No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
     foreach ($m in $targetModules) {
@@ -414,7 +420,7 @@ if (-not $Run) {
 # ==================================================================
 # 5. JUST-IN-TIME (JIT) ELEVATION CHECK
 # ==================================================================
-$activeModules = $discoveredModules | Where-Object { $_.Enabled }
+$activeModules = @($discoveredModules | Where-Object { $_.Enabled })
 if ($activeModules.Count -eq 0) {
     Write-Host "No modules selected to run. Exiting." -ForegroundColor Yellow
     exit 0
