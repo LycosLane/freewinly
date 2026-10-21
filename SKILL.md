@@ -51,6 +51,7 @@ Step 1: AI runs `.\freewinly.ps1 -Check` (or -Audit)
         ▼
 Step 2: AI analyzes findings & updates `config.json`
         └── Excludes failing packages or adds uninstalls.
+        └── Stages natural language postponements (e.g. "skip Blender for 1 week").
         └── Configures desired cleanup thresholds or pre/post commands.
         │
         ▼
@@ -62,6 +63,20 @@ Step 4: AI informs user to execute elevated maintenance
         └── "I audited your PC and prepared the optimizations in config.json.
              Simply press Windows Key, type 'FreeWinly', and hit Enter!"
 ```
+
+### Natural Language Postponements (Zero-Friction User Experience)
+When a user says:
+* *"Don't update Photoshop for the next two weeks"*
+* *"Hold off on updating Blender until next Monday, I'm working on a project"*
+
+The AI agent should:
+1. Identify the package ID (or name).
+2. Calculate the target ISO date (`YYYY-MM-DD`).
+3. Add a structured postponement object into `config.json` under `excluded`:
+   ```json
+   { "id": "BlenderFoundation.Blender", "until": "2026-10-29", "reason": "User requested hold during active project" }
+   ```
+4. Confirm to the user: *"Done! Blender updates are postponed until October 29th. FreeWinly will automatically clean up the exclusion once that date passes."*
 
 ---
 

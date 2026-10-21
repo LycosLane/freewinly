@@ -264,9 +264,15 @@ FreeWinly stores rules in a human-readable `config.json`:
 ```
 
 * **Excluding Self-Updating Launchers:** Add app IDs or names to `excluded` so Winget skips them.
-* **Temporary Postponements:** Want to postpone an update for a week?  
-  `{ "id": "Audacity.Audacity", "until": "2026-10-28", "reason": "Active project" }`  
-  When the date expires, FreeWinly automatically removes the exclusion!
+* **Temporary Postponements (Ideal for AI Assistants):**  
+  Want to postpone an update for a few days or weeks while working on a critical project? You don't have to edit JSON manually—simply tell your AI:  
+  > *"Hey, don't update Blender or Audacity for the next week, I'm in the middle of a project."*  
+  
+  Your AI assistant automatically calculates the date and stages the postponement in `config.json`:  
+  ```json
+  { "id": "Audacity.Audacity", "until": "2026-10-29", "reason": "Active project deadline" }
+  ```  
+  FreeWinly respects the deadline, skips the app during upgrades, and **automatically cleans up and removes the expired postponement** once the date passes. Zero manual maintenance required!
 
 ---
 
