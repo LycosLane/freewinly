@@ -23,12 +23,19 @@
 .PARAMETER ConfigPath
     Optional path to a custom configuration JSON file (defaults to .\config.json).
 
+.PARAMETER CountdownSeconds
+    Override the auto-start countdown duration (0 for instant execution, 3, 5, 10, 20, 30).
+
 .PARAMETER HelpMe
     Displays CLI usage instructions and examples.
 
 .EXAMPLE
     .\freewinly.ps1
-    Starts interactive mode (unelevated, 10s countdown, interactive TUI menu).
+    Starts interactive mode (unelevated, countdown timer, interactive TUI menu).
+
+.EXAMPLE
+    .\freewinly.ps1 -CountdownSeconds 0 -Run
+    Runs all default modules immediately with zero waiting time.
 
 .EXAMPLE
     .\freewinly.ps1 -Check
@@ -50,6 +57,7 @@ param(
     [switch]$Audit,
     [string[]]$Modules = $null,
     [string]$ConfigPath = $null,
+    [int]$CountdownSeconds = -1,
     [switch]$HelpMe
 )
 
@@ -92,9 +100,10 @@ if ($HelpMe) {
     Show-Banner
     Write-Host @"
 CLI Usage:
-  .\freewinly.ps1                      Interactive mode (10s countdown, TUI menu, JIT elevation)
+  .\freewinly.ps1                      Interactive mode (countdown timer, TUI menu, JIT elevation)
   .\freewinly.ps1 -Check               Dry-run preview / diagnostic audit (no changes made)
   .\freewinly.ps1 -Run                 Execute enabled modules immediately
+  .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
   .\freewinly.ps1 -Audit               Alias for -Check (100% read-only health & stability audit)
   .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
   .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 05_hardware_health,10_software_updates)
@@ -169,6 +178,7 @@ function Run-OnboardingWizard {
         cleanupTempMinAgeDays = 7
         eventLogLookbackDays  = 7
         hddDefragMinDays      = 30
+        countdownSeconds      = 10
     }
 
     $newConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
@@ -181,6 +191,15 @@ if (-not (Test-Path $configPath)) {
 }
 
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+# Resolve countdown timer setting (CLI parameter > config.json > default 10)
+$countdown = if ($CountdownSeconds -ge 0) {
+    $CountdownSeconds
+} elseif ($config -and $null -ne $config.countdownSeconds) {
+    [int]$config.countdownSeconds
+} else {
+    10
+}
 
 # Flatten comma-separated Modules if passed as single string
 if ($Modules -and $Modules.Count -eq 1 -and $Modules[0] -match ',') {
@@ -271,40 +290,47 @@ if (-not $Run) {
         Write-Host "  $mark $($m.Name)$admin" -ForegroundColor $col
     }
 
-    Write-Host "`nStarting in " -NoNewline -ForegroundColor Gray
     $openMenu = $false
 
-    try {
-        for ($sec = 10; $sec -gt 0; $sec--) {
-            Write-Host "$sec... " -NoNewline -ForegroundColor Cyan
-            for ($sub = 0; $sub -lt 10; $sub++) {
-                Start-Sleep -Milliseconds 100
-                if ([Console]::KeyAvailable) {
-                    [Console]::ReadKey($true) | Out-Null
-                    $openMenu = $true
-                    break
+    if ($countdown -gt 0) {
+        Write-Host "`nStarting in " -NoNewline -ForegroundColor Gray
+        try {
+            for ($sec = $countdown; $sec -gt 0; $sec--) {
+                Write-Host "$sec... " -NoNewline -ForegroundColor Cyan
+                for ($sub = 0; $sub -lt 10; $sub++) {
+                    Start-Sleep -Milliseconds 100
+                    if ([Console]::KeyAvailable) {
+                        [Console]::ReadKey($true) | Out-Null
+                        $openMenu = $true
+                        break
+                    }
                 }
+                if ($openMenu) { break }
             }
-            if ($openMenu) { break }
+        } catch {
+            $openMenu = $false
         }
-    } catch {
-        $openMenu = $false
     }
 
     if ($openMenu) {
         $selectedIndex = 0
-        $actions = @(
-            @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
-            @{ Label = "[   C   ]  Dry-Run Check / System Audit (No changes)"; Key = "C" },
-            @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
-            @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
-            @{ Label = "[   I   ]  Reinstall Start Menu Shortcut"; Key = "I" },
-            @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
-        )
-        $totalOptions = $discoveredModules.Count + $actions.Count
+        $timerPresets = @(0, 3, 5, 10, 20, 30)
         $running = $true
 
         while ($running) {
+            $timerText = if ($countdown -eq 0) { "0s (Instant)" } else { "${countdown}s" }
+            $actions = @(
+                @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
+                @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
+                @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)"; Key = "T" },
+                @{ Label = "[   W   ]  Schedule Maintenance in Windows Task Scheduler"; Key = "W" },
+                @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
+                @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
+                @{ Label = "[   I   ]  Reinstall Start Menu Shortcut"; Key = "I" },
+                @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
+            )
+            $totalOptions = $discoveredModules.Count + $actions.Count
+
             Clear-Host
             Show-Banner
             Write-Host "Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:`n" -ForegroundColor Gray
@@ -359,21 +385,34 @@ if (-not $Run) {
                         }
                         Read-Host "`nPress Enter to return to menu"
                     } elseif ($selectedIndex -eq ($discoveredModules.Count + 2)) {
+                        # Cycle timer
+                        $curIdx = $timerPresets.IndexOf($countdown)
+                        $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
+                        $countdown = $timerPresets[$nextIdx]
+                        $config.countdownSeconds = $countdown
+                        $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
+                        # Task Scheduler
+                        Clear-Host
+                        & (Join-Path $projectRoot "install-task.ps1")
+                        Read-Host "`nPress Enter to return to menu"
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
                         # Save
                         $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
                         $config.enabledModules = @($enabledList)
+                        $config.countdownSeconds = $countdown
                         $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                        Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
+                        Write-Host "`n  -> Default tasks and settings saved to config.json!" -ForegroundColor Green
                         Start-Sleep -Milliseconds 800
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
                         # Onboarding
                         Run-OnboardingWizard
                         $config = Get-Content $configPath -Raw | ConvertFrom-Json
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 6)) {
                         # Install shortcut
                         & (Join-Path $projectRoot "install-shortcut.ps1")
                         Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 7)) {
                         # Quit
                         Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
                         exit 0
@@ -389,11 +428,24 @@ if (-not $Run) {
                     }
                     Read-Host "`nPress Enter to return to menu"
                 }
+                "T" {
+                    $curIdx = $timerPresets.IndexOf($countdown)
+                    $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
+                    $countdown = $timerPresets[$nextIdx]
+                    $config.countdownSeconds = $countdown
+                    $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+                }
+                "W" {
+                    Clear-Host
+                    & (Join-Path $projectRoot "install-task.ps1")
+                    Read-Host "`nPress Enter to return to menu"
+                }
                 "S" {
                     $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
                     $config.enabledModules = @($enabledList)
+                    $config.countdownSeconds = $countdown
                     $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                    Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
+                    Write-Host "`n  -> Default tasks and settings saved to config.json!" -ForegroundColor Green
                     Start-Sleep -Milliseconds 800
                 }
                 "O" {

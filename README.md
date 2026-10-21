@@ -63,20 +63,31 @@
 
 ---
 
-## 🚀 Quick Start (No Git or Technical Skills Needed)
+## 🚀 3 Ways to Use FreeWinly
 
-### 1. Download and Run
-1. Go to **[Releases](https://github.com/LycosLane/FreeWinly/releases)** and download **`FreeWinly.zip`**.
-2. Right-click the `.zip`, choose **Extract All**, and double-click **`freewinly.cmd`**.
+### Method 1: Direct Download (For Everyday Users & Non-Techies)
+*No Git, coding skills, or technical setup needed:*
+1. Go to **[Releases](https://github.com/LycosLane/FreeWinly/releases)** and download **`FreeWinly.zip`** (pure tool, zero AI files, ~29 KB).
+2. Right-click the `.zip`, click **Extract All**, and double-click **`freewinly.cmd`**.
 
-A clean window will open with a 10-second countdown:
-* **Do nothing:** It runs safe maintenance automatically and quietly closes when finished.
-* **Press any key:** Opens the interactive menu to customize tasks or press **`[ I ]`** to add a permanent shortcut directly into your Windows Start Menu!
+A clean window will open with a countdown:
+* **Do nothing:** Runs safe maintenance automatically and quietly exits when done.
+* **Press any key:** Customize which tasks run, or press **`[ I ]`** to add a permanent shortcut to your Windows Start Menu!
 
-### 2. Launch Anytime from Start Menu
-Once installed, whenever your computer needs a tune-up:
-1. Press the **Windows Key**.
-2. Type **`FreeWinly`** and hit **Enter**.
+---
+
+### Method 2: One-Prompt Setup for AI Assistants (Antigravity, Claude Code, Cursor)
+If you already use an AI coding assistant on Windows, simply paste this prompt into your AI chat:
+
+```text
+Clone https://github.com/LycosLane/FreeWinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
+```
+Your AI will clone the repo, ingest the pre-digested diagnostics in 1 turn (~300 tokens), configure your exclusions in `config.json`, and set up your Start Menu shortcut!
+
+---
+
+### Method 3: AI Skill Bundle (`FreeWinly4LLM.zip`)
+Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/FreeWinly/releases) and extract it directly into your AI assistant's `skills/` or `tools/` folder. It includes both the native PowerShell engine and the complete `SKILL.md` playbook.
 
 ---
 
@@ -89,6 +100,8 @@ Once installed, whenever your computer needs a tune-up:
 ============================================================
 Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
+  [x] Hardware & Driver Health
+  [x] System Stability & Event Logs (Last 7 days)
   [x] Software Updates (Winget)
   [x] Safe Cache & Temp Cleanup (>7 days)
   [x] SSD TRIM Optimization [Admin]
@@ -96,8 +109,9 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
-  [   C   ]  Dry-Run Check Preview (No changes)
-  [   A   ]  Run System Diagnostic Audit (Read-Only)
+  [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
+  [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)
+  [   W   ]  Schedule Maintenance in Windows Task Scheduler
   [   S   ]  Save Selection as Default
   [   O   ]  Run First-Time Onboarding Wizard
   [   I   ]  Reinstall Start Menu Shortcut
@@ -109,12 +123,31 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | **`Up` / `Down`** | Navigate between modules and actions |
 | **`Space`** | Toggle module checkbox `[x]` / `[ ]` |
 | **`Enter`** | Run all currently checked modules (triggers Just-in-Time UAC only if required) |
-| **`C`** | Run **Dry-Run Check** preview (inspects changes without modifying system state) |
-| **`A`** | Run **System Diagnostic Audit** (100% read-only diagnostic scanner) |
-| **`S`** | Save current checkbox selection to `config.json` as permanent default |
+| **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
+| **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
+| **`W`** | Open **Windows Task Scheduler** configurator (Weekly, Monthly, or at Logon) |
+| **`S`** | Save current checkbox selection and timer to `config.json` as permanent defaults |
 | **`O`** | Run onboarding wizard (scans for standalone apps and suggests exclusions) |
 | **`I`** | Reinstall Start Menu shortcut |
 | **`Q`** | Exit without making any changes |
+
+---
+
+## ⏰ Background Scheduled Maintenance (Windows Task Scheduler)
+
+FreeWinly can run completely automatically in the background using native Windows Task Scheduler. **Zero background services, zero system tray daemons, and zero battery drain.**
+
+Run the task scheduler installer anytime:
+```powershell
+# Interactive schedule menu
+powershell -ExecutionPolicy Bypass -File .\install-task.ps1
+
+# Or automate directly from CLI:
+.\install-task.ps1 -Action Weekly -DayOfWeek Sunday -At 12:00
+.\install-task.ps1 -Action Logon
+.\install-task.ps1 -Action Remove
+```
+* Or simply press **`[ W ]`** inside the FreeWinly interactive menu.
 
 ---
 

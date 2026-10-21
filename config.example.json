@@ -14,5 +14,6 @@
   ],
   "cleanupTempMinAgeDays": 7,
   "eventLogLookbackDays": 7,
-  "hddDefragMinDays": 30
+  "hddDefragMinDays": 30,
+  "countdownSeconds": 10
 }

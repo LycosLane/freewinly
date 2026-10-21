@@ -1,8 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly Release Packager.
-    Generates a clean, distributable FreeWinly.zip ready to upload to GitHub Releases.
+    FreeWinly Dual Release Packager.
+    Generates both 'FreeWinly.zip' (pure standalone tool for humans) and
+    'FreeWinly4LLM.zip' (includes SKILL.md for AI agents) ready for GitHub Releases.
 #>
 [CmdletBinding()]
 param()
@@ -10,8 +11,9 @@ param()
 $ErrorActionPreference = "Stop"
 $projectRoot = $PSScriptRoot
 $distDir     = Join-Path $projectRoot "dist"
-$stageDir    = Join-Path $distDir "FreeWinly"
-$zipPath     = Join-Path $distDir "FreeWinly.zip"
+$stageDir    = Join-Path $distDir "stage"
+$coreZip     = Join-Path $distDir "FreeWinly.zip"
+$llmZip      = Join-Path $distDir "FreeWinly4LLM.zip"
 
 if (Test-Path $distDir) {
     Remove-Item -Recurse -Force $distDir
@@ -19,17 +21,17 @@ if (Test-Path $distDir) {
 
 New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 
-$itemsToCopy = @(
+$coreItems = @(
     "freewinly.cmd",
     "freewinly.ps1",
     "install-shortcut.ps1",
+    "install-task.ps1",
     "config.example.json",
     "README.md",
-    "LICENSE",
-    "SKILL.md"
+    "LICENSE"
 )
 
-foreach ($item in $itemsToCopy) {
+foreach ($item in $coreItems) {
     $src = Join-Path $projectRoot $item
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination $stageDir -Force
@@ -38,12 +40,26 @@ foreach ($item in $itemsToCopy) {
 
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
-Compress-Archive -Path "$stageDir\*" -DestinationPath $zipPath -Force
+# 1. Package FreeWinly.zip (Clean core tool for humans / zero AI dependencies)
+Compress-Archive -Path "$stageDir\*" -DestinationPath $coreZip -Force
+$coreSize = [math]::Round((Get-Item $coreZip).Length / 1KB, 1)
+
+# 2. Add SKILL.md and package FreeWinly4LLM.zip (AI Agents & LLM harness integration)
+$skillSrc = Join-Path $projectRoot "SKILL.md"
+if (Test-Path $skillSrc) {
+    Copy-Item -Path $skillSrc -Destination $stageDir -Force
+}
+Compress-Archive -Path "$stageDir\*" -DestinationPath $llmZip -Force
+$llmSize = [math]::Round((Get-Item $llmZip).Length / 1KB, 1)
+
+# Cleanup staging folder
 Remove-Item -Recurse -Force $stageDir
 
-$sizeMB = [math]::Round((Get-Item $zipPath).Length / 1KB, 1)
 Write-Host "`n============================================================" -ForegroundColor Cyan
-Write-Host "       FreeWinly Release Package Created Successfully!      " -ForegroundColor White
+Write-Host "       FreeWinly Dual Release Packages Generated!           " -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Package Path: $zipPath ($sizeMB KB)" -ForegroundColor Green
-Write-Host "Ready to upload to GitHub Releases -> Assets -> FreeWinly.zip`n" -ForegroundColor Cyan
+Write-Host "1. Pure Tool (For Humans / Offline):" -ForegroundColor White
+Write-Host "   $coreZip ($coreSize KB)" -ForegroundColor Green
+Write-Host "`n2. AI Agent Edition (Includes SKILL.md):" -ForegroundColor White
+Write-Host "   $llmZip ($llmSize KB)" -ForegroundColor Green
+Write-Host "`nReady to upload to GitHub Releases -> Assets.`n" -ForegroundColor Cyan
