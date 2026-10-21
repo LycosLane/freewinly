@@ -30,3 +30,26 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') || contains(github.ref, '-alpha') }}
+          body: |
+            ### Which Download Should You Choose?
+
+            | Package | Who It's For | What's Inside |
+            | :--- | :--- | :--- |
+            | **`FreeWinly.zip`** | **Most Users / Offline PCs** | Complete standalone maintenance suite. Zero AI files, no installation required. |
+            | **`FreeWinly4LLM.zip`** | **AI Assistant Users** | Includes the full tool plus **`SKILL.md`**, ready to drop into your AI assistant's skills directory. |
+
+            ---
+
+            ### Quick Start (Humans)
+            1. Download **`FreeWinly.zip`** below and extract it.
+            2. Double-click **`freewinly.cmd`**.
+            3. Wait 10 seconds to run safe maintenance automatically, or press any key for the interactive menu.
+
+            ---
+
+            ### Using with AI Assistants (Antigravity, Claude Code, Cursor)
+            Paste this prompt into your assistant's chat:
+            ```text
+            Clone https://github.com/LycosLane/freewinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
+            ```
+            Or extract **`FreeWinly4LLM.zip`** directly into your assistant's `skills/` or `tools/` folder.
