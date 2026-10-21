@@ -19,14 +19,23 @@
 
 ---
 
-## What FreeWinly Does
+## Why I Built This
 
-If you want your PC clean, fast, and updated without dealing with technical details:
+I don't want to spend time managing my PC; I just want to use it.
 
+Windows already has solid built-in tools for almost everything (official package management via Winget, native SSD TRIM, and system health logs). Yet traditional cleaner utilities wrap these basic functions in paid subscriptions, background tray icons, and upgrade notifications.
+
+I built FreeWinly for three simple reasons:
+
+1. **Use standard Windows tools:** No third-party background services, no registry modifications, and no subscription fees.
+2. **Translate Windows gibberish into clear actions:** Instead of digging through cryptic Device Manager error codes or thousands of Event Viewer logs, the script filters out the noise, spots actual problems (like crashing apps or missing drivers), and tells you what to do.
+3. **Make diagnostics easy for AI assistants:** Pointing an AI at raw system logs burns thousands of tokens on useless background noise. FreeWinly does the heavy lifting locally and produces a concise summary, so your AI assistant can spot issues and help you fix them immediately.
+
+If you just want your PC clean, fast, and updated:
 1. Download **`FreeWinly.zip`** from [Releases](https://github.com/LycosLane/freewinly/releases) and extract it.
 2. Double-click **`freewinly.cmd`**.
 
-FreeWinly automatically checks your hardware, updates installed software, clears old temporary files, and optimizes your drives using official Windows tools. It runs without ads, requires no installation, and does not modify the Windows Registry.
+It will check your system health, update your programs, clean old temp files, and optimize your drives.
 
 ---
 
