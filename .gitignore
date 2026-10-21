@@ -15,6 +15,10 @@ reports/*.md
 modules/*_local_*.ps1
 modules/*_custom_*.ps1
 
+# Build & distribution packages
+dist/
+*.zip
+
 # Editor & OS files
 .vscode/
 .idea/

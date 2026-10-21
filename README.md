@@ -19,29 +19,26 @@
 
 ---
 
-## 💡 Why FreeWinly?
+## 💡 In Plain English: What FreeWinly Does
 
-In the movie *Free Willy*, the captive orca represented freedom and natural strength.
-
-Many traditional PC maintenance tools introduce resident background services, telemetry, paid subscription models, or risky registry cleaners that modern Windows operating systems simply do not need.
-
-**FreeWinly takes a fundamentally different path.**  
-It proves that everything a modern Windows PC genuinely needs—keeping applications updated like Linux `apt upgrade`, safely purging stale caches, sending native SSD TRIM hints, and auditing hardware stability—can be achieved **100% transparently using built-in Windows board tools** (`winget`, PowerShell 5.1+, COM APIs, and DISM).
+> **If you don't care about technical details and just want your PC fast, clean, and up-to-date:**  
+> Download **`FreeWinly.zip`**, double-click **`freewinly.cmd`**, and walk away.  
+> FreeWinly automatically checks your hardware, updates your programs, purges old junk files, and tunes your storage using official Windows tools. It won't break your system, it has zero ads, and it is 100% free forever.
 
 ---
 
-## ⚖️ Comparison: Traditional Tune-Up Tools vs. FreeWinly
+## ⚖️ Comparison: Traditional "PC Cleaners" (like CCleaner) vs. FreeWinly
 
-| Dimension | Traditional Utilities | FreeWinly |
+| Feature | Traditional Tools (e.g. CCleaner) | FreeWinly |
 | :--- | :--- | :--- |
-| **Tooling & Engine** | Proprietary closed-source `.exe`, background agents, and tray daemons | **100% native Windows tools** (`winget`, PowerShell 5.1+, COM APIs, `Optimize-Volume`) |
-| **Dependencies & Install** | Requires setup wizard, background services, or runtime frameworks | **Zero installation & zero external dependencies**; pure script portability |
-| **Cost & Licensing** | Paid subscription renewals, freemium lockouts, or feature upselling | **100% Free & Open Source (MIT)**; zero fees, zero upsells |
-| **Privacy & Telemetry** | Often tracks hardware usage, diagnostics, and update analytics | **Zero telemetry & zero network phoning**; 100% local execution |
-| **Registry Handling** | Risky "registry cleaners" (which Microsoft advises against) | **Zero registry tampering**; preserves operating system stability |
-| **Storage Optimization** | Generic defragmenters (which cause flash wear if applied to SSDs) | **Hardware-aware**: sends native NVMe TRIM hints to SSDs; defrags only magnetic HDDs |
-| **Software Updates** | Custom third-party scrapers or proprietary package mirrors | **Official Microsoft `winget` repository** with verified publisher manifests |
-| **AI / Automation Ready** | Closed GUI-only; impossible to inspect or script headlessly | **Full CLI support (`-Check`, `-Run`) + AI Agent Playbook (`SKILL.md`)** |
+| **Price** | Free version nags you; Pro costs \$30–\$50/year | **100% Free & Open Source forever** (no subscriptions) |
+| **Updating Your Programs** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
+| **Annoying Popups & Ads** | Sits in your system tray; pops up "Your PC is slow!" | **Zero background processes, zero tray icons, zero ads** |
+| **1-Click "Launch & Walk Away"** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults & cleanly exits |
+| **Safety (No Broken Windows)** | Cleans the registry (which Microsoft warns against) | **Zero registry hacking**; only deletes old temp files (>7 days) |
+| **Storage Optimization** | May blindly defrag modern SSDs, wearing them out | **Hardware-aware**: sends TRIM to SSDs, defrags only HDDs |
+| **Setup & Installation** | Requires installer, setup wizards, and desktop bloat | **No installation needed**: unzip and run anywhere |
+| **Offline Privacy** | Collects telemetry, analytics, and usage data | **100% offline & local**: sends zero data anywhere |
 
 ---
 
@@ -66,20 +63,20 @@ It proves that everything a modern Windows PC genuinely needs—keeping applicat
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (No Git or Technical Skills Needed)
 
-### Option 1: Double-Click (Zero Setup)
-Clone or download this repository and simply double-click **`freewinly.cmd`**. It starts immediately without annoying UAC prompts, elevating Just-in-Time only if administrative tasks are selected.
+### 1. Download and Run
+1. Go to **[Releases](https://github.com/LycosLane/FreeWinly/releases)** and download **`FreeWinly.zip`**.
+2. Right-click the `.zip`, choose **Extract All**, and double-click **`freewinly.cmd`**.
 
-### Option 2: Add to Windows Start Menu (Recommended)
-Run the dynamic shortcut installer once:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-shortcut.ps1
-```
-Now, whenever your computer needs a tune-up:
+A clean window will open with a 10-second countdown:
+* **Do nothing:** It runs safe maintenance automatically and quietly closes when finished.
+* **Press any key:** Opens the interactive menu to customize tasks or press **`[ I ]`** to add a permanent shortcut directly into your Windows Start Menu!
+
+### 2. Launch Anytime from Start Menu
+Once installed, whenever your computer needs a tune-up:
 1. Press the **Windows Key**.
 2. Type **`FreeWinly`** and hit **Enter**.
-3. Let it run automatically (or press any key to customize tasks).
 
 ---
 
