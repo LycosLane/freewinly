@@ -338,11 +338,11 @@ if (-not $Run) {
 
             for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
                 $m = $discoveredModules[$i]
-                $pointer = if ($i -eq $selectedIndex) { "> " } else { "  " }
-                $check   = if ($m.Enabled) { "[x]" } else { "[ ]" }
-                $admin   = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
-                $color   = if ($i -eq $selectedIndex) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
-                Write-Host "$pointer$check $($m.Name)$admin" -ForegroundColor $color
+                $pointer   = if ($i -eq $selectedIndex) { "> " } else { "  " }
+                $checkMark = if ($m.Enabled) { "[x]" } else { "[ ]" }
+                $admin     = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
+                $color     = if ($i -eq $selectedIndex) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
+                Write-Host "$pointer$checkMark $($m.Name)$admin" -ForegroundColor $color
             }
 
             Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
