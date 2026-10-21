@@ -3,7 +3,7 @@ name: freewinly
 description: FreeWinly - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows board tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
 ---
 
-# FreeWinly – Open Source Windows Maintenance & AI Agent Playbook
+# FreeWinly - Open Source Windows Maintenance & AI Agent Playbook
 
 FreeWinly is a 100% native Windows maintenance engine built without third-party dependencies. It operates in two modes:
 1. **Human Mode:** Pure standalone PowerShell/TUI with zero AI dependencies (ideal for family PCs, offline environments, and purists).

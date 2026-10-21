@@ -1,6 +1,6 @@
-# 🐋 FreeWinly
+# FreeWinly
 
-> **Keep Windows fast, clean, and up-to-date—without bloatware, background services, or subscriptions.**  
+> Keep Windows fast, clean, and up to date without bloatware, background services, or subscriptions.  
 > *A transparent, modular, 100% native Windows maintenance engine.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -19,79 +19,77 @@
 
 ---
 
-## 💡 In Plain English: What FreeWinly Does
+## What FreeWinly Does
 
-> **If you don't care about technical details and just want your PC fast, clean, and up-to-date:**  
-> Download **`FreeWinly.zip`**, double-click **`freewinly.cmd`**, and walk away.  
-> FreeWinly automatically checks your hardware, updates your programs, purges old junk files, and tunes your storage using official Windows tools. It won't break your system, it has zero ads, and it is 100% free forever.
+If you want your PC clean, fast, and updated without dealing with technical details:
+
+1. Download **`FreeWinly.zip`** from [Releases](https://github.com/LycosLane/freewinly/releases) and extract it.
+2. Double-click **`freewinly.cmd`**.
+
+FreeWinly automatically checks your hardware, updates installed software, clears old temporary files, and optimizes your drives using official Windows tools. It runs without ads, requires no installation, and does not modify the Windows Registry.
 
 ---
 
-## ⚖️ Comparison: Traditional Commercial Cleaners vs. FreeWinly
+## Comparison: Traditional Cleaners vs. FreeWinly
 
 | Feature | Traditional Tools (e.g. CCleaner) | FreeWinly |
 | :--- | :--- | :--- |
-| **Price** | Free version displays upgrade prompts; Pro is \$30–\$50/yr | **100% Free & Open Source forever** (no subscriptions) |
-| **Updating Your Programs** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
-| **Annoying Popups & Ads** | Sits in your system tray; pops up "Your PC is slow!" | **Zero background processes, zero tray icons, zero ads** |
-| **1-Click "Launch & Walk Away"** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults & cleanly exits |
-| **Safety (No Broken Windows)** | Cleans the registry (which Microsoft warns against) | **Zero registry hacking**; only deletes old temp files (>7 days) |
-| **Storage Optimization** | May blindly defrag modern SSDs, wearing them out | **Hardware-aware**: sends TRIM to SSDs, defrags only HDDs |
-| **Setup & Installation** | Requires installer, setup wizards, and desktop bloat | **No installation needed**: unzip and run anywhere |
-| **Offline Privacy** | Collects telemetry, analytics, and usage data | **100% offline & local**: sends zero data anywhere |
+| **Price** | Free version displays upgrade prompts; Pro is \$30-\$50/year | **100% Free and Open Source forever** (no subscriptions) |
+| **Software Updates** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
+| **Notifications and Ads** | Sits in your system tray; shows popups | **No background processes, no tray icons, no ads** |
+| **Unattended Execution** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults automatically |
+| **System Safety** | Cleans the registry (which Microsoft advises against) | **Does not touch the registry**; only deletes old temp files (>7 days) |
+| **Storage Optimization** | May defragment modern SSDs, causing wear | **Hardware-aware**: sends TRIM to SSDs, defragments only HDDs |
+| **Setup** | Requires installer and setup wizards | **No installation needed**: unzip and run |
+| **Privacy** | Collects telemetry and analytics | **100% offline and local**: sends no data anywhere |
 
 ---
 
-## ✨ Features
+## Features
 
-- 📦 **The `apt update && apt upgrade` for Windows**  
-  Uses Microsoft's official `winget` engine to update software silently one by one, with smart version-mismatch detection.
-- ⏱️ **10-Second Auto-Start Countdown**  
-  Launch and walk away! Ideal for family members or automated scheduled tasks: counts down 10 seconds, runs default tasks, and quietly exits.
-- 🎛️ **Interactive Checkbox Menu (TUI)**  
-  Press any key during countdown to open a clean terminal UI. Toggle tasks on/off with `[Space]`, run ad-hoc with `[Enter]`, or save as default with `[S]`.
-- 💽 **SSD-Safe Maintenance**  
-  Modern SSDs should never be defragmented. FreeWinly executes native NVMe/SATA TRIM (`Optimize-Volume -ReTrim`) to maintain flash memory longevity and performance.
-- 🧹 **Safe Temp & Cache Cleaning**  
-  Reclaims disk space from user and system temp folders, WinGet download caches, and DirectX shader caches—only purging files older than 7 days to prevent application crashes.
-- 🔌 **Extensible Plugin Modules**  
-  Add new maintenance routines in seconds! Just drop a numbered `.ps1` file into `modules/`, and FreeWinly automatically discovers it and adds it to the interactive menu.
-- 🩺 **Hardware & Stability Doctor**  
-  Scans Device Manager and Windows Event Logs, translating cryptic codes into human-actionable fixes (e.g. Code 28 driver updates, recurring application crashes, and dirty shutdowns).
-- 🤖 **AI-Native Diagnostic Readiness**  
-  Includes `SKILL.md` ready to pair with AI coding assistants (Antigravity, Claude Code, Cursor) to analyze system health in 1 single turn (~300 tokens) without burning context.
+- **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
+- **Auto-Start Countdown:** Counts down 10 seconds before running default tasks automatically. Press any key to open the interactive menu.
+- **Interactive Console Menu:** Toggle tasks on or off with `[Space]`, run them immediately with `[Enter]`, or save your selection as default with `[S]`.
+- **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only.
+- **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
+- **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
+- **Modular Design:** Add custom maintenance tasks by placing numbered `.ps1` files into the `modules/` folder.
+- **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
 ---
 
-## 🚀 3 Ways to Use FreeWinly
+## Getting Started
 
-### Method 1: Direct Download (For Everyday Users & Non-Techies)
-*No Git, coding skills, or technical setup needed:*
-1. Go to **[Releases](https://github.com/LycosLane/FreeWinly/releases)** and download **`FreeWinly.zip`** (pure tool, zero AI files, ~29 KB).
+### Option 1: Direct Download (Recommended for most users)
+
+1. Go to **[Releases](https://github.com/LycosLane/freewinly/releases)** and download **`FreeWinly.zip`**.
 2. Right-click the `.zip`, click **Extract All**, and double-click **`freewinly.cmd`**.
 
-A clean window will open with a countdown:
-* **Do nothing:** Runs safe maintenance automatically and quietly exits when done.
-* **Press any key:** Customize which tasks run, or press **`[ I ]`** to add a permanent shortcut to your Windows Start Menu!
+A console window opens with a countdown:
+* **Wait 10 seconds:** Runs safe maintenance automatically and exits when done.
+* **Press any key:** Customize which tasks run, or press **`[ I ]`** to add a shortcut to your Windows Start Menu.
 
 ---
 
-### Method 2: One-Prompt Setup for AI Assistants (Antigravity, Claude Code, Cursor)
-If you already use an AI coding assistant on Windows, simply paste this prompt into your AI chat:
+### Option 2: AI Assistant Prompt
+
+If you use an AI coding assistant on Windows, paste this prompt into your assistant's chat:
 
 ```text
-Clone https://github.com/LycosLane/FreeWinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
+Clone https://github.com/LycosLane/freewinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
 ```
-Your AI will clone the repo, ingest the pre-digested diagnostics in 1 turn (~300 tokens), configure your exclusions in `config.json`, and set up your Start Menu shortcut!
+
+Your assistant will clone the repository, read the diagnostic output, configure exclusions in `config.json`, and set up the Start Menu shortcut.
 
 ---
 
-### Method 3: AI Skill Bundle (`FreeWinly4LLM.zip`)
-Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/FreeWinly/releases) and extract it directly into your AI assistant's `skills/` or `tools/` folder. It includes both the native PowerShell engine and the complete `SKILL.md` playbook.
+### Option 3: AI Skill Bundle (`FreeWinly4LLM.zip`)
+
+Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/freewinly/releases) and extract it into your assistant's `skills/` or `tools/` folder. It includes both the PowerShell engine and the complete `SKILL.md` playbook.
 
 ---
 
-## 🎛️ Interactive TUI Controls
+## Interactive Controls
 
 ```text
 ============================================================
@@ -123,7 +121,7 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | :--- | :--- |
 | **`Up` / `Down`** | Navigate between modules and actions |
 | **`Space`** | Toggle module checkbox `[x]` / `[ ]` |
-| **`Enter`** | Run all currently checked modules (triggers Just-in-Time UAC only if required) |
+| **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
 | **`W`** | Open **Windows Task Scheduler** configurator (Weekly, Monthly, at Logon, or Remove) |
@@ -135,11 +133,11 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
 ---
 
-## ⏰ Background Scheduled Maintenance (Windows Task Scheduler)
+## Scheduled Maintenance
 
-FreeWinly can run completely automatically in the background using native Windows Task Scheduler. **Zero background services, zero system tray daemons, and zero battery drain.**
+FreeWinly can run on a schedule using Windows Task Scheduler. It runs only when scheduled and leaves no background services or system tray icons running.
 
-Run the task scheduler installer anytime:
+Run the task scheduler installer:
 ```powershell
 # Interactive schedule menu
 powershell -ExecutionPolicy Bypass -File .\install-task.ps1
@@ -149,18 +147,18 @@ powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 .\install-task.ps1 -Action Logon
 .\install-task.ps1 -Action Remove
 ```
-* Or simply press **`[ W ]`** inside the FreeWinly interactive menu.
+* You can also press **`[ W ]`** inside the FreeWinly interactive menu.
 
 ---
 
-## 🗑️ Clean Uninstallation (`uninstall.ps1`)
+## Uninstallation
 
-FreeWinly respects your system and leaves zero digital debris behind. It includes a dedicated, safe uninstaller that previews every single component before removal:
+FreeWinly leaves no background services, registry entries, or leftover files behind. You can remove it anytime using the uninstaller:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
-* Or press **`[ U ]`** directly inside the FreeWinly TUI menu.
+* Or press **`[ U ]`** directly inside the FreeWinly interactive menu.
 
 **What it does:**
 1. Scans for and displays all active components:
@@ -168,25 +166,25 @@ powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
    - Start Menu shortcut (`FreeWinly.lnk`)
    - Application folder (including local configs and logs)
 2. Asks for explicit confirmation: `Are you sure you want to completely remove FreeWinly? (y/N)`
-3. Cleanly unregisters the scheduled task, deletes the shortcut, and self-deletes the application directory via a detached background process. Zero residual registry keys or background files!
+3. Cleanly unregisters the scheduled task, deletes the shortcut, and removes the application directory via a detached background process.
 
 ---
 
-## ⚡ CLI & Headless Automation
+## Command-Line Usage
 
-FreeWinly works seamlessly from PowerShell scripts, CI pipelines, and terminal shortcuts:
+FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom shortcuts:
 
 ```powershell
-# Interactive mode (unelevated start, 10s countdown, TUI menu)
+# Interactive mode (unelevated start, 10s countdown, menu)
 .\freewinly.ps1
 
 # Dry-run preview mode (checks pending updates, temp sizes, and SSD TRIM without changing anything)
 .\freewinly.ps1 -Check
 
-# Headless run of default enabled modules (JIT elevates only if admin tasks are queued)
+# Headless run of default enabled modules (prompts for UAC only if admin tasks are queued)
 .\freewinly.ps1 -Run
 
-# 100% read-only hardware, process, and event log diagnostic audit
+# Read-only hardware, process, and event log diagnostic audit
 .\freewinly.ps1 -Audit
 
 # Run with a custom config JSON file
@@ -201,15 +199,17 @@ FreeWinly works seamlessly from PowerShell scripts, CI pipelines, and terminal s
 
 ---
 
-## 🧩 Modular Architecture
+## Modular Architecture
 
-Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple native parameter contract (`Info`, `Check`, `Run`):
+Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple parameter contract (`Info`, `Check`, `Run`):
 
 ```text
 FreeWinly/
 ├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
 ├── freewinly.cmd                <-- Double-clickable launcher
 ├── install-shortcut.ps1         <-- Start Menu shortcut generator
+├── install-task.ps1             <-- Task Scheduler automation
+├── uninstall.ps1                <-- Uninstaller with confirmation
 ├── config.json                  <-- Exclusions, enabled modules & drive settings
 ├── SKILL.md                     <-- AI Agent Playbook
 └── modules/
@@ -233,6 +233,7 @@ Each module can be executed directly as a standalone CLI tool:
 ```
 
 ### Adding Your Own Module
+
 Create `modules/25_my_task.ps1`:
 ```powershell
 [CmdletBinding()]
@@ -261,13 +262,13 @@ if ($Action -eq 'Check') {
 
 Write-Host "Executing custom task..." -ForegroundColor Green
 ```
-FreeWinly will automatically discover it, query its metadata, add it to the menu, and handle execution/checks in numerical order!
+FreeWinly automatically discovers new modules, queries their metadata, adds them to the menu, and runs them in numerical order.
 
 ---
 
-## 🔒 Configuration & Exclusions (`config.json`)
+## Configuration and Exclusions
 
-FreeWinly stores rules in a human-readable `config.json`:
+FreeWinly stores settings in `config.json`:
 
 ```json
 {
@@ -285,31 +286,31 @@ FreeWinly stores rules in a human-readable `config.json`:
 ```
 
 * **Excluding Self-Updating Launchers:** Add app IDs or names to `excluded` so Winget skips them.
-* **Temporary Postponements (Ideal for AI Assistants):**  
-  Want to postpone an update for a few days or weeks while working on a critical project? You don't have to edit JSON manually—simply tell your AI:  
-  > *"Hey, don't update Blender or Audacity for the next week, I'm in the middle of a project."*  
-  
-  Your AI assistant automatically calculates the date and stages the postponement in `config.json`:  
+* **Temporary Postponements:**  
+  To postpone an update while working on an important project, you can add an entry with an expiration date:  
   ```json
   { "id": "Audacity.Audacity", "until": "2026-10-29", "reason": "Active project deadline" }
   ```  
-  FreeWinly respects the deadline, skips the app during upgrades, and **automatically cleans up and removes the expired postponement** once the date passes. Zero manual maintenance required!
+  If using an AI assistant, you can simply say:  
+  > *"Don't update Blender or Audacity for the next week, I'm working on a deadline."*  
+  
+  Your AI assistant will calculate the date and add the entry to `config.json`. FreeWinly skips the app during updates and automatically removes the postponement once the date passes.
 
 ---
 
-## 🛡️ Privacy & Zero Telemetry Pledge
+## Privacy
 
-* **0% Analytics:** FreeWinly sends zero telemetry, collects zero metrics, and makes zero phone-home calls.
-* **100% Transparent:** Everything is open-source PowerShell that you can read, audit, and modify in seconds.
-
----
-
-## 🤝 Contributing
-
-Contributions, bug reports, and new modules are welcome! Feel free to open an issue or submit a pull request on GitHub.
+* **No telemetry:** FreeWinly sends no network requests, collects no analytics, and makes no external calls.
+* **Transparent:** 100% open-source PowerShell scripts that you can read, audit, and modify.
 
 ---
 
-## 📄 License
+## Contributing
+
+Contributions, bug reports, and new modules are welcome. Feel free to open an issue or submit a pull request on GitHub.
+
+---
+
+## License
 
 Distributed under the [MIT License](LICENSE).
