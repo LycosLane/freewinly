@@ -1,6 +1,6 @@
 # 🐋 FreeWinly
 
-> **Free Windows from bloatware, aggressive cleaners, and subscription traps.**  
+> **Keep Windows fast, clean, and up-to-date—without bloatware, background services, or subscriptions.**  
 > *A transparent, modular, 100% native Windows maintenance engine.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -27,11 +27,11 @@
 
 ---
 
-## ⚖️ Comparison: Traditional "PC Cleaners" (like CCleaner) vs. FreeWinly
+## ⚖️ Comparison: Traditional Commercial Cleaners vs. FreeWinly
 
 | Feature | Traditional Tools (e.g. CCleaner) | FreeWinly |
 | :--- | :--- | :--- |
-| **Price** | Free version nags you; Pro costs \$30–\$50/year | **100% Free & Open Source forever** (no subscriptions) |
+| **Price** | Free version displays upgrade prompts; Pro is \$30–\$50/yr | **100% Free & Open Source forever** (no subscriptions) |
 | **Updating Your Programs** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
 | **Annoying Popups & Ads** | Sits in your system tray; pops up "Your PC is slow!" | **Zero background processes, zero tray icons, zero ads** |
 | **1-Click "Launch & Walk Away"** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults & cleanly exits |
