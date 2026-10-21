@@ -1,0 +1,95 @@
+# Name: Software Updates (Winget)
+# Default: True
+# Description: Checks and installs pending Winget application updates (skipping excluded packages)
+
+param(
+    [PSCustomObject]$Config,
+    [string]$LogFile
+)
+
+Write-Host "`n--- [Module 10] Software Updates (Winget) ---" -ForegroundColor Cyan
+
+$today = (Get-Date).Date
+$activeExcludes = [System.Collections.Generic.List[string]]::new()
+$excludedSource = if ($Config.excluded) { $Config.excluded } else { @() }
+
+foreach ($item in $excludedSource) {
+    if ($item -is [string]) {
+        $activeExcludes.Add($item)
+    } elseif ($item.id -and $item.until) {
+        if ($today -le [datetime]$item.until) {
+            $activeExcludes.Add($item.id)
+            Write-Host "Exclusion active (postponed until $($item.until)): $($item.id)" -ForegroundColor Gray
+        }
+    }
+}
+
+Write-Host "Excluded IDs: $($activeExcludes -join ', ')" -ForegroundColor Gray
+
+$lines = & winget upgrade --include-unknown --accept-source-agreements | Out-String -Stream
+$headerIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^Name\s+Id\s+Version' })
+
+$packages = [System.Collections.Generic.List[PSCustomObject]]::new()
+if ($headerIdx -ge 0) {
+    $header    = $lines[$headerIdx]
+    $idStart   = $header.IndexOf("Id")
+    $verStart  = $header.IndexOf("Version")
+    for ($i = $headerIdx + 2; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if ($line.Length -gt $verStart) {
+            $name = $line.Substring(0, $idStart).Trim()
+            $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
+            if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
+                $packages.Add([PSCustomObject]@{ Id = $id; Name = $name })
+            }
+        }
+    }
+}
+
+$toUpdate = [System.Collections.Generic.List[PSCustomObject]]::new()
+$skipped  = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+foreach ($pkg in $packages) {
+    $isExcluded = $false
+    foreach ($ex in $activeExcludes) {
+        if ($pkg.Id -eq $ex -or $pkg.Name -match [regex]::Escape($ex)) {
+            $isExcluded = $true
+            break
+        }
+    }
+    if ($isExcluded) {
+        $skipped.Add($pkg)
+    } else {
+        $toUpdate.Add($pkg)
+    }
+}
+
+foreach ($s in $skipped) {
+    Write-Host "SKIPPED: $($s.Name) ($($s.Id))" -ForegroundColor Yellow
+    if ($LogFile) { Add-Content -Path $LogFile -Value "SKIPPED: $($s.Name) ($($s.Id))" -Encoding UTF8 }
+}
+
+if ($toUpdate.Count -eq 0) {
+    Write-Host "All non-excluded packages are up to date." -ForegroundColor Green
+    if ($LogFile) { Add-Content -Path $LogFile -Value "All non-excluded packages are up to date." -Encoding UTF8 }
+} else {
+    Write-Host "Updating $($toUpdate.Count) package(s) one by one..." -ForegroundColor Cyan
+    $idx = 0
+    foreach ($pkg in $toUpdate) {
+        $idx++
+        $id = $pkg.Id
+        Write-Host "[$idx/$($toUpdate.Count)] Updating $($pkg.Name) ($id) ..." -ForegroundColor Cyan
+        $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements 2>&1
+        $exitCode = $LASTEXITCODE
+        $out | Out-Host
+        if ($LogFile) {
+            $out | Add-Content -Path $LogFile -Encoding UTF8
+            Add-Content -Path $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
+        }
+        if ($exitCode -eq 0) {
+            Write-Host "RESULT: $id => SUCCESS" -ForegroundColor Green
+        } else {
+            Write-Host "RESULT: $id => FAILED/SKIPPED (ExitCode $exitCode)" -ForegroundColor Yellow
+        }
+    }
+}

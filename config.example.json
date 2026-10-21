@@ -1,0 +1,15 @@
+{
+  "preCommands": [],
+  "uninstall": [],
+  "install": [],
+  "excluded": [],
+  "postCommands": [],
+  "postponedPhases": [],
+  "enabledModules": [
+    "10_software_updates",
+    "20_cache_cleanup",
+    "30_ssd_trim"
+  ],
+  "cleanupTempMinAgeDays": 7,
+  "eventLogLookbackDays": 7
+}
