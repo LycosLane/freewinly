@@ -36,37 +36,37 @@ FreeWinly/
 
 ## AI Agent Playbook (How LLMs Use FreeWinly)
 
-### The Problem: The Windows Elevation & Token Trap
-1. **Background AI agents cannot click UAC desktop dialogs.** If an LLM tries to run an elevated command in a headless console, Windows blocks or hangs the session waiting for desktop confirmation.
-2. **Raw diagnostic discovery burns thousands of tokens.** If an AI runs 15 exploratory PowerShell commands across 10 chat turns, it exhausts context and time.
+### Background: Elevation and Context Limits
+1. **Background AI agents cannot click UAC desktop prompts.** If an agent tries to run an elevated command in a headless console, Windows blocks the session waiting for desktop confirmation.
+2. **Raw diagnostic queries consume unnecessary tokens.** Running exploratory PowerShell commands across multiple turns quickly exhausts context.
 
-### The Solution: The 4-Step Agent Workflow
+### The 4-Step Agent Workflow
 
-```
+```text
 [User asks AI to check PC]
-        │
-        ▼
+        |
+        v
 Step 1: AI runs `.\freewinly.ps1 -Check` (or -Audit)
-        └── FreeWinly executes all modules in < 1 second.
-        └── Returns condensed, pre-digested health summary in 1 turn (~300 tokens).
-        │
-        ▼
+        - FreeWinly executes all modules locally in seconds.
+        - Returns a structured health summary (~300 tokens).
+        |
+        v
 Step 2: AI analyzes findings & updates `config.json`
-        └── Excludes failing packages or adds uninstalls.
-        └── Stages natural language postponements (e.g. "skip Blender for 1 week").
-        └── Configures desired cleanup thresholds or pre/post commands.
-        │
-        ▼
+        - Excludes failing packages or adds uninstalls.
+        - Stages natural language postponements (e.g. "skip Blender for 1 week").
+        - Configures cleanup thresholds or pre/post commands.
+        |
+        v
 Step 3: AI sets up Start Menu shortcut (if not present)
-        └── Runs `.\install-shortcut.ps1`
-        │
-        ▼
+        - Runs `.\install-shortcut.ps1`
+        |
+        v
 Step 4: AI informs user to execute elevated maintenance
-        └── "I audited your PC and prepared the optimizations in config.json.
-             Simply press Windows Key, type 'FreeWinly', and hit Enter!"
+        - "I checked your PC and updated config.json.
+           Press Windows Key, type 'FreeWinly', and press Enter."
 ```
 
-### Natural Language Postponements (Zero-Friction User Experience)
+### Managing Postponements in Natural Language
 When a user says:
 * *"Don't update Photoshop for the next two weeks"*
 * *"Hold off on updating Blender until next Monday, I'm working on a project"*
@@ -78,7 +78,7 @@ The AI agent should:
    ```json
    { "id": "BlenderFoundation.Blender", "until": "2026-10-29", "reason": "User requested hold during active project" }
    ```
-4. Confirm to the user: *"Done! Blender updates are postponed until October 29th. FreeWinly will automatically clean up the exclusion once that date passes."*
+4. Confirm to the user: *"Done. Blender updates are postponed until October 29th. FreeWinly will automatically remove the postponement once that date passes."*
 
 ---
 
@@ -92,15 +92,15 @@ The AI agent should:
 ### 2. Interactive Checkbox Menu & Hotkeys
 * Navigate with **[Up/Down]** arrows.
 * Toggle individual modules with **[Space]** (`[x]` / `[ ]`).
-* **[ Enter ]** $\rightarrow$ **Run All Checked Tasks [x]** (executes all checked modules immediately; triggers UAC only if required).
-* **[ C ] / [ A ]** $\rightarrow$ **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
-* **[ T ]** $\rightarrow$ **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
-* **[ W ]** $\rightarrow$ **Schedule Maintenance in Windows Task Scheduler** (Weekly, Monthly, Logon, or Remove).
-* **[ S ]** $\rightarrow$ **Save Selection as Default** (persists current checkboxes and timer to `config.json` for future unattended runs).
-* **[ O ]** $\rightarrow$ **Run First-Time Onboarding Wizard** (detects standalone/unknown packages).
-* **[ I ]** $\rightarrow$ **Install or Update Start Menu Shortcut**.
-* **[ U ]** $\rightarrow$ **Complete Uninstaller** (previews and cleanly removes Task Scheduler jobs, shortcuts, and application directory).
-* **[ Q ]** $\rightarrow$ **Quit Without Running**.
+* **[ Enter ]** -> **Run All Checked Tasks [x]** (executes all checked modules immediately; prompts for UAC only if required).
+* **[ C ] / [ A ]** -> **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
+* **[ T ]** -> **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
+* **[ W ]** -> **Schedule Maintenance in Windows Task Scheduler** (Weekly, Monthly, Logon, or Remove).
+* **[ S ]** -> **Save Selection as Default** (saves current checkboxes and timer to `config.json` for future runs).
+* **[ O ]** -> **Run First-Time Onboarding Wizard** (detects standalone/unknown packages).
+* **[ I ]** -> **Install or Update Start Menu Shortcut**.
+* **[ U ]** -> **Complete Uninstaller** (previews and removes Task Scheduler jobs, shortcuts, and application directory).
+* **[ Q ]** -> **Quit Without Running**.
 
 ### 3. Modular Extensibility (`Info / Check / Run`)
 Every module is 100% self-contained and implements the standard contract:

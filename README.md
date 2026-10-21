@@ -28,8 +28,8 @@ Windows already has solid built-in tools for almost everything (official package
 I built FreeWinly for three simple reasons:
 
 1. **Use standard Windows tools:** No third-party background services, no registry modifications, and no subscription fees.
-2. **Translate Windows gibberish into clear actions:** Instead of digging through cryptic Device Manager error codes or thousands of Event Viewer logs, the script filters out the noise, spots actual problems (like crashing apps or missing drivers), and tells you what to do.
-3. **Make diagnostics easy for AI assistants:** Pointing an AI at raw system logs burns thousands of tokens on useless background noise. FreeWinly does the heavy lifting locally and produces a concise summary, so your AI assistant can spot issues and help you fix them immediately.
+2. **Turn Windows error noise into clear actions:** Instead of digging through cryptic Device Manager error codes or thousands of Event Viewer logs, the script filters out the noise, spots actual problems (like crashing apps or missing drivers), and tells you what to do.
+3. **Make diagnostics easy for AI assistants:** Asking an AI to read raw event logs or run exploratory commands wastes tokens and fills up context quickly. FreeWinly runs the checks locally and produces a short, structured summary, so your AI assistant can spot issues and suggest fixes immediately.
 
 If you just want your PC clean, fast, and updated:
 1. Download **`FreeWinly.zip`** from [Releases](https://github.com/LycosLane/freewinly/releases) and extract it.
