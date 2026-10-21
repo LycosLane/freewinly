@@ -179,6 +179,9 @@ function Run-OnboardingWizard {
         eventLogLookbackDays  = 7
         hddDefragMinDays      = 30
         countdownSeconds      = 10
+        scheduleType          = "Weekly"
+        scheduleDay           = "Sunday"
+        scheduleTime          = "12:00"
     }
 
     $newConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
@@ -319,11 +322,17 @@ if (-not $Run) {
 
         while ($running) {
             $timerText = if ($countdown -eq 0) { "0s (Instant)" } else { "${countdown}s" }
+            $schedSummary = if ($config.scheduleType -and $config.scheduleType -ne "Disabled") {
+                if ($config.scheduleType -eq "Logon") { "Logon (+5m)" }
+                else { "$($config.scheduleType) on $($config.scheduleDay) at $($config.scheduleTime)" }
+            } else {
+                "Disabled"
+            }
             $actions = @(
                 @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
                 @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
                 @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)"; Key = "T" },
-                @{ Label = "[   W   ]  Schedule Maintenance in Windows Task Scheduler"; Key = "W" },
+                @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
                 @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
                 @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
                 @{ Label = "[   I   ]  Install / Update Start Menu Shortcut"; Key = "I" },
@@ -396,7 +405,7 @@ if (-not $Run) {
                         # Task Scheduler
                         Clear-Host
                         & (Join-Path $projectRoot "install-task.ps1")
-                        Read-Host "`nPress Enter to return to menu"
+                        $config = Get-Content $configPath -Raw | ConvertFrom-Json
                     } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
                         # Save
                         $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
@@ -444,7 +453,7 @@ if (-not $Run) {
                 "W" {
                     Clear-Host
                     & (Join-Path $projectRoot "install-task.ps1")
-                    Read-Host "`nPress Enter to return to menu"
+                    $config = Get-Content $configPath -Raw | ConvertFrom-Json
                 }
                 "S" {
                     $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)

@@ -7,7 +7,7 @@
     automatically in the background. Uses Windows Task Scheduler without persistent
     background services or tray icons.
 .PARAMETER Action
-    'Interactive' - Opens clean numbered selector to configure schedule.
+    'Interactive' - Opens clean interactive panel to configure schedule.
     'Status'      - Displays current scheduled task configuration.
     'Weekly'      - Schedules weekly maintenance (default: Sunday at 12:00).
     'Monthly'     - Schedules monthly maintenance (1st of month at 12:00).
@@ -29,33 +29,105 @@ param(
     [ValidateSet('Interactive', 'Status', 'Weekly', 'Monthly', 'Logon', 'Remove')]
     [string]$Action = 'Interactive',
 
-    [string]$At = '12:00',
-    [string]$DayOfWeek = 'Sunday'
+    [string]$At = $null,
+    [string]$DayOfWeek = $null
 )
 
 $ErrorActionPreference = "Continue"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $taskName = "FreeWinly"
 $projectRoot = $PSScriptRoot
 $runnerScript = Join-Path $projectRoot "freewinly.ps1"
+$configPath = Join-Path $projectRoot "config.json"
 
-function Get-TaskStatusText {
+$weekdays = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+$modes    = @('Weekly', 'Monthly', 'Logon')
+
+function Get-TaskStatusInfo {
     try {
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
         $state = $task.State
         $trigger = $task.Triggers[0]
-        $triggerType = $trigger.CimClass.CimClassName -replace '^MSFT_Task', '' -replace 'Trigger$', ''
-        return "[Installed] State: $state | Schedule: $triggerType"
+        $triggerClass = $trigger.CimClass.CimClassName
+        
+        $schedDesc = if ($triggerClass -match 'Logon') {
+            "At Logon (+5m delay)"
+        } elseif ($triggerClass -match 'Weekly') {
+            $timePart = if ($trigger.StartBoundary) {
+                try { ([datetime]$trigger.StartBoundary).ToString("HH:mm") } catch { "12:00" }
+            } else { "12:00" }
+
+            $dayName = switch ($trigger.DaysOfWeek) {
+                1 { "Sunday" }
+                2 { "Monday" }
+                4 { "Tuesday" }
+                8 { "Wednesday" }
+                16 { "Thursday" }
+                32 { "Friday" }
+                64 { "Saturday" }
+                default { "Sunday" }
+            }
+
+            if ($trigger.WeeksInterval -eq 4) {
+                "Monthly on $dayName at $timePart"
+            } else {
+                "Weekly on $dayName at $timePart"
+            }
+        } else {
+            "Custom schedule"
+        }
+
+        return [PSCustomObject]@{
+            Installed = $true
+            State     = [string]$state
+            Schedule  = $schedDesc
+            Summary   = "[Installed] State: $state | Schedule: $schedDesc"
+        }
     } catch {
-        return "[Not Installed] No scheduled maintenance task currently registered."
+        return [PSCustomObject]@{
+            Installed = $false
+            State     = "NotInstalled"
+            Schedule  = "None"
+            Summary   = "[Not Installed] No scheduled maintenance task currently registered."
+        }
     }
 }
 
 function Show-Header {
+    param([string]$StatusText)
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host "       FreeWinly - Windows Task Scheduler Setup             " -ForegroundColor White
     Write-Host "       Runs on schedule without background services or icons" -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "Current Status: $(Get-TaskStatusText)`n" -ForegroundColor Yellow
+    Write-Host "Windows Task Status: $StatusText`n" -ForegroundColor Yellow
+}
+
+function Save-ScheduleToConfig {
+    param(
+        [string]$Type,
+        [string]$Day,
+        [string]$Time
+    )
+    if (Test-Path $configPath) {
+        try {
+            $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+            $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue $Type -Force
+            $cfg | Add-Member -NotePropertyName scheduleDay -NotePropertyValue $Day -Force
+            $cfg | Add-Member -NotePropertyName scheduleTime -NotePropertyValue $Time -Force
+            $cfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+        } catch { }
+    }
+}
+
+function Remove-ScheduleFromConfig {
+    if (Test-Path $configPath) {
+        try {
+            $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+            $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue "Disabled" -Force
+            $cfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+        } catch { }
+    }
 }
 
 function Register-FreeWinlyTask {
@@ -67,7 +139,8 @@ function Register-FreeWinlyTask {
 
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
-        Write-Host "`nRegistering scheduled maintenance with highest privileges requires Administrator rights." -ForegroundColor Yellow
+        Write-Host "`nRegistering scheduled maintenance requires Administrator privileges." -ForegroundColor Yellow
+        Write-Host "Requesting elevation..." -ForegroundColor Cyan
         Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action $ScheduleType -At `"$TimeStr`" -DayOfWeek `"$Day`""
         return
     }
@@ -79,7 +152,6 @@ function Register-FreeWinlyTask {
             New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $time
         }
         'Monthly' {
-            # Standard monthly trigger at specified day/time
             $tr = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $time
             $tr.WeeksInterval = 4
             $tr
@@ -100,8 +172,14 @@ function Register-FreeWinlyTask {
 
     try {
         Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $trigger -Principal $principal -Settings $settings -Description "FreeWinly Automated PC Maintenance" -Force | Out-Null
-        Write-Host "`n[SUCCESS] Scheduled task '$taskName' registered successfully!" -ForegroundColor Green
-        Write-Host "Schedule: $ScheduleType ($TimeStr)" -ForegroundColor Cyan
+        Save-ScheduleToConfig -Type $ScheduleType -Day $Day -Time $TimeStr
+        Write-Host "`n[SUCCESS] Scheduled task '$taskName' registered / updated successfully!" -ForegroundColor Green
+        Write-Host "Schedule: $ScheduleType" -ForegroundColor Cyan
+        if ($ScheduleType -ne 'Logon') {
+            Write-Host "Day/Time: Every $Day at $TimeStr" -ForegroundColor Cyan
+        } else {
+            Write-Host "Trigger:  5 minutes after logon" -ForegroundColor Cyan
+        }
         Write-Host "FreeWinly will execute quietly in the background without popups." -ForegroundColor Gray
     } catch {
         Write-Host "`n[ERROR] Failed to register task: $($_.Exception.Message)" -ForegroundColor Red
@@ -118,24 +196,51 @@ function Remove-FreeWinlyTask {
 
     try {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+        Remove-ScheduleFromConfig
         Write-Host "`n[SUCCESS] Scheduled task '$taskName' removed cleanly from Windows." -ForegroundColor Green
     } catch {
         Write-Host "`nTask '$taskName' was not found or already removed." -ForegroundColor Yellow
     }
 }
 
+function Adjust-Hour {
+    param([string]$TimeStr, [int]$Delta)
+    $hour = 12
+    $min  = 0
+    if ($TimeStr -match '^(\d{1,2}):(\d{2})$') {
+        $hour = [int]$matches[1]
+        $min  = [int]$matches[2]
+    }
+    $newHour = ($hour + $Delta) % 24
+    if ($newHour -lt 0) { $newHour += 24 }
+    return ("{0:D2}:{1:D2}" -f $newHour, $min)
+}
+
+# Resolve defaults from config.json if present
+$cfg = if (Test-Path $configPath) {
+    try { Get-Content $configPath -Raw | ConvertFrom-Json } catch { $null }
+} else { $null }
+
+$defaultType = if ($cfg -and $cfg.scheduleType -and $cfg.scheduleType -ne "Disabled") { $cfg.scheduleType } else { "Weekly" }
+$defaultDay  = if ($cfg -and $cfg.scheduleDay) { $cfg.scheduleDay } else { "Sunday" }
+$defaultTime = if ($cfg -and $cfg.scheduleTime) { $cfg.scheduleTime } else { "12:00" }
+
+if ($At) { $defaultTime = $At }
+if ($DayOfWeek) { $defaultDay = $DayOfWeek }
+
 if ($Action -eq 'Status') {
-    Show-Header
+    $info = Get-TaskStatusInfo
+    Show-Header -StatusText $info.Summary
     exit 0
 }
 
 if ($Action -eq 'Weekly') {
-    Register-FreeWinlyTask -ScheduleType 'Weekly' -TimeStr $At -Day $DayOfWeek
+    Register-FreeWinlyTask -ScheduleType 'Weekly' -TimeStr $defaultTime -Day $defaultDay
     exit 0
 }
 
 if ($Action -eq 'Monthly') {
-    Register-FreeWinlyTask -ScheduleType 'Monthly' -TimeStr $At
+    Register-FreeWinlyTask -ScheduleType 'Monthly' -TimeStr $defaultTime -Day $defaultDay
     exit 0
 }
 
@@ -149,25 +254,180 @@ if ($Action -eq 'Remove') {
     exit 0
 }
 
-# Interactive Menu
-Clear-Host
-Show-Header
+# ==================================================================
+# INTERACTIVE PANEL (In-Memory Staging with Confirmation)
+# ==================================================================
+$selectedMode = $defaultType
+$selectedDay  = $defaultDay
+$selectedTime = $defaultTime
 
-Write-Host "Choose a native schedule option:" -ForegroundColor White
-Write-Host "  [ 1 ]  Weekly  (Every Sunday at 12:00)" -ForegroundColor Cyan
-Write-Host "  [ 2 ]  Monthly (Every 4 weeks at 12:00)" -ForegroundColor Cyan
-Write-Host "  [ 3 ]  Logon   (5 minutes after signing into Windows)" -ForegroundColor Cyan
-Write-Host "  [ 4 ]  Remove  (Delete scheduled task from Windows Task Scheduler)" -ForegroundColor Yellow
-Write-Host "  [ Q ]  Cancel & Return" -ForegroundColor Gray
+$selectedIndex = 0
+$running = $true
 
-$choice = Read-Host "`nEnter selection (1-4, Q)"
+while ($running) {
+    $statusInfo = Get-TaskStatusInfo
+    Clear-Host
+    Show-Header -StatusText $statusInfo.Summary
 
-switch ($choice) {
-    "1" { Register-FreeWinlyTask -ScheduleType 'Weekly' -TimeStr '12:00' -Day 'Sunday' }
-    "2" { Register-FreeWinlyTask -ScheduleType 'Monthly' -TimeStr '12:00' }
-    "3" { Register-FreeWinlyTask -ScheduleType 'Logon' }
-    "4" { Remove-FreeWinlyTask }
-    default { Write-Host "`nNo changes made." -ForegroundColor Gray }
+    Write-Host "Staged Schedule Configuration (Use keys below to adjust):`n" -ForegroundColor White
+
+    $dayDisplay = if ($selectedMode -eq 'Logon') { "N/A (At Logon)" } else { $selectedDay }
+    $timeDisplay = if ($selectedMode -eq 'Logon') { "N/A (+5m delay)" } else { $selectedTime }
+
+    $options = @(
+        @{ Label = "Schedule Mode:    [ $selectedMode ]";  Help = "(Press Space/M to cycle: Weekly -> Monthly -> Logon)" },
+        @{ Label = "Day of Week:      [ $dayDisplay ]";   Help = "(Press Space/D to cycle: Sun -> Mon -> Tue...)" },
+        @{ Label = "Scheduled Time:   [ $timeDisplay ]";  Help = "(Press + / - to adjust hour)" },
+        @{ Label = "[ Enter / S ]  Confirm & Apply to Windows Task Scheduler"; Help = "(Saves to config.json and updates task)" },
+        @{ Label = "[     R     ]  Remove Scheduled Task from Windows";        Help = "(Deletes task from Task Scheduler)" },
+        @{ Label = "[     Q     ]  Cancel & Return to Menu";                   Help = "(Discards unstaged adjustments)" }
+    )
+
+    for ($i = 0; $i -lt $options.Count; $i++) {
+        $opt = $options[$i]
+        $pointer = if ($i -eq $selectedIndex) { "> " } else { "  " }
+        $color   = if ($i -eq $selectedIndex) { "Cyan" } elseif ($i -ge 3) { "Yellow" } else { "White" }
+
+        if ($i -eq 3) {
+            Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
+        }
+
+        Write-Host "$pointer$($opt.Label)  " -NoNewline -ForegroundColor $color
+        Write-Host "$($opt.Help)" -ForegroundColor Gray
+    }
+
+    Write-Host "`nControls: [Up/Down] Navigate  |  [D] Next Day  |  [+] Later  |  [-] Earlier  |  [Enter] Confirm" -ForegroundColor DarkGray
+
+    $key = [Console]::ReadKey($true)
+
+    # Global time adjusters (+ / -)
+    if ($key.KeyChar -eq '+' -or $key.Key -eq 'Add' -or $key.KeyChar -eq '=') {
+        if ($selectedMode -ne 'Logon') {
+            $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
+        }
+        continue
+    }
+    if ($key.KeyChar -eq '-' -or $key.Key -eq 'Subtract' -or $key.KeyChar -eq '_') {
+        if ($selectedMode -ne 'Logon') {
+            $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta -1
+        }
+        continue
+    }
+
+    # Global day cycler (D)
+    if ($key.Key -eq 'D') {
+        if ($selectedMode -ne 'Logon') {
+            $dayIdx = $weekdays.IndexOf($selectedDay)
+            if ($dayIdx -lt 0) { $dayIdx = 0 }
+            $dayIdx = ($dayIdx + 1) % $weekdays.Count
+            $selectedDay = $weekdays[$dayIdx]
+        }
+        continue
+    }
+
+    # Global mode cycler (M)
+    if ($key.Key -eq 'M') {
+        $mIdx = $modes.IndexOf($selectedMode)
+        if ($mIdx -lt 0) { $mIdx = 0 }
+        $mIdx = ($mIdx + 1) % $modes.Count
+        $selectedMode = $modes[$mIdx]
+        continue
+    }
+
+    switch ($key.Key) {
+        "UpArrow" {
+            $selectedIndex--
+            if ($selectedIndex -lt 0) { $selectedIndex = $options.Count - 1 }
+        }
+        "DownArrow" {
+            $selectedIndex++
+            if ($selectedIndex -ge $options.Count) { $selectedIndex = 0 }
+        }
+        "LeftArrow" {
+            if ($selectedIndex -eq 0) {
+                $mIdx = $modes.IndexOf($selectedMode)
+                $mIdx = ($mIdx - 1 + $modes.Count) % $modes.Count
+                $selectedMode = $modes[$mIdx]
+            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
+                $dayIdx = $weekdays.IndexOf($selectedDay)
+                $dayIdx = ($dayIdx - 1 + $weekdays.Count) % $weekdays.Count
+                $selectedDay = $weekdays[$dayIdx]
+            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
+                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta -1
+            }
+        }
+        "RightArrow" {
+            if ($selectedIndex -eq 0) {
+                $mIdx = $modes.IndexOf($selectedMode)
+                $mIdx = ($mIdx + 1) % $modes.Count
+                $selectedMode = $modes[$mIdx]
+            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
+                $dayIdx = $weekdays.IndexOf($selectedDay)
+                $dayIdx = ($dayIdx + 1) % $weekdays.Count
+                $selectedDay = $weekdays[$dayIdx]
+            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
+                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
+            }
+        }
+        "Spacebar" {
+            if ($selectedIndex -eq 0) {
+                $mIdx = $modes.IndexOf($selectedMode)
+                $mIdx = ($mIdx + 1) % $modes.Count
+                $selectedMode = $modes[$mIdx]
+            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
+                $dayIdx = $weekdays.IndexOf($selectedDay)
+                $dayIdx = ($dayIdx + 1) % $weekdays.Count
+                $selectedDay = $weekdays[$dayIdx]
+            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
+                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
+            }
+        }
+        "Enter" {
+            if ($selectedIndex -eq 0) {
+                $mIdx = $modes.IndexOf($selectedMode)
+                $mIdx = ($mIdx + 1) % $modes.Count
+                $selectedMode = $modes[$mIdx]
+            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
+                $dayIdx = $weekdays.IndexOf($selectedDay)
+                $dayIdx = ($dayIdx + 1) % $weekdays.Count
+                $selectedDay = $weekdays[$dayIdx]
+            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
+                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
+            } elseif ($selectedIndex -eq 3) {
+                # Confirm and Apply
+                Save-ScheduleToConfig -Type $selectedMode -Day $selectedDay -Time $selectedTime
+                Register-FreeWinlyTask -ScheduleType $selectedMode -TimeStr $selectedTime -Day $selectedDay
+                Start-Sleep -Seconds 2
+                $running = $false
+            } elseif ($selectedIndex -eq 4) {
+                # Remove
+                Remove-FreeWinlyTask
+                Start-Sleep -Seconds 2
+                $running = $false
+            } elseif ($selectedIndex -eq 5) {
+                # Cancel
+                Write-Host "`nNo changes were saved." -ForegroundColor Yellow
+                $running = $false
+            }
+        }
+        "S" {
+            Save-ScheduleToConfig -Type $selectedMode -Day $selectedDay -Time $selectedTime
+            Register-FreeWinlyTask -ScheduleType $selectedMode -TimeStr $selectedTime -Day $selectedDay
+            Start-Sleep -Seconds 2
+            $running = $false
+        }
+        "R" {
+            Remove-FreeWinlyTask
+            Start-Sleep -Seconds 2
+            $running = $false
+        }
+        "Q" {
+            Write-Host "`nNo changes were saved." -ForegroundColor Yellow
+            $running = $false
+        }
+        "Escape" {
+            Write-Host "`nNo changes were saved." -ForegroundColor Yellow
+            $running = $false
+        }
+    }
 }
-
-Start-Sleep -Seconds 1

@@ -118,7 +118,7 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 > [ Enter ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
   [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)
-  [   W   ]  Schedule Maintenance in Windows Task Scheduler
+  [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
   [   S   ]  Save Selection as Default
   [   O   ]  Run First-Time Onboarding Wizard
   [   I   ]  Install / Update Start Menu Shortcut
@@ -133,7 +133,7 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
-| **`W`** | Open **Windows Task Scheduler** configurator (Weekly, Monthly, at Logon, or Remove) |
+| **`W`** | Open **Windows Task Scheduler** panel (press `D` to cycle weekdays, `+`/`-` to adjust hours, `Enter` to save) |
 | **`S`** | Save current checkbox selection and timer to `config.json` as permanent defaults |
 | **`O`** | Run onboarding wizard (scans for standalone apps and suggests exclusions) |
 | **`I`** | Install or update Start Menu shortcut |
@@ -146,9 +146,15 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
 FreeWinly can run on a schedule using Windows Task Scheduler. It runs only when scheduled and leaves no background services or system tray icons running.
 
-Run the task scheduler installer:
+Inside the interactive panel (or by pressing **`[ W ]`** in the main menu):
+* Press **`D`** (or Space) to cycle through weekdays (`Sunday` -> `Monday` -> ...).
+* Press **`+`** / **`-`** to adjust the scheduled hour.
+* Press **`Enter`** (or **`S`**) to save the schedule to `config.json` and register or update the task in Windows Task Scheduler.
+* Press **`R`** to delete the scheduled task from Windows.
+
+You can also run the installer directly:
 ```powershell
-# Interactive schedule menu
+# Interactive schedule panel
 powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 
 # Or automate directly from CLI:
@@ -156,7 +162,6 @@ powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 .\install-task.ps1 -Action Logon
 .\install-task.ps1 -Action Remove
 ```
-* You can also press **`[ W ]`** inside the FreeWinly interactive menu.
 
 ---
 

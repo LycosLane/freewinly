@@ -15,5 +15,8 @@
   "cleanupTempMinAgeDays": 7,
   "eventLogLookbackDays": 7,
   "hddDefragMinDays": 30,
-  "countdownSeconds": 10
+  "countdownSeconds": 10,
+  "scheduleType": "Weekly",
+  "scheduleDay": "Sunday",
+  "scheduleTime": "12:00"
 }

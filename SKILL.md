@@ -95,7 +95,7 @@ The AI agent should:
 * **[ Enter ]** -> **Run All Checked Tasks [x]** (executes all checked modules immediately; prompts for UAC only if required).
 * **[ C ] / [ A ]** -> **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
 * **[ T ]** -> **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
-* **[ W ]** -> **Schedule Maintenance in Windows Task Scheduler** (Weekly, Monthly, Logon, or Remove).
+* **[ W ]** -> **Schedule Maintenance in Windows Task Scheduler** (interactive panel with `D` weekday cycler and `+`/`-` hour adjustments).
 * **[ S ]** -> **Save Selection as Default** (saves current checkboxes and timer to `config.json` for future runs).
 * **[ O ]** -> **Run First-Time Onboarding Wizard** (detects standalone/unknown packages).
 * **[ I ]** -> **Install or Update Start Menu Shortcut**.
