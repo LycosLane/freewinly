@@ -2,7 +2,7 @@
 .SYNOPSIS
     FreeWinly Mechanical HDD Defragmentation Module.
 .DESCRIPTION
-    Analyzes and defragments rotational magnetic hard drives (HDDs) only.
+    100% self-contained script. Analyzes and defragments rotational magnetic hard drives (HDDs) only.
     Automatically skips SSDs and removable USB flash pens. Only executes if the configured minimum days
     (default: 30) have passed since the last run and Windows recommends defragmentation.
 .PARAMETER Action
@@ -32,18 +32,31 @@ param(
     [hashtable]$Options = @{}
 )
 
-# Import shared storage utility if available
-$storageUtil = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\storage-util.ps1"
-if (Test-Path $storageUtil) {
-    . $storageUtil
+function Get-InstalledFixedHDDs {
+    $found = [System.Collections.Generic.List[PSCustomObject]]::new()
+    try {
+        $disks = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'HDD' }
+        foreach ($disk in $disks) {
+            $volumes = $disk | Get-Disk -ErrorAction SilentlyContinue |
+                               Get-Partition -ErrorAction SilentlyContinue |
+                               Get-Volume -ErrorAction SilentlyContinue |
+                               Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
+            foreach ($v in $volumes) {
+                $found.Add([PSCustomObject]@{
+                    DriveLetter = [string]$v.DriveLetter
+                    Label       = $v.FileSystemLabel
+                    Model       = $disk.FriendlyName
+                    BusType     = $disk.BusType
+                    SizeGB      = [math]::Round($v.Size / 1GB, 1)
+                    FreeGB      = [math]::Round($v.SizeRemaining / 1GB, 1)
+                })
+            }
+        }
+    } catch { }
+    return @($found)
 }
 
-$detectedHDDs = if (Get-Command Get-FreeWinlyStorageVolumes -ErrorAction SilentlyContinue) {
-    Get-FreeWinlyStorageVolumes -MediaType 'HDD'
-} else {
-    @()
-}
-
+$detectedHDDs = Get-InstalledFixedHDDs
 $detectedLetters = @($detectedHDDs | Select-Object -ExpandProperty DriveLetter)
 
 if ($Action -eq 'Info') {

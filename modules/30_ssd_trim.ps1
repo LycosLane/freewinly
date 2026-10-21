@@ -2,8 +2,9 @@
 .SYNOPSIS
     FreeWinly SSD TRIM Optimization Module.
 .DESCRIPTION
-    Sends native NVMe/SATA TRIM hints to SSD volumes. Automatically detects all fixed solid-state drives
-    installed on the system, filtering out removable USB flash drives, optical discs, and rotational HDDs.
+    100% self-contained script. Sends native NVMe/SATA TRIM hints to SSD volumes.
+    Automatically detects all fixed solid-state drives installed on the system,
+    filtering out removable USB flash drives, optical discs, and rotational HDDs.
 .PARAMETER Action
     'Info'  - Returns module metadata object including detected SSD drives.
     'Check' - Inspects TRIM status and lists target drives without trimming.
@@ -33,18 +34,47 @@ param(
     [hashtable]$Options = @{}
 )
 
-# Import shared storage utility if available
-$storageUtil = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\storage-util.ps1"
-if (Test-Path $storageUtil) {
-    . $storageUtil
+function Get-InstalledFixedSSDs {
+    $found = [System.Collections.Generic.List[PSCustomObject]]::new()
+    try {
+        # Query physical SSDs, explicitly excluding USB external drives (USB cannot pass standard TRIM)
+        $disks = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'SSD' -and $_.BusType -ne 'USB' }
+        foreach ($disk in $disks) {
+            $volumes = $disk | Get-Disk -ErrorAction SilentlyContinue |
+                               Get-Partition -ErrorAction SilentlyContinue |
+                               Get-Volume -ErrorAction SilentlyContinue |
+                               Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
+            foreach ($v in $volumes) {
+                $found.Add([PSCustomObject]@{
+                    DriveLetter = [string]$v.DriveLetter
+                    Label       = $v.FileSystemLabel
+                    Model       = $disk.FriendlyName
+                    BusType     = $disk.BusType
+                    SizeGB      = [math]::Round($v.Size / 1GB, 1)
+                    FreeGB      = [math]::Round($v.SizeRemaining / 1GB, 1)
+                })
+            }
+        }
+    } catch { }
+
+    # Fallback to C: if disk querying is blocked but C: is a fixed drive
+    if ($found.Count -eq 0 -and (Test-Path 'C:\')) {
+        $cVol = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
+        if ($cVol -and $cVol.DriveType -eq 'Fixed') {
+            $found.Add([PSCustomObject]@{
+                DriveLetter = 'C'
+                Label       = $cVol.FileSystemLabel
+                Model       = 'Primary Fixed Drive'
+                BusType     = 'Internal'
+                SizeGB      = [math]::Round($cVol.Size / 1GB, 1)
+                FreeGB      = [math]::Round($cVol.SizeRemaining / 1GB, 1)
+            })
+        }
+    }
+    return @($found)
 }
 
-$detectedDrives = if (Get-Command Get-FreeWinlyStorageVolumes -ErrorAction SilentlyContinue) {
-    Get-FreeWinlyStorageVolumes -MediaType 'SSD' -ExcludeUSB
-} else {
-    @([PSCustomObject]@{ DriveLetter = 'C'; Label = 'System'; Model = 'Default SSD'; BusType = 'NVMe'; SizeGB = 0; FreeGB = 0 })
-}
-
+$detectedDrives = Get-InstalledFixedSSDs
 $detectedDriveLetters = @($detectedDrives | Select-Object -ExpandProperty DriveLetter)
 
 if ($Action -eq 'Info') {
