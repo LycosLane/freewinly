@@ -17,7 +17,9 @@ FreeWinly is a 100% native Windows maintenance engine built without third-party 
 FreeWinly/
 ├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
 ├── freewinly.cmd                <-- Double-clickable batch launcher (%* arguments)
-├── install-shortcut.ps1         <-- Dynamic Start Menu shortcut installer
+├── install-shortcut.ps1         <-- Start Menu shortcut manager (Install/Remove)
+├── install-task.ps1             <-- Native Windows Task Scheduler installer (Weekly/Monthly/Logon/Remove)
+├── uninstall.ps1                <-- Complete uninstaller with preview & confirmation
 ├── config.json                  <-- Exclusions, enabled modules, generic hooks
 ├── SKILL.md                     <-- AI Agent Playbook
 └── modules/
@@ -92,9 +94,12 @@ The AI agent should:
 * Toggle individual modules with **[Space]** (`[x]` / `[ ]`).
 * **[ Enter ]** $\rightarrow$ **Run All Checked Tasks [x]** (executes all checked modules immediately; triggers UAC only if required).
 * **[ C ] / [ A ]** $\rightarrow$ **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
-* **[ S ]** $\rightarrow$ **Save Selection as Default** (persists current checkboxes to `config.json` for future unattended runs).
+* **[ T ]** $\rightarrow$ **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
+* **[ W ]** $\rightarrow$ **Schedule Maintenance in Windows Task Scheduler** (Weekly, Monthly, Logon, or Remove).
+* **[ S ]** $\rightarrow$ **Save Selection as Default** (persists current checkboxes and timer to `config.json` for future unattended runs).
 * **[ O ]** $\rightarrow$ **Run First-Time Onboarding Wizard** (detects standalone/unknown packages).
-* **[ I ]** $\rightarrow$ **Reinstall Start Menu Shortcut** (dynamically updates shortcut).
+* **[ I ]** $\rightarrow$ **Install or Update Start Menu Shortcut**.
+* **[ U ]** $\rightarrow$ **Complete Uninstaller** (previews and cleanly removes Task Scheduler jobs, shortcuts, and application directory).
 * **[ Q ]** $\rightarrow$ **Quit Without Running**.
 
 ### 3. Modular Extensibility (`Info / Check / Run`)

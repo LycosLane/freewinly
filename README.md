@@ -114,7 +114,8 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
   [   W   ]  Schedule Maintenance in Windows Task Scheduler
   [   S   ]  Save Selection as Default
   [   O   ]  Run First-Time Onboarding Wizard
-  [   I   ]  Reinstall Start Menu Shortcut
+  [   I   ]  Install / Update Start Menu Shortcut
+  [   U   ]  Uninstall FreeWinly Completely
   [   Q   ]  Quit Without Running
 ```
 
@@ -125,10 +126,11 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | **`Enter`** | Run all currently checked modules (triggers Just-in-Time UAC only if required) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
-| **`W`** | Open **Windows Task Scheduler** configurator (Weekly, Monthly, or at Logon) |
+| **`W`** | Open **Windows Task Scheduler** configurator (Weekly, Monthly, at Logon, or Remove) |
 | **`S`** | Save current checkbox selection and timer to `config.json` as permanent defaults |
 | **`O`** | Run onboarding wizard (scans for standalone apps and suggests exclusions) |
-| **`I`** | Reinstall Start Menu shortcut |
+| **`I`** | Install or update Start Menu shortcut |
+| **`U`** | Complete **Uninstaller** (previews and removes Task Scheduler tasks, shortcuts, and files) |
 | **`Q`** | Exit without making any changes |
 
 ---
@@ -148,6 +150,25 @@ powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 .\install-task.ps1 -Action Remove
 ```
 * Or simply press **`[ W ]`** inside the FreeWinly interactive menu.
+
+---
+
+## 🗑️ Clean Uninstallation (`uninstall.ps1`)
+
+FreeWinly respects your system and leaves zero digital debris behind. It includes a dedicated, safe uninstaller that previews every single component before removal:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+```
+* Or press **`[ U ]`** directly inside the FreeWinly TUI menu.
+
+**What it does:**
+1. Scans for and displays all active components:
+   - Windows Task Scheduler job (`FreeWinly`)
+   - Start Menu shortcut (`FreeWinly.lnk`)
+   - Application folder (including local configs and logs)
+2. Asks for explicit confirmation: `Are you sure you want to completely remove FreeWinly? (y/N)`
+3. Cleanly unregisters the scheduled task, deletes the shortcut, and self-deletes the application directory via a detached background process. Zero residual registry keys or background files!
 
 ---
 

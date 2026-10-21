@@ -26,6 +26,7 @@ $coreItems = @(
     "freewinly.ps1",
     "install-shortcut.ps1",
     "install-task.ps1",
+    "uninstall.ps1",
     "config.example.json",
     "README.md",
     "LICENSE"

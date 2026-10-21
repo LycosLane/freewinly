@@ -326,7 +326,8 @@ if (-not $Run) {
                 @{ Label = "[   W   ]  Schedule Maintenance in Windows Task Scheduler"; Key = "W" },
                 @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
                 @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
-                @{ Label = "[   I   ]  Reinstall Start Menu Shortcut"; Key = "I" },
+                @{ Label = "[   I   ]  Install / Update Start Menu Shortcut"; Key = "I" },
+                @{ Label = "[   U   ]  Uninstall FreeWinly Completely"; Key = "U" },
                 @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
             )
             $totalOptions = $discoveredModules.Count + $actions.Count
@@ -413,6 +414,11 @@ if (-not $Run) {
                         & (Join-Path $projectRoot "install-shortcut.ps1")
                         Read-Host "`nPress Enter to return to menu"
                     } elseif ($selectedIndex -eq ($discoveredModules.Count + 7)) {
+                        # Uninstall
+                        Clear-Host
+                        & (Join-Path $projectRoot "uninstall.ps1")
+                        Read-Host "`nPress Enter to return to menu"
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 8)) {
                         # Quit
                         Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
                         exit 0
@@ -454,6 +460,11 @@ if (-not $Run) {
                 }
                 "I" {
                     & (Join-Path $projectRoot "install-shortcut.ps1")
+                    Read-Host "`nPress Enter to return to menu"
+                }
+                "U" {
+                    Clear-Host
+                    & (Join-Path $projectRoot "uninstall.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
                 "Q" {
