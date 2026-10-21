@@ -39,8 +39,8 @@ try {
 
 $startMenuPrograms = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 $shortcutCandidates = @(
-    Join-Path $startMenuPrograms "Utility\FreeWinly.lnk",
-    Join-Path $startMenuPrograms "FreeWinly.lnk"
+    (Join-Path $startMenuPrograms "Utility\FreeWinly.lnk"),
+    (Join-Path $startMenuPrograms "FreeWinly.lnk")
 )
 $shortcutsFound = @($shortcutCandidates | Where-Object { Test-Path $_ })
 

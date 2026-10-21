@@ -31,8 +31,8 @@ $utilityFolder     = Join-Path $startMenuPrograms "Utility"
 
 # Check possible locations
 $shortcutCandidates = @(
-    Join-Path $utilityFolder "FreeWinly.lnk",
-    Join-Path $startMenuPrograms "FreeWinly.lnk"
+    (Join-Path $utilityFolder "FreeWinly.lnk"),
+    (Join-Path $startMenuPrograms "FreeWinly.lnk")
 )
 
 $existingShortcut = $shortcutCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
