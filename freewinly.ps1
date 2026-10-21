@@ -202,10 +202,11 @@ foreach ($mf in $moduleFiles) {
     $defaultVal    = if ($info -and $null -ne $info.Default) { $info.Default } else { $true }
     $requiresAdmin = if ($info -and $null -ne $info.RequiresAdmin) { $info.RequiresAdmin } else { $false }
     $options       = if ($info -and $info.Options) { $info.Options } else { @{} }
-    $isApplicable  = if ($info -and $null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }
 
-    # If the module is not applicable to this system (e.g. HDD defrag on 100% SSD PC), skip unless explicitly called via CLI
-    if (-not $isApplicable -and -not ($Modules -and $Modules -contains $baseName)) {
+    # If the module requires target drives (e.g. SSD TRIM or HDD defrag) and none exist on this PC,
+    # skip adding it to the TUI/execution list unless explicitly targeted via CLI (-Modules)
+    $hasEmptyDrives = ($options -and $options.ContainsKey('DetectedDrives') -and (@($options['DetectedDrives']).Count -eq 0))
+    if ($hasEmptyDrives -and -not ($Modules -and $Modules -contains $baseName)) {
         continue
     }
 

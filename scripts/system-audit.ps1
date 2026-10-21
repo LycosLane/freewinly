@@ -92,23 +92,26 @@ if ($Phase -in @('All', 'StartupBoot')) {
 }
 
 if ($Phase -in @('All', 'CleanupPreview')) {
-    Write-Host "=== [PHASE 7] SAFE CACHE & CLEANUP PREVIEW ===" -ForegroundColor Cyan
+    $minDays = if ($config -and $config.cleanupTempMinAgeDays) { $config.cleanupTempMinAgeDays } else { 7 }
+    Write-Host "=== [PHASE 7] SAFE CACHE & CLEANUP PREVIEW (Files >$minDays days) ===" -ForegroundColor Cyan
     $targets = [ordered]@{
-        'UserTemp'           = $env:TEMP
-        'WindowsTemp'        = 'C:\Windows\Temp'
-        'WinGetCache'        = "$env:LOCALAPPDATA\Temp\WinGet"
-        'WindowsUpdateCache' = 'C:\Windows\SoftwareDistribution\Download'
-        'DirectXShaderCache' = "$env:LOCALAPPDATA\D3DSCache"
-        'LocalCrashDumps'    = "$env:LOCALAPPDATA\CrashDumps"
+        'UserTemp'              = $env:TEMP
+        'WindowsTemp'           = 'C:\Windows\Temp'
+        'WinGetCache'           = "$env:LOCALAPPDATA\Temp\WinGet"
+        'WindowsUpdateCache'    = 'C:\Windows\SoftwareDistribution\Download'
+        'DirectXShaderCache'    = "$env:LOCALAPPDATA\D3DSCache"
+        'LocalCrashDumps'       = "$env:LOCALAPPDATA\CrashDumps"
+        'WindowsErrorReporting' = "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"
     }
+    $cutoff = (Get-Date).AddDays(-$minDays)
     $results = foreach ($k in $targets.Keys) {
         $p = $targets[$k]
         if (Test-Path $p) {
-            $files = Get-ChildItem $p -Recurse -Force -File
+            $files = Get-ChildItem $p -Recurse -Force -File -ErrorAction SilentlyContinue
             $totalMB = [math]::Round(($files | Measure-Object Length -Sum).Sum / 1MB, 1)
-            $oldFiles = $files | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) }
+            $oldFiles = $files | Where-Object { $_.LastWriteTime -lt $cutoff }
             $oldMB = [math]::Round(($oldFiles | Measure-Object Length -Sum).Sum / 1MB, 1)
-            [PSCustomObject]@{ Target = $k; Path = $p; Total_MB = $totalMB; OlderThan7d_MB = $oldMB }
+            [PSCustomObject]@{ Target = $k; Path = $p; Total_MB = $totalMB; Eligible_MB = $oldMB }
         }
     }
     $results | Format-Table -AutoSize

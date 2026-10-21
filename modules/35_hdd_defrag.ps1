@@ -3,10 +3,10 @@
     FreeWinly Mechanical HDD Defragmentation Module.
 .DESCRIPTION
     Analyzes and defragments rotational magnetic hard drives (HDDs) only.
-    Automatically skips SSDs. Only executes if the configured minimum days (default: 30)
-    have passed since the last run and Windows recommends defragmentation.
+    Automatically skips SSDs and removable USB flash pens. Only executes if the configured minimum days
+    (default: 30) have passed since the last run and Windows recommends defragmentation.
 .PARAMETER Action
-    'Info'  - Returns module metadata object including detected HDD drives and applicability.
+    'Info'  - Returns module metadata object including detected HDD drives.
     'Check' - Inspects days elapsed and fragmentation recommendation without writing changes.
     'Run'   - Defragments eligible HDDs if due and recommended by Windows.
 .PARAMETER Config
@@ -32,34 +32,19 @@ param(
     [hashtable]$Options = @{}
 )
 
-function Get-InstalledHDDDrives {
-    $found = [System.Collections.Generic.List[PSCustomObject]]::new()
-    try {
-        $hdds = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object MediaType -eq 'HDD'
-        foreach ($hdd in $hdds) {
-            $vols = $hdd | Get-Disk -ErrorAction SilentlyContinue |
-                           Get-Partition -ErrorAction SilentlyContinue |
-                           Get-Volume -ErrorAction SilentlyContinue |
-                           Where-Object DriveLetter
-            foreach ($v in $vols) {
-                $found.Add([PSCustomObject]@{
-                    DriveLetter = [string]$v.DriveLetter
-                    Label       = $v.FileSystemLabel
-                    Model       = $hdd.FriendlyName
-                    BusType     = $hdd.BusType
-                    SizeGB      = [math]::Round($v.Size / 1GB, 1)
-                    FreeGB      = [math]::Round($v.SizeRemaining / 1GB, 1)
-                })
-            }
-        }
-    } catch {
-    }
-    return $found
+# Import shared storage utility if available
+$storageUtil = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\storage-util.ps1"
+if (Test-Path $storageUtil) {
+    . $storageUtil
 }
 
-$detectedHDDs = Get-InstalledHDDDrives
+$detectedHDDs = if (Get-Command Get-FreeWinlyStorageVolumes -ErrorAction SilentlyContinue) {
+    Get-FreeWinlyStorageVolumes -MediaType 'HDD'
+} else {
+    @()
+}
+
 $detectedLetters = @($detectedHDDs | Select-Object -ExpandProperty DriveLetter)
-$isApplicable = ($detectedHDDs.Count -gt 0)
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
@@ -68,7 +53,6 @@ if ($Action -eq 'Info') {
         Description   = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
         Default       = $false
         RequiresAdmin = $true
-        Applicable    = $isApplicable
         Options       = @{
             DetectedDrives = $detectedLetters
             DrivesDetail   = $detectedHDDs
@@ -78,7 +62,7 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [Module 35] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan
 
-if (-not $isApplicable) {
+if ($detectedLetters.Count -eq 0) {
     Write-Host "No mechanical rotational hard drives (HDDs) detected on this PC." -ForegroundColor Green
     Write-Host "This system is 100% solid-state (SSD/NVMe). HDD defragmentation is not needed." -ForegroundColor Gray
     return
@@ -106,7 +90,7 @@ $targetLetters = if ($Options -and $Options.ContainsKey('Drives') -and $Options[
 }
 
 if ($Action -eq 'Check') {
-    Write-Host "Detected Mechanical HDD Drives:" -ForegroundColor Yellow
+    Write-Host "Detected Mechanical HDD Drives (Removable USB excluded):" -ForegroundColor Yellow
     $detectedHDDs | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
 
     Write-Host "Cadence Threshold: Minimum $minDays day(s) between defragmentation runs." -ForegroundColor Gray

@@ -52,7 +52,7 @@ It proves that everything a modern Windows PC actually needs—keeping all appli
 ## 🚀 Quick Start
 
 ### Option 1: Double-Click (Zero Setup)
-Clone or download this repository, right-click **`freewinly.cmd`**, and choose **Run as administrator** (or double-click; it will self-elevate automatically).
+Clone or download this repository and simply double-click **`freewinly.cmd`**. It starts immediately without annoying UAC prompts, elevating Just-in-Time only if administrative tasks are selected.
 
 ### Option 2: Add to Windows Start Menu (Recommended)
 Run the dynamic shortcut installer once:

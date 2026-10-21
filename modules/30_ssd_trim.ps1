@@ -2,8 +2,8 @@
 .SYNOPSIS
     FreeWinly SSD TRIM Optimization Module.
 .DESCRIPTION
-    Sends native NVMe/SATA TRIM hints to SSD volumes. Automatically detects all solid-state drives
-    installed on the system and skips traditional rotational HDDs.
+    Sends native NVMe/SATA TRIM hints to SSD volumes. Automatically detects all fixed solid-state drives
+    installed on the system, filtering out removable USB flash drives, optical discs, and rotational HDDs.
 .PARAMETER Action
     'Info'  - Returns module metadata object including detected SSD drives.
     'Check' - Inspects TRIM status and lists target drives without trimming.
@@ -33,44 +33,18 @@ param(
     [hashtable]$Options = @{}
 )
 
-function Get-InstalledSSDDrives {
-    $found = [System.Collections.Generic.List[PSCustomObject]]::new()
-    try {
-        $ssds = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object MediaType -eq 'SSD'
-        foreach ($ssd in $ssds) {
-            $vols = $ssd | Get-Disk -ErrorAction SilentlyContinue |
-                           Get-Partition -ErrorAction SilentlyContinue |
-                           Get-Volume -ErrorAction SilentlyContinue |
-                           Where-Object DriveLetter
-            foreach ($v in $vols) {
-                $found.Add([PSCustomObject]@{
-                    DriveLetter = [string]$v.DriveLetter
-                    Label       = $v.FileSystemLabel
-                    Model       = $ssd.FriendlyName
-                    BusType     = $ssd.BusType
-                    SizeGB      = [math]::Round($v.Size / 1GB, 1)
-                    FreeGB      = [math]::Round($v.SizeRemaining / 1GB, 1)
-                })
-            }
-        }
-    } catch {
-        # Fallback to C: if disk querying encounters unexpected permission locks
-    }
-
-    if ($found.Count -eq 0 -and (Test-Path 'C:\')) {
-        $found.Add([PSCustomObject]@{
-            DriveLetter = 'C'
-            Label       = 'System'
-            Model       = 'Primary SSD'
-            BusType     = 'Unknown'
-            SizeGB      = 0
-            FreeGB      = 0
-        })
-    }
-    return $found
+# Import shared storage utility if available
+$storageUtil = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\storage-util.ps1"
+if (Test-Path $storageUtil) {
+    . $storageUtil
 }
 
-$detectedDrives = Get-InstalledSSDDrives
+$detectedDrives = if (Get-Command Get-FreeWinlyStorageVolumes -ErrorAction SilentlyContinue) {
+    Get-FreeWinlyStorageVolumes -MediaType 'SSD' -ExcludeUSB
+} else {
+    @([PSCustomObject]@{ DriveLetter = 'C'; Label = 'System'; Model = 'Default SSD'; BusType = 'NVMe'; SizeGB = 0; FreeGB = 0 })
+}
+
 $detectedDriveLetters = @($detectedDrives | Select-Object -ExpandProperty DriveLetter)
 
 if ($Action -eq 'Info') {
@@ -98,6 +72,11 @@ $targetDriveLetters = if ($Options -and $Options.ContainsKey('Drives') -and $Opt
     $detectedDriveLetters
 }
 
+if ($targetDriveLetters.Count -eq 0) {
+    Write-Host "No fixed SSD drives found to optimize." -ForegroundColor Yellow
+    return
+}
+
 if ($Action -eq 'Check') {
     Write-Host "[Check Mode] Querying operating system TRIM support..." -ForegroundColor Gray
     try {
@@ -106,7 +85,7 @@ if ($Action -eq 'Check') {
         Write-Host "Could not query fsutil DisableDeleteNotify." -ForegroundColor Gray
     }
 
-    Write-Host "`nDetected SSD Physical Drives & Partitions:" -ForegroundColor Yellow
+    Write-Host "`nDetected SSD Physical Drives & Partitions (Removable USB excluded):" -ForegroundColor Yellow
     $detectedDrives | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
 
     Write-Host "Configured target drives for TRIM: $($targetDriveLetters -join ', ')" -ForegroundColor Cyan

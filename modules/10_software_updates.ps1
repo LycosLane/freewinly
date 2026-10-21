@@ -43,6 +43,12 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [Module 10] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
 
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host "Winget CLI is not available on this system. Skipping." -ForegroundColor Yellow
+    if ($LogFile) { Add-Content -Path $LogFile -Value "Winget CLI not available on this system." -Encoding UTF8 }
+    return
+}
+
 $today = (Get-Date).Date
 $activeExcludes = [System.Collections.Generic.List[string]]::new()
 $excludedSource = if ($Config -and $Config.excluded) { $Config.excluded } else { @() }
