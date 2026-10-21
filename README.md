@@ -14,19 +14,34 @@
     ___:____     |"\/"|
   ,'        `.    \  /
   |  O        \___/  |    FreeWinly
-~^~^~^~^~^~^~^~^~^~^~^~^~ Freeing your PC from the CCleaner trap.
+~^~^~^~^~^~^~^~^~^~^~^~^~ Pure, bloatware-free Windows maintenance.
 ```
 
 ---
 
 ## 💡 Why FreeWinly?
 
-In the movie *Free Willy*, the captive orca was trapped in a theme park until he was finally freed. 
+In the movie *Free Willy*, the captive orca represented freedom and natural strength.
 
-For years, Windows users have been trapped by proprietary "PC Cleaners" and "Driver Updaters" that charge annual subscriptions, install background telemetry, break modern Windows with aggressive registry cleaning, and nag you with scary warnings.
+Many traditional PC maintenance tools introduce resident background services, telemetry, paid subscription models, or risky registry cleaners that modern Windows operating systems simply do not need.
 
-**FreeWinly breaks that cycle.**  
-It proves that everything a modern Windows PC actually needs—keeping all applications updated like Linux `apt upgrade`, cleaning safe cache leftovers, running SSD TRIM, and auditing system health—can be done **100% cleanly using native Windows board tools** (`winget`, PowerShell, COM APIs, DISM).
+**FreeWinly takes a fundamentally different path.**  
+It proves that everything a modern Windows PC genuinely needs—keeping applications updated like Linux `apt upgrade`, safely purging stale caches, sending native SSD TRIM hints, and auditing hardware stability—can be achieved **100% transparently using built-in Windows board tools** (`winget`, PowerShell 5.1+, COM APIs, and DISM).
+
+---
+
+## ⚖️ Comparison: Traditional Tune-Up Tools vs. FreeWinly
+
+| Dimension | Traditional Utilities | FreeWinly |
+| :--- | :--- | :--- |
+| **Tooling & Engine** | Proprietary closed-source `.exe`, background agents, and tray daemons | **100% native Windows tools** (`winget`, PowerShell 5.1+, COM APIs, `Optimize-Volume`) |
+| **Dependencies & Install** | Requires setup wizard, background services, or runtime frameworks | **Zero installation & zero external dependencies**; pure script portability |
+| **Cost & Licensing** | Paid subscription renewals, freemium lockouts, or feature upselling | **100% Free & Open Source (MIT)**; zero fees, zero upsells |
+| **Privacy & Telemetry** | Often tracks hardware usage, diagnostics, and update analytics | **Zero telemetry & zero network phoning**; 100% local execution |
+| **Registry Handling** | Risky "registry cleaners" (which Microsoft advises against) | **Zero registry tampering**; preserves operating system stability |
+| **Storage Optimization** | Generic defragmenters (which cause flash wear if applied to SSDs) | **Hardware-aware**: sends native NVMe TRIM hints to SSDs; defrags only magnetic HDDs |
+| **Software Updates** | Custom third-party scrapers or proprietary package mirrors | **Official Microsoft `winget` repository** with verified publisher manifests |
+| **AI / Automation Ready** | Closed GUI-only; impossible to inspect or script headlessly | **Full CLI support (`-Check`, `-Run`) + AI Agent Playbook (`SKILL.md`)** |
 
 ---
 
