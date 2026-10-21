@@ -36,23 +36,41 @@ FreeWinly/
 * **Unattended Mode:** If no key is pressed, it executes default tasks and cleanly exits.
 * **Interactive Mode:** Pressing any key opens the interactive console menu.
 
-### 2. Interactive Checkbox Menu
+### 2. Interactive Checkbox Menu & Hotkeys
 * Navigate with **[Up/Down]** arrows.
 * Toggle individual modules with **[Space]** (`[x]` / `[ ]`).
-* **[ Enter ]** $\rightarrow$ **Run All Checked Tasks [x]** (executes all checked modules immediately without modifying defaults).
+* **[ Enter ]** $\rightarrow$ **Run All Checked Tasks [x]** (executes all checked modules immediately; triggers UAC only if required).
+* **[ C ]** $\rightarrow$ **Dry-Run Check Preview** (inspects pending updates and cache savings without modifying system state).
+* **[ A ]** $\rightarrow$ **Run System Diagnostic Audit** (runs read-only hardware, process, and event log diagnostic auditor).
 * **[ S ]** $\rightarrow$ **Save Selection as Default** (persists current checkboxes to `config.json` for future unattended runs).
 * **[ O ]** $\rightarrow$ **Run First-Time Onboarding Wizard** (detects standalone/unknown packages).
 * **[ I ]** $\rightarrow$ **Reinstall Start Menu Shortcut** (dynamically updates shortcut).
 * **[ Q ]** $\rightarrow$ **Quit Without Running**.
 
-### 3. Modular Extensibility
+### 3. Modular Extensibility (`Info / Check / Run`)
 To add a new maintenance task, simply drop a `.ps1` file into `modules/`:
 ```powershell
-# Name: My Custom Cleanup
-# Default: True
-# Description: Does specific cleanup
+[CmdletBinding()]
+param(
+    [ValidateSet('Info', 'Check', 'Run')]
+    [string]$Action = 'Run',
+    [PSCustomObject]$Config = $null,
+    [string]$LogFile = $null,
+    [hashtable]$Options = @{}
+)
+
+if ($Action -eq 'Info') {
+    return [PSCustomObject]@{
+        Id            = "50_my_task"
+        Name          = "My Custom Cleanup"
+        Description   = "Does specific cleanup"
+        Default       = $true
+        RequiresAdmin = $false
+        Options       = @{}
+    }
+}
 ```
-The master runner automatically discovers it, adds it to the TUI menu, and runs it in order.
+The master runner automatically discovers it via `-Action Info`, adds it to the TUI menu, and runs it in order.
 
 ---
 

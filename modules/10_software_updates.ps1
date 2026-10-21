@@ -1,17 +1,51 @@
-# Name: Software Updates (Winget)
-# Default: True
-# Description: Checks and installs pending Winget application updates (skipping excluded packages)
-
+<#
+.SYNOPSIS
+    FreeWinly Software Updates Module (Winget).
+.DESCRIPTION
+    Checks and installs pending Winget application updates, respecting postponed and permanent exclusions.
+.PARAMETER Action
+    'Info'  - Returns module metadata object (Name, Description, Default, RequiresAdmin).
+    'Check' - Previews pending updates and exclusions without installing.
+    'Run'   - Executes the Winget update pipeline.
+.PARAMETER Config
+    Optional PSCustomObject loaded from config.json.
+.PARAMETER LogFile
+    Optional path to the execution log file.
+.PARAMETER Options
+    Optional hashtable of module-specific options.
+.EXAMPLE
+    .\modules\10_software_updates.ps1 -Action Info
+.EXAMPLE
+    .\modules\10_software_updates.ps1 -Action Check
+.EXAMPLE
+    .\modules\10_software_updates.ps1 -Action Run
+#>
+[CmdletBinding()]
 param(
-    [PSCustomObject]$Config,
-    [string]$LogFile
+    [ValidateSet('Info', 'Check', 'Run')]
+    [string]$Action = 'Run',
+
+    [PSCustomObject]$Config = $null,
+    [string]$LogFile = $null,
+    [hashtable]$Options = @{}
 )
 
-Write-Host "`n--- [Module 10] Software Updates (Winget) ---" -ForegroundColor Cyan
+if ($Action -eq 'Info') {
+    return [PSCustomObject]@{
+        Id            = "10_software_updates"
+        Name          = "Software Updates (Winget)"
+        Description   = "Checks and installs pending Winget application updates (skipping excluded packages)"
+        Default       = $true
+        RequiresAdmin = $false
+        Options       = @{}
+    }
+}
+
+Write-Host "`n--- [Module 10] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
 
 $today = (Get-Date).Date
 $activeExcludes = [System.Collections.Generic.List[string]]::new()
-$excludedSource = if ($Config.excluded) { $Config.excluded } else { @() }
+$excludedSource = if ($Config -and $Config.excluded) { $Config.excluded } else { @() }
 
 foreach ($item in $excludedSource) {
     if ($item -is [string]) {
@@ -24,7 +58,14 @@ foreach ($item in $excludedSource) {
     }
 }
 
-Write-Host "Excluded IDs: $($activeExcludes -join ', ')" -ForegroundColor Gray
+if ($activeExcludes.Count -gt 0) {
+    Write-Host "Excluded IDs: $($activeExcludes -join ', ')" -ForegroundColor Gray
+}
+
+if ($Action -eq 'Run') {
+    Write-Host "Syncing Winget package catalogs..." -ForegroundColor Gray
+    & winget source update --disable-interactivity 2>&1 | Out-Null
+}
 
 $lines = & winget upgrade --include-unknown --accept-source-agreements | Out-String -Stream
 $headerIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^Name\s+Id\s+Version' })
@@ -72,24 +113,34 @@ foreach ($s in $skipped) {
 if ($toUpdate.Count -eq 0) {
     Write-Host "All non-excluded packages are up to date." -ForegroundColor Green
     if ($LogFile) { Add-Content -Path $LogFile -Value "All non-excluded packages are up to date." -Encoding UTF8 }
-} else {
-    Write-Host "Updating $($toUpdate.Count) package(s) one by one..." -ForegroundColor Cyan
-    $idx = 0
+    return
+}
+
+if ($Action -eq 'Check') {
+    Write-Host "`n[Check Mode] Found $($toUpdate.Count) pending application update(s):" -ForegroundColor Yellow
     foreach ($pkg in $toUpdate) {
-        $idx++
-        $id = $pkg.Id
-        Write-Host "[$idx/$($toUpdate.Count)] Updating $($pkg.Name) ($id) ..." -ForegroundColor Cyan
-        $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements 2>&1
-        $exitCode = $LASTEXITCODE
-        $out | Out-Host
-        if ($LogFile) {
-            $out | Add-Content -Path $LogFile -Encoding UTF8
-            Add-Content -Path $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
-        }
-        if ($exitCode -eq 0) {
-            Write-Host "RESULT: $id => SUCCESS" -ForegroundColor Green
-        } else {
-            Write-Host "RESULT: $id => FAILED/SKIPPED (ExitCode $exitCode)" -ForegroundColor Yellow
-        }
+        Write-Host "  -> $($pkg.Name) ($($pkg.Id))" -ForegroundColor White
+    }
+    Write-Host "Dry run complete. No packages were modified." -ForegroundColor Green
+    return
+}
+
+Write-Host "Updating $($toUpdate.Count) package(s) one by one..." -ForegroundColor Cyan
+$idx = 0
+foreach ($pkg in $toUpdate) {
+    $idx++
+    $id = $pkg.Id
+    Write-Host "[$idx/$($toUpdate.Count)] Updating $($pkg.Name) ($id) ..." -ForegroundColor Cyan
+    $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements 2>&1
+    $exitCode = $LASTEXITCODE
+    $out | Out-Host
+    if ($LogFile) {
+        $out | Add-Content -Path $LogFile -Encoding UTF8
+        Add-Content -Path $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
+    }
+    if ($exitCode -eq 0) {
+        Write-Host "RESULT: $id => SUCCESS" -ForegroundColor Green
+    } else {
+        Write-Host "RESULT: $id => FAILED/SKIPPED (ExitCode $exitCode)" -ForegroundColor Yellow
     }
 }

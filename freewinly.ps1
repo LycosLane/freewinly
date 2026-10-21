@@ -4,15 +4,54 @@
     FreeWinly - Open Source Windows Maintenance & Optimization Engine.
     Befreit Windows von Bloatware, alten Caches und unnötigen Abos.
     
-    Features:
-      - Automatic self-elevation on interactive desktop
-      - First-run onboarding wizard if config.json is absent
-      - 10-second auto-start countdown (press any key for interactive TUI)
-      - Interactive TUI menu with toggleable checkboxes [x] / [ ]
-      - Ad-hoc Run [Enter] vs. Save as Default [S]
-      - Extensible modular pipeline from .\modules\*.ps1
-      - Generic execution hooks (preCommands, uninstall, install, postCommands)
+.DESCRIPTION
+    Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM.
+    Supports headless CLI automation, interactive TUI menu, dry-run check previews, and JIT elevation.
+
+.PARAMETER Run
+    Executes the enabled or specified modules immediately without opening the interactive menu.
+
+.PARAMETER Check
+    Performs a dry-run preview across enabled or specified modules without altering system state.
+
+.PARAMETER Audit
+    Runs the 100% read-only diagnostic system audit (hardware, logs, memory, boot).
+
+.PARAMETER Modules
+    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 10_software_updates,30_ssd_trim).
+
+.PARAMETER HelpMe
+    Displays CLI usage instructions and examples.
+
+.EXAMPLE
+    .\freewinly.ps1
+    Starts interactive mode (unelevated, 10s countdown, interactive TUI menu).
+
+.EXAMPLE
+    .\freewinly.ps1 -Check
+    Performs a dry-run preview of all default modules without making changes.
+
+.EXAMPLE
+    .\freewinly.ps1 -Run
+    Runs all default modules immediately with automatic JIT elevation if needed.
+
+.EXAMPLE
+    .\freewinly.ps1 -Audit
+    Executes the comprehensive read-only system diagnostic auditor.
+
+.EXAMPLE
+    .\freewinly.ps1 -Modules 10_software_updates,30_ssd_trim -Run
+    Runs only the specified modules.
 #>
+
+[CmdletBinding()]
+param(
+    [switch]$Run,
+    [switch]$Check,
+    [switch]$Audit,
+    [string[]]$Modules = $null,
+    [switch]$HelpMe
+)
 
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -27,14 +66,11 @@ if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
-# ==================================================================
-# 1. ELEVATION CHECK
-# ==================================================================
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "Elevating FreeWinly with Administrator privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    exit
+function Show-Banner {
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "           FreeWinly - Open Source Windows Engine           " -ForegroundColor White
+    Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
+    Write-Host "============================================================" -ForegroundColor Cyan
 }
 
 function Write-Log {
@@ -44,15 +80,41 @@ function Write-Log {
     Add-Content -Path $logFile -Value "[$timestamp] $Message" -Encoding UTF8
 }
 
-function Show-Banner {
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "           FreeWinly - Open Source Windows Engine           " -ForegroundColor White
-    Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
-    Write-Host "============================================================" -ForegroundColor Cyan
+if ($HelpMe) {
+    Show-Banner
+    Write-Host @"
+CLI Usage:
+  .\freewinly.ps1                   Interactive mode (10s countdown, TUI menu, JIT elevation)
+  .\freewinly.ps1 -Check            Dry-run preview across enabled modules (no changes made)
+  .\freewinly.ps1 -Run              Execute enabled modules immediately
+  .\freewinly.ps1 -Audit            Run 100% read-only system health & hardware audit
+  .\freewinly.ps1 -Modules <list>   Specify modules to run or check (e.g. -Modules 10_software_updates,30_ssd_trim)
+  .\freewinly.ps1 -HelpMe           Show this help message
+
+Module CLI Invocations:
+  Individual modules in .\modules\ can also be called directly:
+  .\modules\30_ssd_trim.ps1 -Action Info
+  .\modules\30_ssd_trim.ps1 -Action Check
+  .\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+"@ -ForegroundColor Yellow
+    exit 0
+}
+
+# ------------------------------------------------------------------
+# Diagnostic Audit Direct CLI Shortcut
+# ------------------------------------------------------------------
+if ($Audit) {
+    $auditScript = Join-Path $projectRoot "scripts\system-audit.ps1"
+    if (Test-Path $auditScript) {
+        & $auditScript
+    } else {
+        Write-Host "Audit script not found at: $auditScript" -ForegroundColor Red
+    }
+    exit 0
 }
 
 # ==================================================================
-# 2. FIRST-RUN ONBOARDING WIZARD
+# 1. FIRST-RUN ONBOARDING WIZARD
 # ==================================================================
 function Run-OnboardingWizard {
     Clear-Host
@@ -114,171 +176,259 @@ if (-not (Test-Path $configPath)) {
 
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
+# Flatten comma-separated Modules if passed as single string
+if ($Modules -and $Modules.Count -eq 1 -and $Modules[0] -match ',') {
+    $Modules = $Modules[0].Split(',') | ForEach-Object { $_.Trim() }
+}
+
 # ==================================================================
-# 3. DISCOVER MODULES
+# 2. DISCOVER MODULES DYNAMICALLY (Via -Action Info)
 # ==================================================================
 $moduleFiles = Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue | Sort-Object Name
-$modules = [System.Collections.Generic.List[PSCustomObject]]::new()
+$discoveredModules = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 foreach ($mf in $moduleFiles) {
     $baseName = $mf.BaseName
-    $content = Get-Content $mf.FullName -TotalCount 10
+    $info = $null
 
-    $name = $baseName
-    $defaultEnabled = $true
-    foreach ($line in $content) {
-        if ($line -match '^#\s*Name:\s*(.+)$') { $name = $matches[1].Trim() }
-        if ($line -match '^#\s*Default:\s*(.+)$') {
-            $val = $matches[1].Trim()
-            $defaultEnabled = ($val -eq 'true' -or $val -eq '1')
-        }
+    try {
+        $info = & $mf.FullName -Action Info -Config $config -ErrorAction Stop
+    } catch {
+        # Fallback if module fails Info query
     }
 
-    $isEnabled = if ($config.enabledModules) {
+    $name          = if ($info -and $info.Name) { $info.Name } else { $baseName }
+    $description   = if ($info -and $info.Description) { $info.Description } else { "" }
+    $defaultVal    = if ($info -and $null -ne $info.Default) { $info.Default } else { $true }
+    $requiresAdmin = if ($info -and $null -ne $info.RequiresAdmin) { $info.RequiresAdmin } else { $false }
+    $options       = if ($info -and $info.Options) { $info.Options } else { @{} }
+
+    $isEnabled = if ($Modules) {
+        $Modules -contains $baseName
+    } elseif ($config.enabledModules) {
         $config.enabledModules -contains $baseName
     } else {
-        $defaultEnabled
+        $defaultVal
     }
 
-    $modules.Add([PSCustomObject]@{
-        BaseName = $baseName
-        Name     = $name
-        Path     = $mf.FullName
-        Enabled  = $isEnabled
+    $discoveredModules.Add([PSCustomObject]@{
+        BaseName      = $baseName
+        Name          = $name
+        Description   = $description
+        Path          = $mf.FullName
+        Enabled       = [bool]$isEnabled
+        RequiresAdmin = [bool]$requiresAdmin
+        Options       = $options
     })
 }
 
 # ==================================================================
-# 4. 10-SECOND COUNTDOWN (Press any key for interactive menu)
+# 3. DRY-RUN CHECK MODE (-Check)
 # ==================================================================
-Clear-Host
-Show-Banner
-Write-Host "`nScheduled Tasks to Run:" -ForegroundColor Yellow
+if ($Check) {
+    Show-Banner
+    $targetModules = $discoveredModules | Where-Object { $_.Enabled }
+    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+    Write-Host "No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
-foreach ($m in $modules) {
-    $mark = if ($m.Enabled) { "[x]" } else { "[ ]" }
-    $col  = if ($m.Enabled) { "Green" } else { "DarkGray" }
-    Write-Host "  $mark $($m.Name)" -ForegroundColor $col
-}
-
-Write-Host "`nStarting in " -NoNewline -ForegroundColor Gray
-$openMenu = $false
-
-try {
-    for ($sec = 10; $sec -gt 0; $sec--) {
-        Write-Host "$sec... " -NoNewline -ForegroundColor Cyan
-        for ($sub = 0; $sub -lt 10; $sub++) {
-            Start-Sleep -Milliseconds 100
-            if ([Console]::KeyAvailable) {
-                [Console]::ReadKey($true) | Out-Null
-                $openMenu = $true
-                break
-            }
+    foreach ($m in $targetModules) {
+        try {
+            & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options
+        } catch {
+            Write-Host "Error during check for $($m.Name): $($_.Exception.Message)" -ForegroundColor Red
         }
-        if ($openMenu) { break }
     }
-} catch {
-    $openMenu = $false
+
+    Write-Host "`n=== Dry-Run Check Completed Successfully ===" -ForegroundColor Green
+    exit 0
 }
 
 # ==================================================================
-# 5. INTERACTIVE TUI MENU (if key was pressed)
+# 4. INTERACTIVE MODE (Only if neither -Run nor -Check was specified)
 # ==================================================================
-if ($openMenu) {
-    $selectedIndex = 0
-    $totalOptions = $modules.Count + 5
-    $running = $true
+if (-not $Run) {
+    Clear-Host
+    Show-Banner
+    Write-Host "`nScheduled Tasks to Run:" -ForegroundColor Yellow
 
-    while ($running) {
-        Clear-Host
-        Show-Banner
-        Write-Host "Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:`n" -ForegroundColor Gray
+    foreach ($m in $discoveredModules) {
+        $mark  = if ($m.Enabled) { "[x]" } else { "[ ]" }
+        $admin = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
+        $col   = if ($m.Enabled) { "Green" } else { "DarkGray" }
+        Write-Host "  $mark $($m.Name)$admin" -ForegroundColor $col
+    }
 
-        for ($i = 0; $i -lt $modules.Count; $i++) {
-            $m = $modules[$i]
-            $pointer = if ($i -eq $selectedIndex) { "> " } else { "  " }
-            $check   = if ($m.Enabled) { "[x]" } else { "[ ]" }
-            $color   = if ($i -eq $selectedIndex) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
-            Write-Host "$pointer$check $($m.Name)" -ForegroundColor $color
+    Write-Host "`nStarting in " -NoNewline -ForegroundColor Gray
+    $openMenu = $false
+
+    try {
+        for ($sec = 10; $sec -gt 0; $sec--) {
+            Write-Host "$sec... " -NoNewline -ForegroundColor Cyan
+            for ($sub = 0; $sub -lt 10; $sub++) {
+                Start-Sleep -Milliseconds 100
+                if ([Console]::KeyAvailable) {
+                    [Console]::ReadKey($true) | Out-Null
+                    $openMenu = $true
+                    break
+                }
+            }
+            if ($openMenu) { break }
         }
+    } catch {
+        $openMenu = $false
+    }
 
-        Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
-
+    if ($openMenu) {
+        $selectedIndex = 0
         $actions = @(
             @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
+            @{ Label = "[   C   ]  Dry-Run Check Preview (No changes)"; Key = "C" },
+            @{ Label = "[   A   ]  Run System Diagnostic Audit (Read-Only)"; Key = "A" },
             @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
             @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
             @{ Label = "[   I   ]  Reinstall Start Menu Shortcut"; Key = "I" },
             @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
         )
+        $totalOptions = $discoveredModules.Count + $actions.Count
+        $running = $true
 
-        for ($j = 0; $j -lt $actions.Count; $j++) {
-            $actionIdx = $modules.Count + $j
-            $pointer = if ($actionIdx -eq $selectedIndex) { "> " } else { "  " }
-            $color   = if ($actionIdx -eq $selectedIndex) { "Yellow" } else { "White" }
-            Write-Host "$pointer$($actions[$j].Label)" -ForegroundColor $color
-        }
+        while ($running) {
+            Clear-Host
+            Show-Banner
+            Write-Host "Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:`n" -ForegroundColor Gray
 
-        $key = [Console]::ReadKey($true)
-        switch ($key.Key) {
-            "UpArrow" {
-                $selectedIndex--
-                if ($selectedIndex -lt 0) { $selectedIndex = $totalOptions - 1 }
+            for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
+                $m = $discoveredModules[$i]
+                $pointer = if ($i -eq $selectedIndex) { "> " } else { "  " }
+                $check   = if ($m.Enabled) { "[x]" } else { "[ ]" }
+                $admin   = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
+                $color   = if ($i -eq $selectedIndex) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
+                Write-Host "$pointer$check $($m.Name)$admin" -ForegroundColor $color
             }
-            "DownArrow" {
-                $selectedIndex++
-                if ($selectedIndex -ge $totalOptions) { $selectedIndex = 0 }
+
+            Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
+
+            for ($j = 0; $j -lt $actions.Count; $j++) {
+                $actionIdx = $discoveredModules.Count + $j
+                $pointer = if ($actionIdx -eq $selectedIndex) { "> " } else { "  " }
+                $color   = if ($actionIdx -eq $selectedIndex) { "Yellow" } else { "White" }
+                Write-Host "$pointer$($actions[$j].Label)" -ForegroundColor $color
             }
-            "Spacebar" {
-                if ($selectedIndex -lt $modules.Count) {
-                    $modules[$selectedIndex].Enabled = -not $modules[$selectedIndex].Enabled
+
+            $key = [Console]::ReadKey($true)
+            switch ($key.Key) {
+                "UpArrow" {
+                    $selectedIndex--
+                    if ($selectedIndex -lt 0) { $selectedIndex = $totalOptions - 1 }
                 }
-            }
-            "Enter" {
-                if ($selectedIndex -lt $modules.Count) {
-                    $modules[$selectedIndex].Enabled = -not $modules[$selectedIndex].Enabled
-                } elseif ($selectedIndex -eq $modules.Count) {
-                    # Run All Checked Tasks
-                    $running = $false
-                } elseif ($selectedIndex -eq ($modules.Count + 1)) {
-                    # Save Selection as Default
-                    $enabledList = ($modules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
+                "DownArrow" {
+                    $selectedIndex++
+                    if ($selectedIndex -ge $totalOptions) { $selectedIndex = 0 }
+                }
+                "Spacebar" {
+                    if ($selectedIndex -lt $discoveredModules.Count) {
+                        $discoveredModules[$selectedIndex].Enabled = -not $discoveredModules[$selectedIndex].Enabled
+                    }
+                }
+                "Enter" {
+                    if ($selectedIndex -lt $discoveredModules.Count) {
+                        $discoveredModules[$selectedIndex].Enabled = -not $discoveredModules[$selectedIndex].Enabled
+                    } elseif ($selectedIndex -eq $discoveredModules.Count) {
+                        # Run All Checked Tasks
+                        $running = $false
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 1)) {
+                        # Dry-Run Check
+                        Clear-Host
+                        Show-Banner
+                        $targetModules = $discoveredModules | Where-Object { $_.Enabled }
+                        Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+                        foreach ($m in $targetModules) {
+                            try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
+                        }
+                        Read-Host "`nPress Enter to return to menu"
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 2)) {
+                        # Audit
+                        Clear-Host
+                        & (Join-Path $projectRoot "scripts\system-audit.ps1")
+                        Read-Host "`nPress Enter to return to menu"
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
+                        # Save
+                        $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
+                        $config.enabledModules = @($enabledList)
+                        $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+                        Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
+                        Start-Sleep -Milliseconds 800
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
+                        # Onboarding
+                        Run-OnboardingWizard
+                        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
+                        # Install shortcut
+                        & (Join-Path $projectRoot "install-shortcut.ps1")
+                        Read-Host "`nPress Enter to return to menu"
+                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 6)) {
+                        # Quit
+                        Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
+                        exit 0
+                    }
+                }
+                "C" {
+                    Clear-Host
+                    Show-Banner
+                    $targetModules = $discoveredModules | Where-Object { $_.Enabled }
+                    Write-Host "`n=== [Dry-Run Check Mode] Inspecting $( $targetModules.Count ) module(s) ===" -ForegroundColor Yellow
+                    foreach ($m in $targetModules) {
+                        try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
+                    }
+                    Read-Host "`nPress Enter to return to menu"
+                }
+                "A" {
+                    Clear-Host
+                    & (Join-Path $projectRoot "scripts\system-audit.ps1")
+                    Read-Host "`nPress Enter to return to menu"
+                }
+                "S" {
+                    $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
                     $config.enabledModules = @($enabledList)
                     $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
                     Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
                     Start-Sleep -Milliseconds 800
-                } elseif ($selectedIndex -eq ($modules.Count + 2)) {
+                }
+                "O" {
                     Run-OnboardingWizard
                     $config = Get-Content $configPath -Raw | ConvertFrom-Json
-                } elseif ($selectedIndex -eq ($modules.Count + 3)) {
+                }
+                "I" {
                     & (Join-Path $projectRoot "install-shortcut.ps1")
                     Read-Host "`nPress Enter to return to menu"
-                } elseif ($selectedIndex -eq ($modules.Count + 4)) {
-                    Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
-                    exit
                 }
-            }
-            "S" {
-                $enabledList = ($modules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
-                $config.enabledModules = @($enabledList)
-                $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                Write-Host "`n  -> Default tasks saved to config.json!" -ForegroundColor Green
-                Start-Sleep -Milliseconds 800
-            }
-            "O" {
-                Run-OnboardingWizard
-                $config = Get-Content $configPath -Raw | ConvertFrom-Json
-            }
-            "I" {
-                & (Join-Path $projectRoot "install-shortcut.ps1")
-                Read-Host "`nPress Enter to return to menu"
-            }
-            "Q" {
-                Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
-                exit
+                "Q" {
+                    Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
+                    exit 0
+                }
             }
         }
     }
+}
+
+# ==================================================================
+# 5. JUST-IN-TIME (JIT) ELEVATION CHECK
+# ==================================================================
+$activeModules = $discoveredModules | Where-Object { $_.Enabled }
+if ($activeModules.Count -eq 0) {
+    Write-Host "No modules selected to run. Exiting." -ForegroundColor Yellow
+    exit 0
+}
+
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$needsAdmin = ($activeModules | Where-Object { $_.RequiresAdmin -eq $true }).Count -gt 0
+
+if ($needsAdmin -and -not $isAdmin) {
+    Write-Host "`nSelected tasks require Administrator privileges." -ForegroundColor Yellow
+    Write-Host "Elevating FreeWinly runner..." -ForegroundColor Cyan
+    $selectedNames = ($activeModules | Select-Object -ExpandProperty BaseName) -join ','
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run -Modules `"$selectedNames`""
+    exit 0
 }
 
 # ==================================================================
@@ -338,12 +488,11 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
 }
 
 # 6.3 RUN ENABLED MODULES
-$activeModules = $modules | Where-Object { $_.Enabled }
 Write-Log "`nExecuting $($activeModules.Count) active maintenance module(s)..." "Cyan"
 
 foreach ($m in $activeModules) {
     try {
-        & $m.Path -Config $config -LogFile $logFile
+        & $m.Path -Action Run -Config $config -LogFile $logFile -Options $m.Options
     } catch {
         Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
     }

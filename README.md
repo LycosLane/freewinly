@@ -77,11 +77,13 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
   [x] Software Updates (Winget)
   [x] Safe Cache & Temp Cleanup (>7 days)
-  [x] SSD TRIM Optimization
-  [ ] Windows OS & Security Updates
+  [x] SSD TRIM Optimization [Admin]
+  [ ] Windows OS & Security Updates [Admin]
 
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
+  [   C   ]  Dry-Run Check Preview (No changes)
+  [   A   ]  Run System Diagnostic Audit (Read-Only)
   [   S   ]  Save Selection as Default
   [   O   ]  Run First-Time Onboarding Wizard
   [   I   ]  Reinstall Start Menu Shortcut
@@ -92,7 +94,9 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | :--- | :--- |
 | **`Up` / `Down`** | Navigate between modules and actions |
 | **`Space`** | Toggle module checkbox `[x]` / `[ ]` |
-| **`Enter`** | Run all currently checked modules |
+| **`Enter`** | Run all currently checked modules (triggers Just-in-Time UAC only if required) |
+| **`C`** | Run **Dry-Run Check** preview (inspects changes without modifying system state) |
+| **`A`** | Run **System Diagnostic Audit** (100% read-only diagnostic scanner) |
 | **`S`** | Save current checkbox selection to `config.json` as permanent default |
 | **`O`** | Run onboarding wizard (scans for standalone apps and suggests exclusions) |
 | **`I`** | Reinstall Start Menu shortcut |
@@ -100,36 +104,90 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 
 ---
 
+## ⚡ CLI & Headless Automation
+
+FreeWinly works seamlessly from PowerShell scripts, CI pipelines, and terminal shortcuts:
+
+```powershell
+# Interactive mode (unelevated start, 10s countdown, TUI menu)
+.\freewinly.ps1
+
+# Dry-run preview mode (checks pending updates, temp sizes, and SSD TRIM without changing anything)
+.\freewinly.ps1 -Check
+
+# Headless run of default enabled modules (JIT elevates only if admin tasks are queued)
+.\freewinly.ps1 -Run
+
+# 100% read-only hardware, process, and event log diagnostic audit
+.\freewinly.ps1 -Audit
+
+# Run specific modules by name
+.\freewinly.ps1 -Modules 10_software_updates,30_ssd_trim -Run
+
+# Show help
+.\freewinly.ps1 -HelpMe
+```
+
+---
+
 ## 🧩 Modular Architecture
 
-Every maintenance routine lives in [`modules/`](modules/) as an independent script:
+Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple native parameter contract (`Info`, `Check`, `Run`):
 
 ```text
 FreeWinly/
-├── freewinly.ps1                <-- Master runner (TUI + countdown + elevation)
+├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation)
 ├── freewinly.cmd                <-- Double-clickable launcher
 ├── install-shortcut.ps1         <-- Start Menu shortcut generator
-├── config.json                  <-- Exclusions & settings
+├── config.json                  <-- Exclusions, enabled modules & drive settings
 └── modules/
     ├── 10_software_updates.ps1  <-- Winget updates
     ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
-    ├── 30_ssd_trim.ps1          <-- SSD TRIM optimization
+    ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
     └── 40_windows_updates.ps1   <-- Windows Update COM API
+```
+
+### Module Contract (`Info / Check / Run`)
+
+Each module can be executed directly as a standalone CLI tool:
+
+```powershell
+.\modules\30_ssd_trim.ps1 -Action Info
+.\modules\30_ssd_trim.ps1 -Action Check
+.\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C', 'D') }
 ```
 
 ### Adding Your Own Module
 Create `modules/25_my_task.ps1`:
 ```powershell
-# Name: My Custom Cleanup
-# Default: True
-# Description: Describe your task here
+[CmdletBinding()]
+param(
+    [ValidateSet('Info', 'Check', 'Run')]
+    [string]$Action = 'Run',
+    [PSCustomObject]$Config = $null,
+    [string]$LogFile = $null,
+    [hashtable]$Options = @{}
+)
 
-param([PSCustomObject]$Config, [string]$LogFile)
+if ($Action -eq 'Info') {
+    return [PSCustomObject]@{
+        Id            = "25_my_task"
+        Name          = "My Custom Task"
+        Description   = "Describe your task here"
+        Default       = $true
+        RequiresAdmin = $false
+        Options       = @{}
+    }
+}
 
-Write-Host "Running custom task..." -ForegroundColor Cyan
-# Your PowerShell commands here
+if ($Action -eq 'Check') {
+    Write-Host "Dry run preview: would perform my task." -ForegroundColor Yellow
+    return
+}
+
+Write-Host "Executing custom task..." -ForegroundColor Green
 ```
-FreeWinly will automatically load it into the menu and execute it in numerical order!
+FreeWinly will automatically discover it, query its metadata, add it to the menu, and handle execution/checks in numerical order!
 
 ---
 
