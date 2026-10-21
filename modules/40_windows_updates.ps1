@@ -32,7 +32,6 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "40_windows_updates"
         Name          = "Windows OS & Security Updates"
         Description   = "Scans, downloads, and installs pending Windows Updates and Microsoft Defender definitions via native COM API"
         Default       = $false

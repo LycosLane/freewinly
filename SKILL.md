@@ -96,7 +96,6 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "50_my_task"
         Name          = "My Custom Task"
         Description   = "Does specific cleanup"
         Default       = $true

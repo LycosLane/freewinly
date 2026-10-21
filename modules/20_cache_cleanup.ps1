@@ -34,7 +34,6 @@ $minAgeDays = if ($Config -and $Config.cleanupTempMinAgeDays) { $Config.cleanupT
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "20_cache_cleanup"
         Name          = "Safe Cache & Temp Cleanup (>$minAgeDays days)"
         Description   = "Safely purges temporary user & system files, installer caches, crash dumps and shader caches older than $minAgeDays days"
         Default       = $true

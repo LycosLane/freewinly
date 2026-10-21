@@ -79,7 +79,6 @@ $detectedDriveLetters = @($detectedDrives | Select-Object -ExpandProperty DriveL
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "30_ssd_trim"
         Name          = "SSD TRIM Optimization"
         Description   = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
         Default       = $true

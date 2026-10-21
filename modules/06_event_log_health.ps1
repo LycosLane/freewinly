@@ -37,7 +37,6 @@ $days = if ($Config -and $Config.eventLogLookbackDays) { [int]$Config.eventLogLo
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "06_event_log_health"
         Name          = "System Stability & Event Logs (Last $days days)"
         Description   = "Scans Windows Event Logs for recurring application crashes, BSODs, and hardware errors with plain-language advice"
         Default       = $true

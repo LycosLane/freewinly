@@ -34,7 +34,6 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "05_hardware_health"
         Name          = "Hardware & Driver Health"
         Description   = "Scans Windows Device Manager for hardware faults and missing drivers with actionable advice"
         Default       = $true

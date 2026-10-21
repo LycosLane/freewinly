@@ -32,7 +32,6 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "10_software_updates"
         Name          = "Software Updates (Winget)"
         Description   = "Checks and installs pending Winget application updates (skipping excluded packages)"
         Default       = $true

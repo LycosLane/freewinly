@@ -61,7 +61,6 @@ $detectedLetters = @($detectedHDDs | Select-Object -ExpandProperty DriveLetter)
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "35_hdd_defrag"
         Name          = "Mechanical HDD Defragmentation"
         Description   = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
         Default       = $false

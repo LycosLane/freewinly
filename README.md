@@ -180,7 +180,6 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Id            = "25_my_task"
         Name          = "My Custom Task"
         Description   = "Describe your task here"
         Default       = $true
