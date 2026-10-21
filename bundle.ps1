@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly Dual Release Packager.
-    Generates both 'FreeWinly.zip' (pure standalone tool for humans) and
-    'FreeWinly4LLM.zip' (includes SKILL.md for AI agents) ready for GitHub Releases.
+    FreeWinly Release Packager.
+    Generates 'FreeWinly.zip' (core standalone release) and
+    'FreeWinly4LLM.zip' (includes SKILL.md for AI assistants).
 #>
 [CmdletBinding()]
 param()
@@ -41,11 +41,11 @@ foreach ($item in $coreItems) {
 
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
-# 1. Package FreeWinly.zip (Clean core tool for humans / zero AI dependencies)
+# 1. Package FreeWinly.zip (core release package)
 Compress-Archive -Path "$stageDir\*" -DestinationPath $coreZip -Force
 $coreSize = [math]::Round((Get-Item $coreZip).Length / 1KB, 1)
 
-# 2. Add SKILL.md and package FreeWinly4LLM.zip (AI Agents & LLM harness integration)
+# 2. Add SKILL.md and package FreeWinly4LLM.zip (AI agent skill package)
 $skillSrc = Join-Path $projectRoot "SKILL.md"
 if (Test-Path $skillSrc) {
     Copy-Item -Path $skillSrc -Destination $stageDir -Force

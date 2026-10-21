@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     FreeWinly - Open Source Windows Maintenance & Optimization Engine.
-    Befreit Windows von Bloatware, alten Caches und unnötigen Abos.
+    Automates software updates, cache cleanup, drive optimization, and hardware diagnostics.
     
 .DESCRIPTION
     Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM.

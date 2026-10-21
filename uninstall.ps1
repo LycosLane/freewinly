@@ -25,7 +25,7 @@ $projectRoot = $PSScriptRoot
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "                FreeWinly Complete Uninstaller              " -ForegroundColor White
-Write-Host "        Zero leftover services, zero residual files         " -ForegroundColor Gray
+Write-Host "          Removes scheduled tasks, shortcuts, and files     " -ForegroundColor Gray
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 1. Inspect Components

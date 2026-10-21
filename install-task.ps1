@@ -4,8 +4,8 @@
     FreeWinly Windows Task Scheduler Automation.
 .DESCRIPTION
     Configures, inspects, or removes a native Windows Scheduled Task to run FreeWinly
-    automatically in the background. Uses 100% native Windows Task Scheduler with zero
-    resident services, tray icons, or battery drain.
+    automatically in the background. Uses Windows Task Scheduler without persistent
+    background services or tray icons.
 .PARAMETER Action
     'Interactive' - Opens clean numbered selector to configure schedule.
     'Status'      - Displays current scheduled task configuration.
@@ -52,8 +52,8 @@ function Get-TaskStatusText {
 
 function Show-Header {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "       FreeWinly - Native Windows Task Scheduler Sync       " -ForegroundColor White
-    Write-Host "       Zero background RAM, zero tray icons, zero bloat     " -ForegroundColor Gray
+    Write-Host "       FreeWinly - Windows Task Scheduler Setup             " -ForegroundColor White
+    Write-Host "       Runs on schedule without background services or icons" -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host "Current Status: $(Get-TaskStatusText)`n" -ForegroundColor Yellow
 }

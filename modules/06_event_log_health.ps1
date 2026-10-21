@@ -96,7 +96,7 @@ try {
 }
 
 if ($events.Count -eq 0) {
-    Write-Host "[OK] Clean stability record! Zero recurring crashes or critical warnings in the last $days day(s)." -ForegroundColor Green
+    Write-Host "[OK] Clean stability record. No recurring crashes or critical warnings in the last $days day(s)." -ForegroundColor Green
     if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log Health: Clean record over last $days days." -Encoding UTF8 }
     return
 }
