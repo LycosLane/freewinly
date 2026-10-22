@@ -164,7 +164,9 @@ function Run-OnboardingWizard {
     $enabled = if ($existingConfig -and $existingConfig.enabledModules) {
         $existingConfig.enabledModules
     } else {
-        @('10_hardware_health', '11_event_log_health', '12_app_launch_repair', '20_software_updates', '30_cache_cleanup', '31_ssd_trim')
+        @(Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue | Where-Object {
+            try { (& $_.FullName -Action Info).Default -eq $true } catch { $true }
+        } | Select-Object -ExpandProperty BaseName)
     }
 
     $newConfig = [ordered]@{
