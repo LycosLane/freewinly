@@ -315,6 +315,7 @@ FreeWinly stores settings in `config.json`:
 ## Privacy
 
 * **No telemetry:** FreeWinly sends no network requests, collects no analytics, and makes no external calls.
+* **Local logs only:** Run logs and diagnostic records are saved strictly to your local `logs/` folder for your own inspection, never sent anywhere, and completely removed if you uninstall.
 * **Transparent:** 100% open-source PowerShell scripts that you can read, audit, and modify.
 
 ---
