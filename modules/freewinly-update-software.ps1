@@ -21,12 +21,56 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Info', 'Check', 'Run')]
+    [ValidateSet('Info', 'Check', 'Run', 'Scan')]
     [string]$Action = 'Run',
 
     [object]$Settings = $null,
     [string]$LogFile = $null
 )
+
+function Get-WingetAvailablePackages {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        return @()
+    }
+    $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
+    $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
+    $packages = [System.Collections.Generic.List[PSCustomObject]]::new()
+    if ($sepIdx -ge 1) {
+        $header     = $lines[$sepIdx - 1]
+        $colMatches = [regex]::Matches($header, '(?<=^|\s{2,})\S+')
+        if ($colMatches.Count -ge 3) {
+            $idStart    = $colMatches[1].Index
+            $verStart   = $colMatches[2].Index
+            $availStart = if ($colMatches.Count -ge 4) { $colMatches[3].Index } else { $header.Length }
+
+            for ($i = $sepIdx + 1; $i -lt $lines.Count; $i++) {
+                $line = $lines[$i]
+                if ($line.Length -gt $verStart) {
+                    $name = $line.Substring(0, $idStart).Trim()
+                    $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
+                    $verLen = [math]::Min($availStart - $verStart, $line.Length - $verStart)
+                    $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
+                    $availText = if ($line.Length -gt $availStart) { $line.Substring($availStart).Trim() } else { "" }
+
+                    # Matches standard Publisher.Product IDs as well as 12-character Microsoft Store product IDs
+                    if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$') {
+                        $packages.Add([PSCustomObject]@{
+                            Id               = $id
+                            Name             = $name
+                            InstalledVersion = $verText
+                            AvailableVersion = $availText
+                        })
+                    }
+                }
+            }
+        }
+    }
+    return @($packages)
+}
+
+if ($Action -eq 'Scan') {
+    return (Get-WingetAvailablePackages)
+}
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
@@ -86,29 +130,7 @@ if ($Action -eq 'Run') {
     & winget source update --disable-interactivity 2>&1 | Out-Null
 }
 
-$lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity | Out-String -Stream
-$sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
-
-$packages = [System.Collections.Generic.List[PSCustomObject]]::new()
-if ($sepIdx -ge 1) {
-    $header     = $lines[$sepIdx - 1]
-    $colMatches = [regex]::Matches($header, '(?<=^|\s{2,})\S+')
-    if ($colMatches.Count -ge 3) {
-        $idStart  = $colMatches[1].Index
-        $verStart = $colMatches[2].Index
-        for ($i = $sepIdx + 1; $i -lt $lines.Count; $i++) {
-            $line = $lines[$i]
-            if ($line.Length -gt $verStart) {
-                $name = $line.Substring(0, $idStart).Trim()
-                $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
-                # Matches standard Publisher.Product IDs as well as 12-character Microsoft Store product IDs
-                if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$') {
-                    $packages.Add([PSCustomObject]@{ Id = $id; Name = $name })
-                }
-            }
-        }
-    }
-}
+$packages = Get-WingetAvailablePackages
 
 $toUpdate = [System.Collections.Generic.List[PSCustomObject]]::new()
 $skipped  = [System.Collections.Generic.List[PSCustomObject]]::new()

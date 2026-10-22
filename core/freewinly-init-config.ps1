@@ -54,45 +54,30 @@ foreach ($ex in $existingExcludedList) {
     $detectedExcludes.Add($ex)
 }
 
-if (Get-Command winget -ErrorAction SilentlyContinue) {
+$updateModule = Join-Path $modulesDir "freewinly-update-software.ps1"
+if (Test-Path $updateModule) {
     try {
-        $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
-        $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
-        if ($sepIdx -ge 1) {
-            $header     = $lines[$sepIdx - 1]
-            $colMatches = [regex]::Matches($header, '(?<=^|\s{2,})\S+')
-            if ($colMatches.Count -ge 3) {
-                $idStart    = $colMatches[1].Index
-                $verStart   = $colMatches[2].Index
-                $availStart = if ($colMatches.Count -ge 4) { $colMatches[3].Index } else { $header.Length }
+        $availablePackages = & $updateModule -Action Scan -ErrorAction Stop
+        foreach ($pkg in $availablePackages) {
+            $isDevRuntime    = ($pkg.Id -match '^(OpenJS\.NodeJS|Python\.Python|GoLang\.Go|Docker\.DockerDesktop|Git\.Git|Rustlang\.Rustup)')
+            $hasVersionQuirk = ($pkg.InstalledVersion -and $pkg.InstalledVersion -notmatch '\d')
 
-                for ($i = $sepIdx + 1; $i -lt $lines.Count; $i++) {
-                    $line = $lines[$i]
-                    if ($line.Length -gt $verStart) {
-                        $appName = $line.Substring(0, $idStart).Trim()
-                        $pkgId   = $line.Substring($idStart, $verStart - $idStart).Trim()
-                        $verLen  = [math]::Min($availStart - $verStart, $line.Length - $verStart)
-                        $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
-
-                        $isDevRuntime = ($pkgId -match '^(OpenJS\.NodeJS|Python\.Python|GoLang\.Go|Docker\.DockerDesktop|Git\.Git|Rustlang\.Rustup)')
-                        $hasVersionQuirk = ($verText -and $verText -notmatch '\d')
-
-                        if (($hasVersionQuirk -or $isDevRuntime) -and ($pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$')) {
-                            if (-not ($detectedExcludes -contains $pkgId)) {
-                                $reason = if ($isDevRuntime) { "developer runtime / toolchain" } else { "independent auto-updater" }
-                                Write-Host "Detected $reason: $appName (ID: $pkgId)" -ForegroundColor Yellow
-                                $choice = Read-Host "Exclude '$pkgId' from automated Winget upgrades? (Y/n) [Default: Y]"
-                                if ($choice -notmatch '^[Nn]$') {
-                                    $detectedExcludes.Add($pkgId)
-                                    Write-Host "  -> Added '$pkgId' to exclusions." -ForegroundColor Green
-                                }
-                            }
-                        }
+            if ($hasVersionQuirk -or $isDevRuntime) {
+                if (-not ($detectedExcludes -contains $pkg.Id)) {
+                    $reason = if ($isDevRuntime) { "developer runtime / toolchain" } else { "independent auto-updater" }
+                    Write-Host "Detected $reason: $($pkg.Name) (ID: $($pkg.Id))" -ForegroundColor Yellow
+                    $choice = Read-Host "Exclude '$($pkg.Id)' from automated Winget upgrades? (Y/n) [Default: Y]"
+                    if ($choice -notmatch '^[Nn]$') {
+                        $detectedExcludes.Add($pkg.Id)
+                        Write-Host "  -> Added '$($pkg.Id)' to exclusions." -ForegroundColor Green
                     }
                 }
             }
         }
     } catch {
+        Write-Host "Winget scan skipped: $($_.Exception.Message)" -ForegroundColor Gray
+    }
+}
         Write-Host "Winget scan skipped: $($_.Exception.Message)" -ForegroundColor Gray
     }
 }

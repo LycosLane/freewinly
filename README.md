@@ -78,7 +78,7 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 ### Option 1: Direct Download (Recommended for most users)
 
 1. Go to **[Releases](https://github.com/LycosLane/freewinly/releases)** and download **`FreeWinly.zip`**.
-2. Right-click the `.zip`, click **Extract All**, and double-click **`freewinly.cmd`**.
+2. Right-click the `.zip`, click **Extract All** (to any user directory, e.g. `C:\Tools\FreeWinly` or `%LOCALAPPDATA%\Programs\FreeWinly`), and double-click **`freewinly.cmd`**.
 
 A console window opens with a countdown:
 * **Wait 10 seconds:** Runs safe maintenance automatically and exits when done.
