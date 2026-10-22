@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Cleans temporary files and caches older than a configured threshold.
@@ -16,9 +17,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\30_cache_cleanup.ps1 -Action Check
+    .\modules\30_cache_cleanup.ps1 -Action Check
 .EXAMPLE
-    .\30_cache_cleanup.ps1 -Action Run
+    .\modules\30_cache_cleanup.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -48,13 +49,16 @@ if ($Action -eq 'Info') {
 Write-Host "`n--- [Module 30] Safe Cache & Temp Cleanup [$Action] ---" -ForegroundColor Cyan
 
 $cutoff = (Get-Date).AddDays(-$minAgeDays)
+$wuCutoff = (Get-Date).AddDays(-([math]::Max($minAgeDays, 14)))
 Write-Host "Age threshold: files older than $minAgeDays days (before $($cutoff.ToString('yyyy-MM-dd HH:mm')))" -ForegroundColor Gray
+
+$wingetCachePath = Join-Path $env:LOCALAPPDATA "Temp\WinGet"
 
 $targets = [ordered]@{
     'UserTemp'               = $env:TEMP
-    'WindowsTemp'            = 'C:\Windows\Temp'
-    'WinGetCache'            = "$env:LOCALAPPDATA\Temp\WinGet"
-    'WindowsUpdateCache'     = 'C:\Windows\SoftwareDistribution\Download'
+    'WindowsTemp'            = "$env:SystemRoot\Temp"
+    'WinGetCache'            = $wingetCachePath
+    'WindowsUpdateCache'     = "$env:SystemRoot\SoftwareDistribution\Download"
     'DirectXShaderCache'     = "$env:LOCALAPPDATA\D3DSCache"
     'LocalCrashDumps'        = "$env:LOCALAPPDATA\CrashDumps"
     'WindowsErrorReporting'  = "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"
@@ -66,18 +70,37 @@ $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 foreach ($k in $targets.Keys) {
     $p = $targets[$k]
     if (Test-Path $p) {
-        $files = Get-ChildItem $p -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt $cutoff }
+        $targetCutoff = if ($k -eq 'WindowsUpdateCache') { $wuCutoff } else { $cutoff }
+        $files = Get-ChildItem $p -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.LastWriteTime -lt $targetCutoff -and (
+                $k -ne 'UserTemp' -or -not $_.FullName.StartsWith($wingetCachePath, [System.StringComparison]::OrdinalIgnoreCase)
+            )
+        }
         $count = ($files | Measure-Object).Count
         $bytes = ($files | Measure-Object Length -Sum).Sum
         if ($bytes -gt 0) {
-            $totalBytes += $bytes
-            $mb = [math]::Round($bytes / 1MB, 1)
-
             if ($Action -eq 'Run') {
-                $files | Remove-Item -Force -ErrorAction SilentlyContinue
-                Write-Host "Cleaned $k ($count files) -> Freed $mb MB" -ForegroundColor Green
-                if ($LogFile) { Add-Content -Path $LogFile -Value "Cleaned $k ($p): $count files -> Freed $mb MB" -Encoding UTF8 }
+                $freedCount = 0
+                $freedBytes = 0
+                foreach ($f in $files) {
+                    try {
+                        $fLen = $f.Length
+                        Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
+                        $freedCount++
+                        $freedBytes += $fLen
+                    } catch {
+                        # File is in use / locked by a running process; skip safely
+                    }
+                }
+                if ($freedCount -gt 0) {
+                    $totalBytes += $freedBytes
+                    $mb = [math]::Round($freedBytes / 1MB, 1)
+                    Write-Host "Cleaned $k ($freedCount files) -> Freed $mb MB" -ForegroundColor Green
+                    if ($LogFile) { Add-Content -Path $LogFile -Value "Cleaned $k ($p): $freedCount files -> Freed $mb MB" -Encoding UTF8 }
+                }
             } else {
+                $totalBytes += $bytes
+                $mb = [math]::Round($bytes / 1MB, 1)
                 $results.Add([PSCustomObject]@{
                     Category  = $k
                     FileCount = $count

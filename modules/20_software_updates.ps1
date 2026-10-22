@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Queries and installs application updates using Microsoft WinGet.
@@ -16,9 +17,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\20_software_updates.ps1 -Action Check
+    .\modules\20_software_updates.ps1 -Action Check
 .EXAMPLE
-    .\20_software_updates.ps1 -Action Run
+    .\modules\20_software_updates.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -73,20 +74,23 @@ if ($Action -eq 'Run') {
 }
 
 $lines = & winget upgrade --include-unknown --accept-source-agreements | Out-String -Stream
-$headerIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^Name\s+Id\s+Version' })
+$sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
 
 $packages = [System.Collections.Generic.List[PSCustomObject]]::new()
-if ($headerIdx -ge 0) {
-    $header    = $lines[$headerIdx]
-    $idStart   = $header.IndexOf("Id")
-    $verStart  = $header.IndexOf("Version")
-    for ($i = $headerIdx + 2; $i -lt $lines.Count; $i++) {
-        $line = $lines[$i]
-        if ($line.Length -gt $verStart) {
-            $name = $line.Substring(0, $idStart).Trim()
-            $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
-            if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
-                $packages.Add([PSCustomObject]@{ Id = $id; Name = $name })
+if ($sepIdx -ge 1) {
+    $header     = $lines[$sepIdx - 1]
+    $colMatches = [regex]::Matches($header, '(?<=^|\s{2,})\S+')
+    if ($colMatches.Count -ge 3) {
+        $idStart  = $colMatches[1].Index
+        $verStart = $colMatches[2].Index
+        for ($i = $sepIdx + 1; $i -lt $lines.Count; $i++) {
+            $line = $lines[$i]
+            if ($line.Length -gt $verStart) {
+                $name = $line.Substring(0, $idStart).Trim()
+                $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
+                if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
+                    $packages.Add([PSCustomObject]@{ Id = $id; Name = $name })
+                }
             }
         }
     }

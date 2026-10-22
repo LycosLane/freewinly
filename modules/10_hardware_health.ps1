@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Queries Windows Device Manager for hardware faults and missing drivers.
@@ -16,9 +17,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\10_hardware_health.ps1 -Action Check
+    .\modules\10_hardware_health.ps1 -Action Check
 .EXAMPLE
-    .\10_hardware_health.ps1 -Action Run -LogFile "run.log"
+    .\modules\10_hardware_health.ps1 -Action Run -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(
@@ -42,14 +43,18 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [Module 10] Hardware & Driver Health [$Action] ---" -ForegroundColor Cyan
 
+$cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+$isVM = $cs -and ("$($cs.Manufacturer) $($cs.Model)" -match 'Virtual|VMware|KVM|QEMU|Bochs|Parallels|HVM|Xen|innotek')
+
 function Get-ProblemAdvice {
     param([int]$Code)
+    $vmHint = if ($isVM -and $Code -eq 28) { " (Virtual Machine detected: install or update VM Guest Tools / VirtIO drivers.)" } else { "" }
     switch ($Code) {
         1  { return "Device is not configured correctly. Update or reinstall driver." }
         10 { return "Device cannot start. Try unplugging/replugging, updating driver, or restarting PC." }
         14 { return "Device requires a computer restart to complete driver installation." }
         22 { return "Device is disabled. Enable it in Windows Device Manager if needed." }
-        28 { return "Driver missing. Check Windows Update -> Advanced -> Optional Updates, or download from manufacturer." }
+        28 { return "Driver missing. Check Windows Update -> Advanced -> Optional Updates, or download from manufacturer.$vmHint" }
         31 { return "Device is not working properly because Windows cannot load required drivers." }
         43 { return "Device stopped because it reported problems (hardware crash or driver fault)." }
         default { return "Windows reported status error code $Code. Check Device Manager properties." }

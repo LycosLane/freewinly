@@ -18,11 +18,11 @@
 .PARAMETER DayOfWeek
     Day of week for weekly schedule (default: 'Sunday').
 .EXAMPLE
-    .\install-task.ps1
+    .\core\scheduler.ps1
 .EXAMPLE
-    .\install-task.ps1 -Action Weekly -DayOfWeek Sunday -At 14:00
+    .\core\scheduler.ps1 -Action Weekly -DayOfWeek Sunday -At 14:00
 .EXAMPLE
-    .\install-task.ps1 -Action Remove
+    .\core\scheduler.ps1 -Action Remove
 #>
 [CmdletBinding()]
 param(
@@ -37,7 +37,7 @@ $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $taskName = "FreeWinly"
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $runnerScript = Join-Path $projectRoot "freewinly.ps1"
 $configPath = Join-Path $projectRoot "config.json"
 
@@ -163,7 +163,7 @@ function Register-FreeWinlyTask {
         }
     }
 
-    $taskAction = New-ScheduledTaskAction -Execute "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
+    $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
         -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`" -Run" `
         -WorkingDirectory $projectRoot
 
@@ -334,7 +334,19 @@ while ($running) {
         continue
     }
 
-    switch ($key.Key) {
+    $actionKey = $key.Key.ToString()
+    if ($actionKey -eq "Enter") {
+        switch ($selectedIndex) {
+            3 { $actionKey = "S" }
+            4 { $actionKey = "R" }
+            5 { $actionKey = "Q" }
+            default { $actionKey = "RightArrow" }
+        }
+    } elseif ($actionKey -eq "Spacebar") {
+        $actionKey = "RightArrow"
+    }
+
+    switch ($actionKey) {
         "UpArrow" {
             $selectedIndex--
             if ($selectedIndex -lt 0) { $selectedIndex = $options.Count - 1 }
@@ -345,12 +357,10 @@ while ($running) {
         }
         "LeftArrow" {
             if ($selectedIndex -eq 0) {
-                $mIdx = $modes.IndexOf($selectedMode)
-                $mIdx = ($mIdx - 1 + $modes.Count) % $modes.Count
+                $mIdx = ($modes.IndexOf($selectedMode) - 1 + $modes.Count) % $modes.Count
                 $selectedMode = $modes[$mIdx]
             } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
-                $dayIdx = $weekdays.IndexOf($selectedDay)
-                $dayIdx = ($dayIdx - 1 + $weekdays.Count) % $weekdays.Count
+                $dayIdx = ($weekdays.IndexOf($selectedDay) - 1 + $weekdays.Count) % $weekdays.Count
                 $selectedDay = $weekdays[$dayIdx]
             } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
                 $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta -1
@@ -358,56 +368,13 @@ while ($running) {
         }
         "RightArrow" {
             if ($selectedIndex -eq 0) {
-                $mIdx = $modes.IndexOf($selectedMode)
-                $mIdx = ($mIdx + 1) % $modes.Count
+                $mIdx = ($modes.IndexOf($selectedMode) + 1) % $modes.Count
                 $selectedMode = $modes[$mIdx]
             } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
-                $dayIdx = $weekdays.IndexOf($selectedDay)
-                $dayIdx = ($dayIdx + 1) % $weekdays.Count
+                $dayIdx = ($weekdays.IndexOf($selectedDay) + 1) % $weekdays.Count
                 $selectedDay = $weekdays[$dayIdx]
             } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
                 $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
-            }
-        }
-        "Spacebar" {
-            if ($selectedIndex -eq 0) {
-                $mIdx = $modes.IndexOf($selectedMode)
-                $mIdx = ($mIdx + 1) % $modes.Count
-                $selectedMode = $modes[$mIdx]
-            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
-                $dayIdx = $weekdays.IndexOf($selectedDay)
-                $dayIdx = ($dayIdx + 1) % $weekdays.Count
-                $selectedDay = $weekdays[$dayIdx]
-            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
-                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
-            }
-        }
-        "Enter" {
-            if ($selectedIndex -eq 0) {
-                $mIdx = $modes.IndexOf($selectedMode)
-                $mIdx = ($mIdx + 1) % $modes.Count
-                $selectedMode = $modes[$mIdx]
-            } elseif ($selectedIndex -eq 1 -and $selectedMode -ne 'Logon') {
-                $dayIdx = $weekdays.IndexOf($selectedDay)
-                $dayIdx = ($dayIdx + 1) % $weekdays.Count
-                $selectedDay = $weekdays[$dayIdx]
-            } elseif ($selectedIndex -eq 2 -and $selectedMode -ne 'Logon') {
-                $selectedTime = Adjust-Hour -TimeStr $selectedTime -Delta 1
-            } elseif ($selectedIndex -eq 3) {
-                # Confirm and Apply
-                Save-ScheduleToConfig -Type $selectedMode -Day $selectedDay -Time $selectedTime
-                Register-FreeWinlyTask -ScheduleType $selectedMode -TimeStr $selectedTime -Day $selectedDay
-                Start-Sleep -Seconds 2
-                $running = $false
-            } elseif ($selectedIndex -eq 4) {
-                # Remove
-                Remove-FreeWinlyTask
-                Start-Sleep -Seconds 2
-                $running = $false
-            } elseif ($selectedIndex -eq 5) {
-                # Cancel
-                Write-Host "`nNo changes were saved." -ForegroundColor Yellow
-                $running = $false
             }
         }
         "S" {
@@ -421,11 +388,7 @@ while ($running) {
             Start-Sleep -Seconds 2
             $running = $false
         }
-        "Q" {
-            Write-Host "`nNo changes were saved." -ForegroundColor Yellow
-            $running = $false
-        }
-        "Escape" {
+        { $_ -in @("Q", "Escape") } {
             Write-Host "`nNo changes were saved." -ForegroundColor Yellow
             $running = $false
         }

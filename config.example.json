@@ -4,7 +4,6 @@
   "install": [],
   "excluded": [],
   "postCommands": [],
-  "postponedPhases": [],
   "enabledModules": [
     "10_hardware_health",
     "11_event_log_health",

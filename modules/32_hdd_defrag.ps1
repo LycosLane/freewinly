@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Analyzes and defragments mechanical hard disk drives (HDDs).
@@ -16,9 +17,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters (e.g. @{ Drives = @('D') }).
 .EXAMPLE
-    .\32_hdd_defrag.ps1 -Action Check
+    .\modules\32_hdd_defrag.ps1 -Action Check
 .EXAMPLE
-    .\32_hdd_defrag.ps1 -Action Run
+    .\modules\32_hdd_defrag.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -122,8 +123,12 @@ if ($Action -eq 'Check') {
     if ($isAdmin) {
         foreach ($dl in $targetLetters) {
             Write-Host "Analyzing Drive $dl`: for fragmentation..." -ForegroundColor Cyan
-            $analysis = & defrag.exe "$($dl):" /A 2>&1 | Out-String
-            $analysis | Out-Host
+            try {
+                $analysis = Optimize-Volume -DriveLetter $dl -Analyze -Verbose 4>&1 | Out-String
+                $analysis | Out-Host
+            } catch {
+                Write-Host "Could not analyze Drive $dl`: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
         }
     } else {
         Write-Host "Note: Running detailed fragmentation analysis requires Administrator privileges." -ForegroundColor Gray
@@ -140,33 +145,32 @@ if (-not $isDue) {
     return
 }
 
-Write-Host "Checking $( $targetLetters.Count ) HDD drive(s): $( $targetLetters -join ', ' )" -ForegroundColor Cyan
-$updatedAny = $false
+Write-Host "Optimizing $( $targetLetters.Count ) HDD drive(s): $( $targetLetters -join ', ' )" -ForegroundColor Cyan
 
 foreach ($dl in $targetLetters) {
-    Write-Host "Analyzing fragmentation on Drive $dl`: ..." -ForegroundColor Cyan
-    $analysis = & defrag.exe "$($dl):" /A 2>&1 | Out-String
-    $analysis | Out-Host
-
-    $needsDefrag = $true
-    if ($analysis -match 'You do not need to defragment this volume') {
-        $needsDefrag = $false
-        Write-Host "Drive $dl`: Windows reports defragmentation is not needed. Skipping." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: Defragmentation not needed." -Encoding UTF8 }
-    }
-
-    if ($needsDefrag) {
-        Write-Host "Defragmenting Drive $dl`: ..." -ForegroundColor Yellow
-        $out = & Optimize-Volume -DriveLetter $dl -Defrag -Verbose 4>&1
+    Write-Host "Analyzing and defragmenting Drive $dl`: (skips automatically if not fragmented)..." -ForegroundColor Cyan
+    try {
+        $out = Optimize-Volume -DriveLetter $dl -Defrag -Verbose -ErrorAction Stop 4>&1
         $out | Out-Host
         if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
-        Write-Host "Drive $dl`: Defragmentation completed." -ForegroundColor Green
-        $updatedAny = $true
+        Write-Host "Drive $dl`: Optimization completed." -ForegroundColor Green
+    } catch {
+        Write-Host "Error optimizing Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Error optimizing Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
-# Update timestamp in config if provided
+# Update timestamp in config (in-memory for runner, or on disk if run standalone)
+$todayStr = (Get-Date).ToString("yyyy-MM-dd")
 if ($Config) {
-    $todayStr = (Get-Date).ToString("yyyy-MM-dd")
     $Config | Add-Member -NotePropertyName hddDefragLastRun -NotePropertyValue $todayStr -Force
+} else {
+    $defaultCfgPath = Join-Path (Split-Path -Parent $PSScriptRoot) "config.json"
+    if (Test-Path $defaultCfgPath) {
+        try {
+            $diskCfg = Get-Content $defaultCfgPath -Raw | ConvertFrom-Json
+            $diskCfg | Add-Member -NotePropertyName hddDefragLastRun -NotePropertyValue $todayStr -Force
+            $diskCfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $defaultCfgPath -Encoding UTF8
+        } catch { }
+    }
 }

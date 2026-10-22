@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Analyzes Windows Application and System event logs for recurring errors.
@@ -17,9 +18,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\11_event_log_health.ps1 -Action Check
+    .\modules\11_event_log_health.ps1 -Action Check
 .EXAMPLE
-    .\11_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
+    .\modules\11_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(
@@ -61,15 +62,22 @@ try {
             $first = $g.Group[0]
             $msg = ($first.Message -replace '\r?\n',' ')
             
-            # Actionable insight extraction based on standard Windows Event signatures
+            # Actionable insight extraction based on standard Windows Event signatures (locale-independent via Properties first)
             $advice = "Review event details in Windows Event Viewer under $($first.LogName)."
             if ($first.Id -eq 1000 -and $first.ProviderName -match 'Application Error') {
-                if ($first.Message -match 'Faulting application name:\s*([^,\r\n]+)') {
-                    $app = $matches[1].Trim()
+                $app = if ($first.Properties -and $first.Properties.Count -gt 0 -and $first.Properties[0].Value) {
+                    [string]$first.Properties[0].Value
+                } elseif ($first.Message -match 'Faulting application name:\s*([^,\r\n]+)') {
+                    $matches[1].Trim()
+                } else { $null }
+                if ($app) {
                     $advice = "Application '$app' is crashing repeatedly. Consider checking for updates, repairing, or uninstalling it."
                 }
             } elseif ($first.Id -eq 1002) {
-                $advice = "Application hung and was terminated by Windows. Check for resource contention or corrupted app files."
+                $app = if ($first.Properties -and $first.Properties.Count -gt 0 -and $first.Properties[0].Value) {
+                    " ('$($first.Properties[0].Value)')"
+                } else { "" }
+                $advice = "Application$app hung and was terminated by Windows. Check for resource contention or corrupted app files."
             } elseif ($first.Id -eq 41 -and $first.ProviderName -match 'Kernel-Power') {
                 $advice = "System lost power or rebooted without clean shutdown (possible power cut, forced reset, or BSOD crash)."
             } elseif ($first.ProviderName -match 'Disk|Ntfs|volmgr|stornvme|iaStor') {

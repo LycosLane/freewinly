@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Inspects and repairs application launch interceptors in Image File Execution Options (IFEO).
@@ -21,9 +22,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\12_app_launch_repair.ps1 -Action Check
+    .\modules\12_app_launch_repair.ps1 -Action Check
 .EXAMPLE
-    .\12_app_launch_repair.ps1 -Action Run
+    .\modules\12_app_launch_repair.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(

@@ -155,15 +155,15 @@ Inside the interactive panel (or by pressing **`[ W ]`** in the main menu):
 * Press **`Enter`** (or **`S`**) to save the schedule to `config.json` and register or update the task in Windows Task Scheduler.
 * Press **`R`** to delete the scheduled task from Windows.
 
-You can also run the installer directly:
+You can also run the scheduler directly:
 ```powershell
 # Interactive schedule panel
-powershell -ExecutionPolicy Bypass -File .\install-task.ps1
+powershell -ExecutionPolicy Bypass -File .\core\scheduler.ps1
 
 # Or automate directly from CLI:
-.\install-task.ps1 -Action Weekly -DayOfWeek Sunday -At 12:00
-.\install-task.ps1 -Action Logon
-.\install-task.ps1 -Action Remove
+.\core\scheduler.ps1 -Action Weekly -DayOfWeek Sunday -At 12:00
+.\core\scheduler.ps1 -Action Logon
+.\core\scheduler.ps1 -Action Remove
 ```
 
 ---
@@ -173,7 +173,7 @@ powershell -ExecutionPolicy Bypass -File .\install-task.ps1
 FreeWinly leaves no background services, registry entries, or leftover files behind. You can remove it anytime using the uninstaller:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+powershell -ExecutionPolicy Bypass -File .\core\uninstall.ps1
 ```
 * Or press **`[ U ]`** directly inside the FreeWinly interactive menu.
 
@@ -211,7 +211,7 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 .\freewinly.ps1 -Modules 10_hardware_health,20_software_updates -Run
 
 # Show help
-.\freewinly.ps1 -HelpMe
+.\freewinly.ps1 -Help
 ```
 
 ---
@@ -229,11 +229,13 @@ Modules are numbered by category (`1x`, `2x`, `3x`) and executed in a strict cau
 FreeWinly/
 ├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
 ├── freewinly.cmd                <-- Double-clickable launcher
-├── install-shortcut.ps1         <-- Start Menu shortcut generator
-├── install-task.ps1             <-- Task Scheduler automation
-├── uninstall.ps1                <-- Uninstaller with confirmation
 ├── config.json                  <-- Exclusions, enabled modules & drive settings
 ├── SKILL.md                     <-- AI Agent Playbook
+├── core/
+│   ├── onboarding.ps1           <-- First-run setup & exclusion wizard
+│   ├── scheduler.ps1            <-- Windows Task Scheduler automation
+│   ├── shortcut.ps1             <-- Start Menu shortcut manager
+│   └── uninstall.ps1            <-- Uninstaller with preview & confirmation
 └── modules/
     ├── 10_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
     ├── 11_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes

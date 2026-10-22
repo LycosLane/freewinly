@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Sends native TRIM commands to internal solid-state drives (SSDs).
@@ -16,11 +17,11 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters (e.g. @{ Drives = @('C', 'D') }).
 .EXAMPLE
-    .\31_ssd_trim.ps1 -Action Check
+    .\modules\31_ssd_trim.ps1 -Action Check
 .EXAMPLE
-    .\31_ssd_trim.ps1 -Action Run
+    .\modules\31_ssd_trim.ps1 -Action Run
 .EXAMPLE
-    .\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+    .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
 #>
 [CmdletBinding()]
 param(
@@ -34,9 +35,14 @@ param(
 
 function Get-InstalledFixedSSDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $allDisks = @()
     try {
-        # Query physical SSDs, explicitly excluding USB external drives (USB cannot pass standard TRIM)
-        $disks = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'SSD' -and $_.BusType -ne 'USB' }
+        $allDisks = @(Get-PhysicalDisk -ErrorAction SilentlyContinue)
+        # Query physical SSDs (excluding USB) plus thin-provisioned Virtual Machine disks
+        $disks = $allDisks | Where-Object {
+            ($_.MediaType -eq 'SSD' -and $_.BusType -ne 'USB') -or
+            ($_.MediaType -eq 'Unspecified' -and ($_.BusType -eq 'Virtual' -or $_.FriendlyName -match 'Virtual|VBOX|VMware|QEMU|VirtIO|Msft'))
+        }
         foreach ($disk in $disks) {
             $volumes = $disk | Get-Disk -ErrorAction SilentlyContinue |
                                Get-Partition -ErrorAction SilentlyContinue |
@@ -55,8 +61,9 @@ function Get-InstalledFixedSSDs {
         }
     } catch { }
 
-    # Fallback to C: if disk querying is blocked but C: is a fixed drive
-    if ($found.Count -eq 0 -and (Test-Path 'C:\')) {
+    # Only fall back to C: if Get-PhysicalDisk returned no disks at all (WMI storage provider unavailable).
+    # Never fall back if Get-PhysicalDisk succeeded and confirmed the system only has mechanical HDDs.
+    if ($found.Count -eq 0 -and $allDisks.Count -eq 0 -and (Test-Path 'C:\')) {
         $cVol = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
         if ($cVol -and $cVol.DriveType -eq 'Fixed') {
             $found.Add([PSCustomObject]@{
@@ -126,13 +133,18 @@ Write-Host "Executing TRIM on $( $targetDriveLetters.Count ) drive(s): $( $targe
 foreach ($dl in $targetDriveLetters) {
     Write-Host "Sending TRIM hint to Drive $dl`: ..." -ForegroundColor White
     try {
-        $out = Optimize-Volume -DriveLetter $dl -ReTrim -Verbose 4>&1
+        $out = Optimize-Volume -DriveLetter $dl -ReTrim -Verbose -ErrorAction Stop 4>&1
         $out | Out-Host
         if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
         Write-Host "Drive $dl`: TRIM completed successfully." -ForegroundColor Green
         if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: TRIM completed successfully." -Encoding UTF8 }
     } catch {
-        Write-Host "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($_.Exception.Message -match '0x8900002A|not supported by the hardware') {
+            Write-Host "[Info] Drive $dl`: Storage controller (or virtual disk) does not require hardware TRIM. Skipping." -ForegroundColor Gray
+            if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: Hardware TRIM not required/supported by storage controller." -Encoding UTF8 }
+        } else {
+            Write-Host "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
+            if ($LogFile) { Add-Content -Path $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
 }

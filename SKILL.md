@@ -17,11 +17,13 @@ FreeWinly is a native Windows maintenance engine built without third-party depen
 FreeWinly/
 ├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
 ├── freewinly.cmd                <-- Double-clickable batch launcher (%* arguments)
-├── install-shortcut.ps1         <-- Start Menu shortcut manager (Install/Remove)
-├── install-task.ps1             <-- Native Windows Task Scheduler installer (Weekly/Monthly/Logon/Remove)
-├── uninstall.ps1                <-- Complete uninstaller with preview & confirmation
 ├── config.json                  <-- Exclusions, enabled modules, generic hooks
 ├── SKILL.md                     <-- AI Agent Playbook
+├── core/
+│   ├── onboarding.ps1           <-- First-run setup & exclusion wizard
+│   ├── scheduler.ps1            <-- Native Windows Task Scheduler installer (Weekly/Monthly/Logon/Remove)
+│   ├── shortcut.ps1             <-- Start Menu shortcut manager (Install/Remove/Status)
+│   └── uninstall.ps1            <-- Complete uninstaller with preview & confirmation
 └── modules/
     ├── 10_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
     ├── 11_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
@@ -59,7 +61,7 @@ Step 2: AI analyzes findings & updates `config.json`
         |
         v
 Step 3: AI sets up Start Menu shortcut (if not present)
-        - Runs `.\install-shortcut.ps1`
+        - Runs `.\core\shortcut.ps1`
         |
         v
 Step 4: AI informs user to execute elevated maintenance

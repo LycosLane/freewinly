@@ -10,11 +10,11 @@
     'Remove'  - Deletes the shortcut from the Start Menu.
     'Status'  - Checks if the shortcut is currently installed.
 .EXAMPLE
-    .\install-shortcut.ps1
+    .\core\shortcut.ps1
 .EXAMPLE
-    .\install-shortcut.ps1 -Action Remove
+    .\core\shortcut.ps1 -Action Remove
 .EXAMPLE
-    .\install-shortcut.ps1 -Action Status
+    .\core\shortcut.ps1 -Action Status
 #>
 [CmdletBinding()]
 param(
@@ -23,7 +23,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $runnerScript = Join-Path $projectRoot "freewinly.ps1"
 
 $startMenuPrograms = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
@@ -72,11 +72,11 @@ $shortcutPath = Join-Path $targetDir "FreeWinly.lnk"
 
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-$Shortcut.TargetPath       = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+$Shortcut.TargetPath       = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $Shortcut.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
 $Shortcut.WorkingDirectory = $projectRoot
 $Shortcut.Description      = "FreeWinly - Open Source Windows Maintenance & Optimization"
-$Shortcut.IconLocation     = "C:\Windows\System32\shell32.dll,238"
+$Shortcut.IconLocation     = "$env:SystemRoot\System32\shell32.dll,238"
 $Shortcut.Save()
 
 Write-Host "`n============================================================" -ForegroundColor Cyan

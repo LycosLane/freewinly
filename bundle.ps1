@@ -24,9 +24,6 @@ New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 $coreItems = @(
     "freewinly.cmd",
     "freewinly.ps1",
-    "install-shortcut.ps1",
-    "install-task.ps1",
-    "uninstall.ps1",
     "config.example.json",
     "README.md",
     "LICENSE"
@@ -39,6 +36,7 @@ foreach ($item in $coreItems) {
     }
 }
 
+Copy-Item -Path (Join-Path $projectRoot "core") -Destination $stageDir -Recurse -Force
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
 # 1. Package FreeWinly.zip (core release package)

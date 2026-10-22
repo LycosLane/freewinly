@@ -6,22 +6,27 @@
     Scans for all installed FreeWinly system artifacts (Scheduled Tasks in Windows Task Scheduler,
     Start Menu shortcuts, and the application directory itself). Displays an interactive preview
     of what will be removed and asks for confirmation before cleaning up.
+.PARAMETER Check
+    Displays the components that would be removed without prompting or deleting anything.
 .PARAMETER Force
     Skips the confirmation prompt and proceeds immediately with uninstallation.
 .EXAMPLE
-    .\uninstall.ps1
+    .\core\uninstall.ps1
 .EXAMPLE
-    .\uninstall.ps1 -Force
+    .\core\uninstall.ps1 -Check
+.EXAMPLE
+    .\core\uninstall.ps1 -Force
 #>
 [CmdletBinding()]
 param(
+    [switch]$Check,
     [switch]$Force
 )
 
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "                FreeWinly Complete Uninstaller              " -ForegroundColor White
@@ -63,6 +68,11 @@ if ($shortcutsFound.Count -gt 0) {
 Write-Host "  [x] Application Directory:      $projectRoot" -ForegroundColor White
 Write-Host "      (Includes all modules, local config.json, and execution logs)`n" -ForegroundColor Gray
 
+if ($Check) {
+    Write-Host "Dry run complete. No components were removed." -ForegroundColor Green
+    exit 0
+}
+
 # 2. Confirm with user
 if (-not $Force) {
     $confirm = Read-Host "Are you sure you want to completely remove FreeWinly from this PC? (y/N)"
@@ -77,7 +87,7 @@ Write-Host "`nProceeding with uninstallation..." -ForegroundColor Cyan
 # 3. Remove Scheduled Task
 if ($taskFound) {
     Write-Host "Removing scheduled task..." -ForegroundColor Gray
-    $taskInstaller = Join-Path $projectRoot "install-task.ps1"
+    $taskInstaller = Join-Path $PSScriptRoot "scheduler.ps1"
     if (Test-Path $taskInstaller) {
         & $taskInstaller -Action Remove
     }

@@ -7,10 +7,6 @@ logs/*.log
 logs/*.txt
 !logs/.gitkeep
 
-# Local diagnostic reports
-reports/*.md
-!reports/.gitkeep
-
 # Local user-specific modules (optional personal additions)
 modules/*_local_*.ps1
 modules/*_custom_*.ps1

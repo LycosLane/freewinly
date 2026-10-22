@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     FreeWinly Windows OS & Security Updates Module.

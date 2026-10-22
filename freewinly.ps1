@@ -1,55 +1,35 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly - Open Source Windows Maintenance & Optimization Engine.
-    Automates software updates, cache cleanup, drive optimization, and hardware diagnostics.
-    
+    FreeWinly v1.1.0 - Open Source Windows Maintenance & Optimization Engine.
 .DESCRIPTION
-    Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM.
+    Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, and TRIM.
     Supports headless CLI automation, interactive TUI menu, dry-run check previews, and JIT elevation.
-
 .PARAMETER Run
     Executes the enabled or specified modules immediately without opening the interactive menu.
-
 .PARAMETER Check
     Performs a dry-run preview across enabled or specified modules without altering system state.
-
 .PARAMETER Audit
-    Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, memory, updates, storage).
-
+    Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, updates, storage).
 .PARAMETER Modules
     Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 10_hardware_health,20_software_updates).
-
 .PARAMETER ConfigPath
     Optional path to a custom configuration JSON file (defaults to .\config.json).
-
 .PARAMETER CountdownSeconds
     Override the auto-start countdown duration (0 for instant execution, 3, 5, 10, 20, 30).
-
+.PARAMETER Interactive
+    Indicates an interactive user session (keeps the console window open until Enter is pressed after completion).
 .PARAMETER HelpMe
-    Displays CLI usage instructions and examples.
-
+    Displays CLI usage instructions and examples (aliases: -Help, -h).
 .EXAMPLE
     .\freewinly.ps1
-    Starts interactive mode (unelevated, countdown timer, interactive TUI menu).
-
-.EXAMPLE
-    .\freewinly.ps1 -CountdownSeconds 0 -Run
-    Runs all default modules immediately with zero waiting time.
-
 .EXAMPLE
     .\freewinly.ps1 -Check
-    Performs a dry-run preview of all default modules without making changes.
-
 .EXAMPLE
     .\freewinly.ps1 -Run
-    Runs all default modules immediately with automatic JIT elevation if needed.
-
 .EXAMPLE
-    .\freewinly.ps1 -ConfigPath "custom-config.json" -Run
-    Runs FreeWinly using a custom configuration file.
+    .\freewinly.ps1 -Modules 10_hardware_health,20_software_updates -Run
 #>
-
 [CmdletBinding()]
 param(
     [switch]$Run,
@@ -58,6 +38,8 @@ param(
     [string[]]$Modules = $null,
     [string]$ConfigPath = $null,
     [int]$CountdownSeconds = -1,
+    [switch]$Interactive,
+    [Alias('Help', 'h')]
     [switch]$HelpMe
 )
 
@@ -65,8 +47,13 @@ $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $projectRoot = $PSScriptRoot
-$configPath  = if ($ConfigPath -and (Test-Path $ConfigPath)) {
-    $ConfigPath
+$coreDir     = Join-Path $projectRoot "core"
+$modulesDir  = Join-Path $projectRoot "modules"
+$logsDir     = Join-Path $projectRoot "logs"
+$logFile     = Join-Path $logsDir "latest-run.log"
+
+$configPath = if ($ConfigPath -and (Test-Path $ConfigPath)) {
+    (Resolve-Path $ConfigPath).Path
 } elseif ($ConfigPath) {
     Write-Warning "Specified config file '$ConfigPath' not found. Falling back to default config.json."
     Join-Path $projectRoot "config.json"
@@ -74,17 +61,13 @@ $configPath  = if ($ConfigPath -and (Test-Path $ConfigPath)) {
     Join-Path $projectRoot "config.json"
 }
 
-$modulesDir  = Join-Path $projectRoot "modules"
-$logsDir     = Join-Path $projectRoot "logs"
-$logFile     = Join-Path $logsDir "latest-run.log"
-
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "           FreeWinly - Open Source Windows Engine           " -ForegroundColor White
+    Write-Host "         FreeWinly v1.1.0 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -96,87 +79,22 @@ function Write-Log {
     Add-Content -Path $logFile -Value "[$timestamp] $Message" -Encoding UTF8
 }
 
-if ($HelpMe) {
-    Show-Banner
-    Write-Host @"
-CLI Usage:
-  .\freewinly.ps1                      Interactive mode (countdown timer, TUI menu, JIT elevation)
-  .\freewinly.ps1 -Check               Dry-run preview / diagnostic audit (no changes made)
-  .\freewinly.ps1 -Run                 Execute enabled modules immediately
-  .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
-  .\freewinly.ps1 -Audit               Alias for -Check (read-only health & stability audit)
-  .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
-  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 10_hardware_health,20_software_updates)
-  .\freewinly.ps1 -HelpMe              Show this help message
-
-Module CLI Invocations:
-  Individual modules in .\modules\ can also be called directly:
-  .\modules\10_hardware_health.ps1 -Action Check
-  .\modules\11_event_log_health.ps1 -Action Check
-  .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
-"@ -ForegroundColor Yellow
-    exit 0
-}
-
-# -Audit is a friendly alias for -Check
-if ($Audit) {
-    $Check = $true
-}
-
-# ==================================================================
-# 1. FIRST-RUN ONBOARDING WIZARD
-# ==================================================================
-function Run-OnboardingWizard {
-    Clear-Host
-    Show-Banner
-    Write-Host "`n[First-Run Setup] Scanning for applications with version quirks...`n" -ForegroundColor Gray
-
-    $detectedExcludes = [System.Collections.Generic.List[string]]::new()
-
-    try {
-        $lines = & winget upgrade --include-unknown --accept-source-agreements 2>&1 | Out-String -Stream
-        $headerIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^Name\s+Id\s+Version' })
-        if ($headerIdx -ge 0) {
-            $header   = $lines[$headerIdx]
-            $idStart  = $header.IndexOf("Id")
-            $verStart = $header.IndexOf("Version")
-            for ($i = $headerIdx + 2; $i -lt $lines.Count; $i++) {
-                $line = $lines[$i]
-                if ($line -match '\sUnknown\s' -and $line.Length -gt $verStart) {
-                    $appName = $line.Substring(0, $idStart).Trim()
-                    $pkgId   = $line.Substring($idStart, $verStart - $idStart).Trim()
-                    if ($pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
-                        Write-Host "Detected independent app: $appName (ID: $pkgId)" -ForegroundColor Yellow
-                        $choice = Read-Host "Exclude '$pkgId' from automated Winget upgrades? (Y/n) [Default: Y]"
-                        if ($choice -notmatch '^[Nn]$') {
-                            $detectedExcludes.Add($pkgId)
-                            Write-Host "  -> Added '$pkgId' to exclusions." -ForegroundColor Green
-                        }
-                    }
-                }
-            }
+function Get-SafeConfig {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        try {
+            return (Get-Content $Path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop)
+        } catch {
+            Write-Warning "Failed to parse '$Path' (invalid JSON syntax). Using safe in-memory defaults."
         }
-    } catch {
-        Write-Host "Winget scan skipped: $($_.Exception.Message)" -ForegroundColor Gray
     }
-
-    $existingConfig = if (Test-Path $configPath) { Get-Content $configPath -Raw | ConvertFrom-Json } else { $null }
-    $enabled = if ($existingConfig -and $existingConfig.enabledModules) {
-        $existingConfig.enabledModules
-    } else {
-        @(Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue | Where-Object {
-            try { (& $_.FullName -Action Info).Default -eq $true } catch { $true }
-        } | Select-Object -ExpandProperty BaseName)
-    }
-
-    $newConfig = [ordered]@{
+    return [PSCustomObject]@{
         preCommands           = @()
         uninstall             = @()
         install               = @()
-        excluded              = @($detectedExcludes)
+        excluded              = @()
         postCommands          = @()
-        postponedPhases       = @()
-        enabledModules        = @($enabled)
+        enabledModules        = $null
         cleanupTempMinAgeDays = 7
         eventLogLookbackDays  = 7
         hddDefragMinDays      = 30
@@ -185,19 +103,52 @@ function Run-OnboardingWizard {
         scheduleDay           = "Sunday"
         scheduleTime          = "12:00"
     }
-
-    $newConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-    Write-Host "`nConfiguration created successfully at: $configPath" -ForegroundColor Green
-    Start-Sleep -Seconds 2
 }
 
+if ($HelpMe) {
+    Show-Banner
+    Write-Host @"
+CLI Usage:
+  .\freewinly.ps1                      Interactive mode (countdown timer, TUI menu, JIT elevation)
+  .\freewinly.ps1 -Check               Dry-run preview / diagnostic audit (no changes made)
+  .\freewinly.ps1 -Run                 Execute enabled modules immediately (headless)
+  .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
+  .\freewinly.ps1 -Audit               Alias for -Check (read-only health & stability audit)
+  .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
+  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 10_hardware_health,20_software_updates)
+  .\freewinly.ps1 -Help                Show this help message
+
+Core Utilities:
+  .\core\onboarding.ps1                First-run setup & exclusion wizard
+  .\core\scheduler.ps1                 Configure Windows Task Scheduler automation
+  .\core\shortcut.ps1                  Manage Start Menu shortcut (Install / Remove / Status)
+  .\core\uninstall.ps1                 Cleanly remove FreeWinly from this PC
+
+Standalone Module Invocations:
+  .\modules\10_hardware_health.ps1 -Action Check
+  .\modules\11_event_log_health.ps1 -Action Check
+  .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+"@ -ForegroundColor Yellow
+    exit 0
+}
+
+if ($Audit) {
+    $Check = $true
+}
+
+# Track whether this session was started interactively by a human (vs headless -Run)
+$isInteractiveSession = (-not $Run) -or $Interactive
+
+# 1. First-Run Onboarding (if config.json does not exist yet)
 if (-not (Test-Path $configPath)) {
-    Run-OnboardingWizard
+    $onboardingScript = Join-Path $coreDir "onboarding.ps1"
+    if (Test-Path $onboardingScript) {
+        & $onboardingScript -ConfigPath $configPath
+    }
 }
 
-$config = Get-Content $configPath -Raw | ConvertFrom-Json
+$config = Get-SafeConfig -Path $configPath
 
-# Resolve countdown timer setting (CLI parameter > config.json > default 10)
 $countdown = if ($CountdownSeconds -ge 0) {
     $CountdownSeconds
 } elseif ($config -and $null -ne $config.countdownSeconds) {
@@ -206,7 +157,6 @@ $countdown = if ($CountdownSeconds -ge 0) {
     10
 }
 
-# Flatten comma-separated Modules if passed as single string
 if ($Modules -and $Modules.Count -eq 1 -and $Modules[0] -match ',') {
     $Modules = $Modules[0].Split(',') | ForEach-Object { $_.Trim() }
 }
@@ -223,9 +173,7 @@ foreach ($mf in $moduleFiles) {
 
     try {
         $info = & $mf.FullName -Action Info -Config $config -ErrorAction Stop
-    } catch {
-        # Fallback if module fails Info query
-    }
+    } catch { }
 
     $name          = if ($info -and $info.Name) { $info.Name } else { $baseName }
     $description   = if ($info -and $info.Description) { $info.Description } else { "" }
@@ -233,8 +181,6 @@ foreach ($mf in $moduleFiles) {
     $requiresAdmin = if ($info -and $null -ne $info.RequiresAdmin) { $info.RequiresAdmin } else { $false }
     $options       = if ($info -and $info.Options) { $info.Options } else { @{} }
 
-    # If the module requires target drives (e.g. SSD TRIM or HDD defrag) and none exist on this PC,
-    # skip adding it to the TUI/execution list unless explicitly targeted via CLI (-Modules)
     $hasEmptyDrives = ($options -and $options.ContainsKey('DetectedDrives') -and (@($options['DetectedDrives']).Count -eq 0))
     if ($hasEmptyDrives -and -not ($Modules -and $Modules -contains $baseName)) {
         continue
@@ -259,24 +205,28 @@ foreach ($mf in $moduleFiles) {
     })
 }
 
-# ==================================================================
-# 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
-# ==================================================================
-if ($Check) {
+function Invoke-DryRunCheck {
+    param([array]$TargetModules)
     Show-Banner
-    $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
+    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($TargetModules.Count) module(s) ===" -ForegroundColor Yellow
     Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
-    foreach ($m in $targetModules) {
+    foreach ($m in $TargetModules) {
         try {
             & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options
         } catch {
             Write-Host "Error during check for $($m.Name): $($_.Exception.Message)" -ForegroundColor Red
         }
     }
-
     Write-Host "`n=== Diagnostic Audit & Dry-Run Check Completed Successfully ===" -ForegroundColor Green
+}
+
+# ==================================================================
+# 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
+# ==================================================================
+if ($Check) {
+    $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
+    Invoke-DryRunCheck -TargetModules $targetModules
     exit 0
 }
 
@@ -331,7 +281,7 @@ if (-not $Run) {
                 "Disabled"
             }
             $actions = @(
-                @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Enter" },
+                @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
                 @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
                 @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)"; Key = "T" },
                 @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
@@ -366,7 +316,17 @@ if (-not $Run) {
             }
 
             $key = [Console]::ReadKey($true)
-            switch ($key.Key) {
+            $cmdKey = $key.Key.ToString()
+
+            if ($cmdKey -eq "Enter") {
+                if ($selectedIndex -lt $discoveredModules.Count) {
+                    $cmdKey = "Spacebar"
+                } else {
+                    $cmdKey = $actions[$selectedIndex - $discoveredModules.Count].Key
+                }
+            }
+
+            switch ($cmdKey) {
                 "UpArrow" {
                     $selectedIndex--
                     if ($selectedIndex -lt 0) { $selectedIndex = $totalOptions - 1 }
@@ -380,105 +340,49 @@ if (-not $Run) {
                         $discoveredModules[$selectedIndex].Enabled = -not $discoveredModules[$selectedIndex].Enabled
                     }
                 }
-                "Enter" {
-                    if ($selectedIndex -lt $discoveredModules.Count) {
-                        $discoveredModules[$selectedIndex].Enabled = -not $discoveredModules[$selectedIndex].Enabled
-                    } elseif ($selectedIndex -eq $discoveredModules.Count) {
-                        # Run All Checked Tasks
-                        $running = $false
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 1)) {
-                        # Dry-Run Check / Audit
-                        Clear-Host
-                        Show-Banner
-                        $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-                        Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
-                        foreach ($m in $targetModules) {
-                            try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
-                        }
-                        Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 2)) {
-                        # Cycle timer
-                        $curIdx = $timerPresets.IndexOf($countdown)
-                        $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
-                        $countdown = $timerPresets[$nextIdx]
-                        $config.countdownSeconds = $countdown
-                        $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 3)) {
-                        # Task Scheduler
-                        Clear-Host
-                        & (Join-Path $projectRoot "install-task.ps1")
-                        $config = Get-Content $configPath -Raw | ConvertFrom-Json
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 4)) {
-                        # Save
-                        $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
-                        $config.enabledModules = @($enabledList)
-                        $config.countdownSeconds = $countdown
-                        $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                        Write-Host "`n  -> Default tasks and settings saved to config.json!" -ForegroundColor Green
-                        Start-Sleep -Milliseconds 800
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 5)) {
-                        # Onboarding
-                        Run-OnboardingWizard
-                        $config = Get-Content $configPath -Raw | ConvertFrom-Json
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 6)) {
-                        # Install shortcut
-                        & (Join-Path $projectRoot "install-shortcut.ps1")
-                        Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 7)) {
-                        # Uninstall
-                        Clear-Host
-                        & (Join-Path $projectRoot "uninstall.ps1")
-                        Read-Host "`nPress Enter to return to menu"
-                    } elseif ($selectedIndex -eq ($discoveredModules.Count + 8)) {
-                        # Quit
-                        Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
-                        exit 0
-                    }
+                "Run" {
+                    $running = $false
                 }
                 { $_ -in @("C", "A") } {
                     Clear-Host
-                    Show-Banner
                     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-                    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
-                    foreach ($m in $targetModules) {
-                        try { & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options } catch { Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red }
-                    }
+                    Invoke-DryRunCheck -TargetModules $targetModules
                     Read-Host "`nPress Enter to return to menu"
                 }
                 "T" {
                     $curIdx = $timerPresets.IndexOf($countdown)
                     $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
                     $countdown = $timerPresets[$nextIdx]
-                    $config.countdownSeconds = $countdown
+                    $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
                     $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
                 }
                 "W" {
                     Clear-Host
-                    & (Join-Path $projectRoot "install-task.ps1")
-                    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+                    & (Join-Path $coreDir "scheduler.ps1")
+                    $config = Get-SafeConfig -Path $configPath
                 }
                 "S" {
-                    $enabledList = ($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
-                    $config.enabledModules = @($enabledList)
-                    $config.countdownSeconds = $countdown
+                    $enabledList = @($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
+                    $config | Add-Member -NotePropertyName enabledModules -NotePropertyValue $enabledList -Force
+                    $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
                     $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
                     Write-Host "`n  -> Default tasks and settings saved to config.json!" -ForegroundColor Green
                     Start-Sleep -Milliseconds 800
                 }
                 "O" {
-                    Run-OnboardingWizard
-                    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+                    & (Join-Path $coreDir "onboarding.ps1") -ConfigPath $configPath
+                    $config = Get-SafeConfig -Path $configPath
                 }
                 "I" {
-                    & (Join-Path $projectRoot "install-shortcut.ps1")
+                    & (Join-Path $coreDir "shortcut.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
                 "U" {
                     Clear-Host
-                    & (Join-Path $projectRoot "uninstall.ps1")
+                    & (Join-Path $coreDir "uninstall.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
-                "Q" {
+                { $_ -in @("Q", "Escape") } {
                     Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
                     exit 0
                 }
@@ -503,7 +407,8 @@ if ($needsAdmin -and -not $isAdmin) {
     Write-Host "`nSelected tasks require Administrator privileges." -ForegroundColor Yellow
     Write-Host "Elevating FreeWinly runner..." -ForegroundColor Cyan
     $selectedNames = ($activeModules | Select-Object -ExpandProperty BaseName) -join ','
-    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
+    $interactiveArg = if ($isInteractiveSession) { " -Interactive" } else { "" }
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run$interactiveArg -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
     exit 0
 }
 
@@ -512,10 +417,11 @@ if ($needsAdmin -and -not $isAdmin) {
 # ==================================================================
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.1.0 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
+$configSnapshotBefore = if ($config) { $config | ConvertTo-Json -Depth 5 -Compress } else { "" }
 
 # 6.0 PRE-COMMANDS HOOK
 if ($config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
@@ -593,14 +499,15 @@ if ($config -and $config.postCommands -and $config.postCommands.Count -gt 0) {
 }
 
 # Auto-cleanup expired postponements in exclusions
-if ($config.excluded) {
+if ($config -and $config.excluded) {
     $today = (Get-Date).Date
     $cleanExcludes = [System.Collections.Generic.List[object]]::new()
     foreach ($item in $config.excluded) {
         if ($item -is [string]) {
             $cleanExcludes.Add($item)
         } elseif ($item.id -and $item.until) {
-            if ($today -le [datetime]$item.until) {
+            $untilDate = try { [datetime]$item.until } catch { $null }
+            if ($untilDate -and $today -le $untilDate) {
                 $cleanExcludes.Add($item)
             } else {
                 Write-Log "Postponement expired & removed: $($item.id)" "Yellow"
@@ -608,14 +515,23 @@ if ($config.excluded) {
             }
         }
     }
-    $config.excluded = $cleanExcludes
+    $config.excluded = @($cleanExcludes)
 }
 
-if ($configModified) {
+# Check if any module updated properties on $config (such as hddDefragLastRun)
+$configSnapshotAfter = if ($config) { $config | ConvertTo-Json -Depth 5 -Compress } else { "" }
+if ($configSnapshotBefore -ne $configSnapshotAfter) {
+    $configModified = $true
+}
+
+if ($configModified -and (Test-Path (Split-Path -Parent $configPath))) {
     $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-    Write-Log "Configuration updated (cleared completed queues/hooks)." "Green"
+    Write-Log "Configuration updated." "Green"
 }
 
 Write-Log "`n=== FreeWinly Finished Successfully ===" "Green"
 Write-Host "`nLog saved to: $logFile" -ForegroundColor Gray
-Read-Host "Press Enter to close this window"
+
+if ($isInteractiveSession) {
+    Read-Host "Press Enter to close this window"
+}
