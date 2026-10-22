@@ -38,8 +38,17 @@
       "cleanEdge": true,
       "cleanChrome": true,
       "cleanFirefox": true,
-      "cleanBrave": true,
-      "cleanDesktopApps": true
+      "cleanBrave": true
+    },
+    "freewinly-clean-apps": {
+      "enabled": true,
+      "minAgeDays": 3,
+      "discord": true,
+      "teams": true,
+      "slack": true,
+      "steam": true,
+      "vscode": true,
+      "customApps": {}
     },
     "freewinly-clean-network": {
       "enabled": true,

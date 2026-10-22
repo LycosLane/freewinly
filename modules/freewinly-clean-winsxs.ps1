@@ -43,7 +43,7 @@ if ($Action -eq 'Info') {
     return [PSCustomObject]@{
         Name                 = "Windows Component Store Cleanup (DISM)"
         Description          = "Analyzes and cleans superseded Windows Update payloads in C:\Windows\WinSxS via native DISM"
-        Order                = 33
+        Order                = 34
         Default              = $false
         RequiresAdmin        = $true
         DefaultSettings      = [ordered]@{

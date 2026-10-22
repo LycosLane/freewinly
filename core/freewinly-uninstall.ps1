@@ -81,7 +81,7 @@ if ($shortcutsFound.Count -gt 0) {
 }
 
 Write-Host "  [x] Application Directory:      $projectRoot" -ForegroundColor White
-Write-Host "      (Includes all modules, local config.json, and execution logs)`n" -ForegroundColor Gray
+Write-Host "      (Includes all modules, local config.json, backups, and execution logs)`n" -ForegroundColor Gray
 
 if ($Check) {
     Write-Host "Dry run complete. No components were removed." -ForegroundColor Green

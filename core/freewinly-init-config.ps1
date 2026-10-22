@@ -28,9 +28,12 @@ if (-not $ConfigPath) {
     $ConfigPath = Join-Path $projectRoot "config.json"
 }
 
+# Dot-source config I/O manager
+. (Join-Path $PSScriptRoot "freewinly-config-io.ps1")
+
 Clear-Host
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "     FreeWinly v1.3.0 - Configuration & Exclusion Wizard    " -ForegroundColor White
+Write-Host "     FreeWinly v1.4.0 - Configuration & Exclusion Wizard    " -ForegroundColor White
 Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
 Write-Host "============================================================`n" -ForegroundColor Cyan
 
@@ -156,24 +159,41 @@ foreach ($baseName in $orderedBaseNames) {
         enabled = $isEnabled
     }
 
-    # Overlay default settings first
-    if ($m.DefaultSettings) {
-        $keys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) { $m.DefaultSettings.Keys } else { $m.DefaultSettings.PSObject.Properties.Name }
-        foreach ($k in $keys) {
-            $modBlock[$k] = $m.DefaultSettings[$k]
+    if ($m.BaseName -eq 'freewinly-clean-apps') {
+        $modBlock['minAgeDays'] = if ($null -ne $existingMod -and $null -ne $existingMod.minAgeDays) { [int]$existingMod.minAgeDays } else { 3 }
+        foreach ($bName in @('discord', 'teams', 'slack', 'steam', 'vscode')) {
+            $existingVal = if ($null -ne $existingMod) { $existingMod.$bName } else { $null }
+            $bEnabled = if ($existingVal -is [bool]) {
+                $existingVal
+            } elseif ($null -ne $existingVal -and $null -ne $existingVal.enabled) {
+                [bool]$existingVal.enabled
+            } else {
+                $true
+            }
+            $modBlock[$bName] = $bEnabled
         }
-    }
+        $existingCust = if ($null -ne $existingMod -and $null -ne $existingMod.customApps) { $existingMod.customApps } else { [ordered]@{} }
+        $modBlock['customApps'] = $existingCust
+    } else {
+        # Overlay default settings first
+        if ($m.DefaultSettings) {
+            $keys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) { $m.DefaultSettings.Keys } else { $m.DefaultSettings.PSObject.Properties.Name }
+            foreach ($k in $keys) {
+                $modBlock[$k] = $m.DefaultSettings[$k]
+            }
+        }
 
-    # Overlay existing customized settings
-    if ($null -ne $existingMod -and -not ($existingMod -is [bool])) {
-        $existingKeys = if ($existingMod -is [System.Collections.IDictionary]) {
-            $existingMod.Keys
-        } else {
-            $existingMod.PSObject.Properties.Name
-        }
-        foreach ($ek in $existingKeys) {
-            if ($ek -ne 'enabled') {
-                $modBlock[$ek] = $existingMod.$ek
+        # Overlay existing customized settings
+        if ($null -ne $existingMod -and -not ($existingMod -is [bool])) {
+            $existingKeys = if ($existingMod -is [System.Collections.IDictionary]) {
+                $existingMod.Keys
+            } else {
+                $existingMod.PSObject.Properties.Name
+            }
+            foreach ($ek in $existingKeys) {
+                if ($ek -ne 'enabled') {
+                    $modBlock[$ek] = $existingMod.$ek
+                }
             }
         }
     }
@@ -198,6 +218,6 @@ $newConfig = [ordered]@{
     modulesExecutionOrder = $modulesExecutionOrder
 }
 
-$newConfig | ConvertTo-Json -Depth 6 | Out-File -FilePath $ConfigPath -Encoding UTF8
+Save-AtomicConfigFile -Path $ConfigPath -Config $newConfig -Depth 6
 Write-Host "`nConfiguration saved to: $ConfigPath" -ForegroundColor Green
 Start-Sleep -Seconds 2

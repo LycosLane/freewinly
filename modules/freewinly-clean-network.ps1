@@ -46,7 +46,7 @@ if ($Action -eq 'Info') {
     return [PSCustomObject]@{
         Name                 = "Network Cache & Connectivity"
         Description          = "Flushes DNS/ARP caches, checks gateway & DNS latency, and optionally resets Winsock"
-        Order                = 32
+        Order                = 33
         Default              = $true
         RequiresAdmin        = $false
         DefaultSettings      = [ordered]@{

@@ -39,6 +39,9 @@ foreach ($item in $coreItems) {
 Copy-Item -Path (Join-Path $projectRoot "core") -Destination $stageDir -Recurse -Force
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
+# Ensure no local configuration files or backups are shipped
+Get-ChildItem -Path $stageDir -Filter "config*.json" -Recurse | Where-Object { $_.Name -ne "config.example.json" } | Remove-Item -Force -ErrorAction SilentlyContinue
+
 # 1. Package FreeWinly.zip (core release package)
 Compress-Archive -Path "$stageDir\*" -DestinationPath $coreZip -Force
 $coreSize = [math]::Round((Get-Item $coreZip).Length / 1KB, 1)

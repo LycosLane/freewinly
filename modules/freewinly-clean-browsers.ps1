@@ -1,11 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Cleans disposable browser and desktop application disk, shader, and code caches.
+    Cleans disposable browser disk, shader, and code caches.
 .DESCRIPTION
     Purges temporary caches from Microsoft Edge, Google Chrome, Mozilla Firefox,
-    LibreWolf, Brave, Vivaldi, Opera, Discord, Microsoft Teams, Slack, Spotify, Steam,
-    and Visual Studio Code.
+    LibreWolf, Brave, Vivaldi, and Opera.
     
     Safety Guarantee:
     - Never touches cookies, browsing history, sessions, saved passwords, or bookmarks.
@@ -40,17 +39,16 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays       = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 3 }
-$cleanEdge        = if ($null -ne $Settings -and $null -ne $Settings.cleanEdge) { [bool]$Settings.cleanEdge } else { $true }
-$cleanChrome      = if ($null -ne $Settings -and $null -ne $Settings.cleanChrome) { [bool]$Settings.cleanChrome } else { $true }
-$cleanFirefox     = if ($null -ne $Settings -and $null -ne $Settings.cleanFirefox) { [bool]$Settings.cleanFirefox } else { $true }
-$cleanBrave       = if ($null -ne $Settings -and $null -ne $Settings.cleanBrave) { [bool]$Settings.cleanBrave } else { $true }
-$cleanDesktopApps = if ($null -ne $Settings -and $null -ne $Settings.cleanDesktopApps) { [bool]$Settings.cleanDesktopApps } else { $true }
+$minAgeDays   = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 3 }
+$cleanEdge    = if ($null -ne $Settings -and $null -ne $Settings.cleanEdge) { [bool]$Settings.cleanEdge } else { $true }
+$cleanChrome  = if ($null -ne $Settings -and $null -ne $Settings.cleanChrome) { [bool]$Settings.cleanChrome } else { $true }
+$cleanFirefox = if ($null -ne $Settings -and $null -ne $Settings.cleanFirefox) { [bool]$Settings.cleanFirefox } else { $true }
+$cleanBrave   = if ($null -ne $Settings -and $null -ne $Settings.cleanBrave) { [bool]$Settings.cleanBrave } else { $true }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name                 = "Browser & App Cache Cleanup"
-        Description          = "Purges disposable browser & app caches without touching cookies or logins (skips open apps)"
+        Name                 = "Browser Cache Cleanup"
+        Description          = "Purges disposable browser caches without touching cookies or logins (skips open browsers)"
         Order                = 31
         Default              = $true
         RequiresAdmin        = $false
@@ -60,7 +58,6 @@ if ($Action -eq 'Info') {
             cleanChrome      = $true
             cleanFirefox     = $true
             cleanBrave       = $true
-            cleanDesktopApps = $true
         }
         SettingsDescriptions = [ordered]@{
             minAgeDays       = "Minimum file age in days before purging cache files"
@@ -68,12 +65,11 @@ if ($Action -eq 'Info') {
             cleanChrome      = "Google Chrome disk & shader caches (skips if open)"
             cleanFirefox     = "Mozilla Firefox & LibreWolf disk cache (skips if open)"
             cleanBrave       = "Brave, Vivaldi & Opera Chromium caches (skips if open)"
-            cleanDesktopApps = "Desktop app caches: Discord, Teams, Slack, Spotify, Steam, VS Code (skips if open)"
         }
     }
 }
 
-Write-Host "`n--- [freewinly-clean-browsers] Browser & App Cache Cleanup [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-clean-browsers] Browser Cache Cleanup [$Action] ---" -ForegroundColor Cyan
 
 $cutoff = (Get-Date).AddDays(-$minAgeDays)
 Write-Host "Age threshold: files older than $minAgeDays days (before $($cutoff.ToString('yyyy-MM-dd HH:mm')))`n" -ForegroundColor Gray
@@ -189,79 +185,6 @@ $targets = @(
         Paths     = @(
             "$env:LOCALAPPDATA\Opera Software\Opera Stable\Cache\Cache_Data"
         )
-    },
-    # Discord
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Discord"
-        Processes = @('Discord')
-        Paths     = @(
-            "$env:APPDATA\discord\Cache\Cache_Data",
-            "$env:APPDATA\discord\Code Cache",
-            "$env:APPDATA\discord\GPUCache"
-        )
-    },
-    # Microsoft Teams
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Microsoft Teams"
-        Processes = @('ms-teams', 'Teams')
-        Paths     = @(
-            "$env:LOCALAPPDATA\Packages\MSTeams_*\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache\Cache_Data",
-            "$env:APPDATA\Microsoft\Teams\Cache"
-        )
-    },
-    # Slack
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Slack"
-        Processes = @('slack')
-        Paths     = @(
-            "$env:APPDATA\Slack\Cache\Cache_Data",
-            "$env:APPDATA\Slack\Code Cache",
-            "$env:APPDATA\Slack\GPUCache"
-        )
-    },
-    # Spotify
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Spotify"
-        Processes = @('Spotify')
-        Paths     = @(
-            "$env:LOCALAPPDATA\Spotify\Data",
-            "$env:LOCALAPPDATA\Spotify\Browser\Cache",
-            "$env:LOCALAPPDATA\Spotify\Browser\GPUCache",
-            "$env:LOCALAPPDATA\Spotify\Browser\Code Cache"
-        )
-    },
-    # Steam
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Steam"
-        Processes = @('steam')
-        Paths     = @(
-            "$env:LOCALAPPDATA\Steam\htmlcache\Cache\Cache_Data",
-            "$env:LOCALAPPDATA\Steam\htmlcache\Code Cache",
-            "$env:LOCALAPPDATA\Steam\htmlcache\GPUCache"
-        )
-    },
-    # VS Code
-    @{
-        Category  = 'cleanDesktopApps'
-        Enabled   = $cleanDesktopApps
-        Name      = "Visual Studio Code"
-        Processes = @('Code')
-        Paths     = @(
-            "$env:APPDATA\Code\Cache\Cache_Data",
-            "$env:APPDATA\Code\CachedData",
-            "$env:APPDATA\Code\Code Cache",
-            "$env:APPDATA\Code\GPUCache"
-        )
     }
 )
 
@@ -332,15 +255,15 @@ foreach ($target in $targets) {
 $summaryMb = [math]::Round($totalBytes / 1MB, 1)
 if ($Action -eq 'Run') {
     if ($totalBytes -gt 0) {
-        Write-Host "`nTotal browser & app cache freed: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Total browser & app cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
+        Write-Host "`nTotal browser cache freed: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Total browser cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
     } else {
-        Write-Host "`nNo expired browser or app cache files needed cleanup (threshold: >$minAgeDays days)." -ForegroundColor Gray
+        Write-Host "`nNo expired browser cache files needed cleanup (threshold: >$minAgeDays days)." -ForegroundColor Gray
     }
 } else {
     if ($totalBytes -gt 0) {
-        Write-Host "`nTotal reclaimable browser & app cache: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
+        Write-Host "`nTotal reclaimable browser cache: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
     } else {
-        Write-Host "`nNo expired browser or app cache files found (threshold: >$minAgeDays days)." -ForegroundColor Gray
+        Write-Host "`nNo expired browser cache files found (threshold: >$minAgeDays days)." -ForegroundColor Gray
     }
 }

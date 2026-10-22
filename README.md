@@ -108,7 +108,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.3.0 - Open Source Windows Engine      
+         FreeWinly v1.4.0 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -120,13 +120,20 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
   [x]     Software Updates (Winget)
   [ ]     Windows OS & Security Updates [Admin]
   [x] [+] Safe Cache & Temp Cleanup (>7 days)
-  [x] [-] Browser & App Cache Cleanup
+  [x] [-] Browser Cache Cleanup
             < 3d > Minimum file age in days before purging cache files
             [x] Microsoft Edge disk & shader caches (skips if open)
             [x] Google Chrome disk & shader caches (skips if open)
             [x] Mozilla Firefox & LibreWolf disk cache (skips if open)
             [x] Brave, Vivaldi & Opera Chromium caches (skips if open)
-            [x] Desktop app caches: Discord, Teams, Slack, Spotify, Steam, VS Code (skips if open)
+  [x] [-] Desktop App Cache Cleanup
+            < 3d > Minimum file age in days before purging cache files
+            [x] Discord cache (skips if open)
+            [x] Microsoft Teams cache (skips if open)
+            [x] Slack cache (skips if open)
+            [x] Steam web & HTML cache (skips if open)
+            [x] Visual Studio Code cache (skips if open)
+            [ + Add new app... ]
   [x] [+] Network Cache & Connectivity
   [ ] [+] Windows Component Store Cleanup (DISM) [Admin]
   [x] [-] SSD TRIM Optimization [Admin]
@@ -154,6 +161,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 | **`Tab`** | Expand or collapse sub-options `[+]` / `[-]` for the highlighted module |
 | **`Left` / `Right`** | Collapse / expand module tree, toggle sub-option, or step integer sliders down / up |
 | **`+` / `-`** | Move highlighted module up or down in the execution pipeline order |
+| **`Delete` / `Back`** | Remove highlighted custom application cache entry (prompts for confirmation; built-ins can only be toggled) |
 | **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, caches without modifying system) |
 | **`E`** | Cycle **Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`) |
@@ -254,25 +262,30 @@ FreeWinly/
 ├── freewinly.ps1                        <-- Master runner (CLI + TUI + AST Gatekeeper + JIT elevation)
 ├── freewinly.cmd                        <-- Double-clickable launcher
 ├── config.json                          <-- Execution order & per-module scoped settings
+├── config.previous.json                 <-- Rolling backup created on configuration modification
+├── config.last-good.json                <-- Verified configuration preserved after successful runs
 ├── SKILL.md                             <-- AI Agent Playbook
 ├── core/
+│   ├── freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
+│   ├── freewinly-add-app.ps1            <-- Custom app cache manager (add/remove with safety checks)
 │   ├── freewinly-init-config.ps1        <-- First-run setup & exclusion wizard
 │   ├── freewinly-setup-schedule.ps1     <-- Windows Task Scheduler automation
 │   ├── freewinly-setup-launcher.ps1     <-- Start Menu launcher manager
 │   ├── freewinly-setup-path.ps1         <-- User PATH CLI auto-complete manager
 │   └── freewinly-uninstall.ps1          <-- Uninstaller with preview & confirmation
 └── modules/
-    ├── freewinly-check-hardware.ps1     <-- Device Manager & driver faults with actionable advice
-    ├── freewinly-check-eventlog.ps1     <-- Recurring crashes & BSODs with plain-language fixes
-    ├── freewinly-repair-applaunch.ps1   <-- Restores apps broken by dead sleep hooks & debuggers
-    ├── freewinly-update-software.ps1    <-- Winget updates with per-app exclusions & postponements
-    ├── freewinly-update-windows.ps1     <-- Windows Update COM API
-    ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days)
-    ├── freewinly-clean-browsers.ps1     <-- Disposable browser & desktop app cache cleanup
-    ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics
-    ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification
-    ├── freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization
-    └── freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
+    ├── freewinly-check-hardware.ps1     <-- Device Manager & driver faults with actionable advice (Order 10)
+    ├── freewinly-check-eventlog.ps1     <-- Recurring crashes & BSODs with plain-language fixes (Order 11)
+    ├── freewinly-repair-applaunch.ps1   <-- Restores apps broken by dead sleep hooks & debuggers (Order 12)
+    ├── freewinly-update-software.ps1    <-- Winget updates with per-app exclusions & postponements (Order 20)
+    ├── freewinly-update-windows.ps1     <-- Windows Update COM API (Order 21)
+    ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days) (Order 30)
+    ├── freewinly-clean-browsers.ps1     <-- Disposable browser cache cleanup (Edge, Chrome, Firefox, Brave) (Order 31)
+    ├── freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, custom) (Order 32)
+    ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics (Order 33)
+    ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification (Order 34)
+    ├── freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization (Order 35)
+    └── freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs) (Order 36)
 ```
 
 ### Module Contract (`Info / Check / Run`) & AST Gatekeeper
@@ -392,6 +405,37 @@ FreeWinly stores global settings and per-module scoped settings in `config.json`
       "minAgeDays": 7,
       "cleanRecycleBin": false
     },
+    "freewinly-clean-browsers": {
+      "enabled": true,
+      "minAgeDays": 3,
+      "cleanEdge": true,
+      "cleanChrome": true,
+      "cleanFirefox": true,
+      "cleanBrave": true
+    },
+    "freewinly-clean-apps": {
+      "enabled": true,
+      "minAgeDays": 3,
+      "discord": true,
+      "teams": true,
+      "slack": true,
+      "steam": true,
+      "vscode": true,
+      "customApps": {}
+    },
+    "freewinly-clean-network": {
+      "enabled": true,
+      "flushDns": true,
+      "clearArpCache": true,
+      "checkConnectivity": true,
+      "clearNetBios": false,
+      "resetWinsock": false
+    },
+    "freewinly-clean-winsxs": {
+      "enabled": false,
+      "verifySystemFiles": false,
+      "resetBase": false
+    },
     "freewinly-trim-ssd": {
       "enabled": true,
       "excludedDrives": [
@@ -410,6 +454,21 @@ FreeWinly stores global settings and per-module scoped settings in `config.json`
 }
 ```
 
+* **Desktop Application Cache Cleaner (`freewinly-clean-apps`):** Data-driven cleanup for application caches. Built-in definitions (Discord, Teams, Slack, Steam web cache, and VS Code) live in module code so future updates apply automatically without config bloat. `config.json` stores only your enable toggles and custom apps.
+* **Adding & Removing Custom Apps:** Add custom applications via the interactive TUI menu (`[ + Add new app... ]`) or via CLI:
+  ```powershell
+  # Add a custom application cache with running process detection
+  .\core\freewinly-add-app.ps1 -Name "Spotify" -Process "Spotify" -Path "%LOCALAPPDATA%/Spotify/Data"
+
+  # Remove a custom application
+  .\core\freewinly-add-app.ps1 -Remove "Spotify"
+  ```
+  *(Note: Forward slashes `/` and backslashes `\` are normalized automatically. Paths must reside under `%APPDATA%`, `%LOCALAPPDATA%`, or `%TEMP%` at least two segments below base).*
+* **Configuration Safety, Atomic Writes & Backups:**  
+  - **Atomic writes:** Every configuration save writes to a temporary file before atomically replacing `config.json`.
+  - **`config.previous.json`:** A rolling copy of your prior configuration is preserved whenever content changes.
+  - **`config.last-good.json`:** A verified snapshot is saved after runs that finish without unhandled errors.
+  - **Syntax corruption recovery:** Corrupted JSON files are never overwritten or deleted. In interactive mode, FreeWinly displays the error and offers `[R]` to restore from backup; in automated runs, it runs safely in memory using the last good configuration.
 * **Per-Drive Storage Controls (`excludedDrives` & `minIntervalDays`):** Exclude specific drive letters (e.g. `"D"`) from SSD TRIM or HDD Defrag, or set `minIntervalDays` (e.g. `30` for monthly TRIM) so FreeWinly automatically records `lastRun` and skips the drive until the interval elapses.
 * **Excluding Self-Updating Launchers:** Add app IDs or names to `modulesExecutionOrder.freewinly-update-software.excluded` so Winget skips them.
 * **Temporary Postponements:**  

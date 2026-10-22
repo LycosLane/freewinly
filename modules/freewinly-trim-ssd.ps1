@@ -111,7 +111,7 @@ if ($Action -eq 'Info') {
     return [PSCustomObject]@{
         Name                 = "SSD TRIM Optimization"
         Description          = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
-        Order                = 34
+        Order                = 35
         Default              = $true
         RequiresAdmin        = $true
         DetectedDrives       = $drives

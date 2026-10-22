@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.3.0 - Open Source Windows Maintenance & Optimization Engine.
+    FreeWinly v1.4.0 - Open Source Windows Maintenance & Optimization Engine.
 .DESCRIPTION
     Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, and TRIM.
     Supports headless CLI automation, interactive TUI menu, dry-run check previews,
@@ -53,6 +53,9 @@ $modulesDir  = Join-Path $projectRoot "modules"
 $logsDir     = Join-Path $projectRoot "logs"
 $logFile     = Join-Path $logsDir "latest-run.log"
 
+# Dot-source config I/O manager
+. (Join-Path $coreDir "freewinly-config-io.ps1")
+
 $configPath = if ($ConfigPath -and (Test-Path $ConfigPath)) {
     (Resolve-Path $ConfigPath).Path
 } elseif ($ConfigPath) {
@@ -68,7 +71,7 @@ if (-not (Test-Path $logsDir)) {
 
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.3.0 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "         FreeWinly v1.4.0 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -80,28 +83,18 @@ function Write-Log {
     Add-Content -Path $logFile -Value "[$timestamp] $Message" -Encoding UTF8
 }
 
-function Get-SafeConfig {
-    param([string]$Path)
-    if (Test-Path $Path) {
-        try {
-            return (Get-Content $Path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop)
-        } catch {
-            Write-Warning "Failed to parse '$Path' (invalid JSON syntax). Using safe in-memory defaults."
-        }
-    }
-    return [PSCustomObject]@{
-        countdownSeconds      = 10
-        submenuView           = "Hidden"
-        expandedModules       = @()
-        scheduleType          = "Weekly"
-        scheduleDay           = "Sunday"
-        scheduleTime          = "12:00"
-        preCommands           = @()
-        uninstall             = @()
-        install               = @()
-        postCommands          = @()
-        modulesExecutionOrder = $null
-    }
+$defaultConfigTemplate = [PSCustomObject]@{
+    countdownSeconds      = 10
+    submenuView           = "Hidden"
+    expandedModules       = @()
+    scheduleType          = "Weekly"
+    scheduleDay           = "Sunday"
+    scheduleTime          = "12:00"
+    preCommands           = @()
+    uninstall             = @()
+    install               = @()
+    postCommands          = @()
+    modulesExecutionOrder = $null
 }
 
 function Get-IntPresets {
@@ -149,6 +142,51 @@ function Toggle-DriveSubOption {
     }
     $mod.Settings.excludedDrives = [string[]]$newExcl
     Update-ModuleDynamicProps -Module $mod
+}
+
+function Refresh-CleanAppsSubOptions {
+    param($Module)
+    if (-not $Module -or $Module.BaseName -ne 'freewinly-clean-apps') { return }
+    $entry = $validFileMap['freewinly-clean-apps']
+    if (-not $entry) { return }
+    $info = $entry.Info
+    $newSubs = [System.Collections.Generic.List[PSCustomObject]]::new()
+    if ($info.SettingsDescriptions) {
+        $descKeys = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
+            $info.SettingsDescriptions.Keys
+        } else {
+            $info.SettingsDescriptions.PSObject.Properties.Name
+        }
+        foreach ($sk in $descKeys) {
+            $valType = if ($sk -match 'Days') { 'int' } else { 'bool' }
+            $newSubs.Add([PSCustomObject]@{
+                Key       = $sk
+                Label     = [string]$info.SettingsDescriptions[$sk]
+                ValueType = $valType
+            })
+        }
+    }
+    if ($Module.Settings.customApps) {
+        $cKeys = if ($Module.Settings.customApps -is [System.Collections.IDictionary]) {
+            $Module.Settings.customApps.Keys
+        } else {
+            $Module.Settings.customApps.PSObject.Properties.Name
+        }
+        foreach ($ck in $cKeys) {
+            $newSubs.Add([PSCustomObject]@{
+                Key           = "customApp_$ck"
+                CustomAppName = $ck
+                Label         = "$ck cache (custom)"
+                ValueType     = 'customApp'
+            })
+        }
+    }
+    $newSubs.Add([PSCustomObject]@{
+        Key       = "add_new_app"
+        Label     = "[ + Add new app... ]"
+        ValueType = 'addApp'
+    })
+    $Module.SubOptions = $newSubs
 }
 
 function Test-UserPathRegistered {
@@ -318,7 +356,9 @@ if (-not (Test-Path $configPath)) {
     }
 }
 
-$config = Get-SafeConfig -Path $configPath
+$configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+$config = $configLoad.Config
+$configWasCorrupted = [bool]$configLoad.IsCorrupted
 
 $countdown = if ($CountdownSeconds -ge 0) {
     $CountdownSeconds
@@ -516,6 +556,30 @@ foreach ($baseName in $orderedBaseNames) {
         }
     }
 
+    # Dynamic Custom Apps & Add New App sub-options for freewinly-clean-apps
+    if ($baseName -eq 'freewinly-clean-apps') {
+        if ($modSettings.customApps) {
+            $cKeys = if ($modSettings.customApps -is [System.Collections.IDictionary]) {
+                $modSettings.customApps.Keys
+            } else {
+                $modSettings.customApps.PSObject.Properties.Name
+            }
+            foreach ($ck in $cKeys) {
+                $subOptions.Add([PSCustomObject]@{
+                    Key           = "customApp_$ck"
+                    CustomAppName = $ck
+                    Label         = "$ck cache (custom)"
+                    ValueType     = 'customApp'
+                })
+            }
+        }
+        $subOptions.Add([PSCustomObject]@{
+            Key       = "add_new_app"
+            Label     = "[ + Add new app... ]"
+            ValueType = 'addApp'
+        })
+    }
+
     $hasSubs = ($subOptions.Count -gt 0)
     $isExpanded = switch ($submenuView) {
         "Expanded" { $hasSubs }
@@ -541,14 +605,32 @@ foreach ($baseName in $orderedBaseNames) {
 }
 
 function Save-ConfigState {
+    if ($configWasCorrupted) {
+        Write-Warning "Configuration was corrupted on launch; skipping save to avoid overwriting invalid syntax."
+        return
+    }
+
     $modOrder = [ordered]@{}
     foreach ($dm in $discoveredModules) {
         $block = [ordered]@{
             enabled = if ($Modules) { [bool]$dm.ConfigEnabled } else { [bool]$dm.Enabled }
         }
         if ($dm.Settings) {
-            foreach ($prop in $dm.Settings.PSObject.Properties) {
-                $block[$prop.Name] = $prop.Value
+            if ($dm.BaseName -eq 'freewinly-clean-apps') {
+                if ($null -ne $dm.Settings.minAgeDays) {
+                    $block['minAgeDays'] = [int]$dm.Settings.minAgeDays
+                }
+                foreach ($bName in @('discord', 'teams', 'slack', 'steam', 'vscode')) {
+                    if ($null -ne $dm.Settings.$bName) {
+                        $v = $dm.Settings.$bName
+                        $block[$bName] = if ($v -is [bool]) { $v } elseif ($null -ne $v.enabled) { [bool]$v.enabled } else { $true }
+                    }
+                }
+                $block['customApps'] = if ($dm.Settings.customApps) { $dm.Settings.customApps } else { [ordered]@{} }
+            } else {
+                foreach ($prop in $dm.Settings.PSObject.Properties) {
+                    $block[$prop.Name] = $prop.Value
+                }
             }
         }
         $modOrder[$dm.BaseName] = $block
@@ -573,7 +655,7 @@ function Save-ConfigState {
     if ($config.PSObject.Properties['excluded']) {
         $config.PSObject.Properties.Remove('excluded')
     }
-    $config | ConvertTo-Json -Depth 6 | Out-File -FilePath $configPath -Encoding UTF8
+    Save-AtomicConfigFile -Path $configPath -Config $config -Depth 6
 }
 
 function Invoke-DryRunCheck {
@@ -761,6 +843,21 @@ if (-not $Run) {
                         $line = "$pointer      $subCheck $($item.Label)"
                         $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $isDriveEnabled) { "Green" } elseif ($m.Enabled) { "DarkGray" } else { "DarkGray" }
                         Write-Host $line -ForegroundColor $color
+                    } elseif ($item.ValueType -eq 'customApp') {
+                        $custObj = if ($m.Settings.customApps -is [System.Collections.IDictionary]) {
+                            $m.Settings.customApps[$item.CustomAppName]
+                        } else {
+                            $m.Settings.customApps.$($item.CustomAppName)
+                        }
+                        $subVal = if ($custObj -is [bool]) { $custObj } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) { [bool]$custObj.enabled } else { $true }
+                        $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
+                        $line = "$pointer      $subCheck $($item.Label)  [Del to remove]"
+                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
+                        Write-Host $line -ForegroundColor $color
+                    } elseif ($item.ValueType -eq 'addApp') {
+                        $line = "$pointer      $($item.Label)"
+                        $color = if ($isSelected) { "Cyan" } else { "Yellow" }
+                        Write-Host $line -ForegroundColor $color
                     } else {
                         $intVal = [int]$m.Settings.$($item.SubKey)
                         $line = "$pointer      < ${intVal}d > $($item.Label)"
@@ -855,8 +952,19 @@ if (-not $Run) {
                             $mod = $item.Module
                             if ($item.ValueType -eq 'drive') {
                                 Toggle-DriveSubOption -Item $item
+                            } elseif ($item.ValueType -eq 'customApp') {
+                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
+                                if ($custObj -is [bool]) {
+                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
+                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
+                                    $custObj.enabled = -not [bool]$custObj.enabled
+                                }
                             } elseif ($item.ValueType -eq 'bool') {
-                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
+                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
+                                } else {
+                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                }
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {
                                 $presets = Get-IntPresets -Key $item.SubKey
@@ -885,8 +993,19 @@ if (-not $Run) {
                             $mod = $item.Module
                             if ($item.ValueType -eq 'drive') {
                                 Toggle-DriveSubOption -Item $item
+                            } elseif ($item.ValueType -eq 'customApp') {
+                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
+                                if ($custObj -is [bool]) {
+                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
+                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
+                                    $custObj.enabled = -not [bool]$custObj.enabled
+                                }
                             } elseif ($item.ValueType -eq 'bool') {
-                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
+                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
+                                } else {
+                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                }
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {
                                 $presets = Get-IntPresets -Key $item.SubKey
@@ -910,10 +1029,31 @@ if (-not $Run) {
                             $item.Module.ConfigEnabled = $item.Module.Enabled
                         } elseif ($item.Type -eq 'SubOption') {
                             $mod = $item.Module
-                            if ($item.ValueType -eq 'drive') {
+                            if ($item.ValueType -eq 'addApp') {
+                                Clear-Host
+                                & (Join-Path $coreDir "freewinly-add-app.ps1") -ConfigPath $configPath
+                                $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+                                $config = $configLoad.Config
+                                $configWasCorrupted = [bool]$configLoad.IsCorrupted
+                                if ($config.modulesExecutionOrder -and $config.modulesExecutionOrder.'freewinly-clean-apps') {
+                                    $mod.Settings.customApps = $config.modulesExecutionOrder.'freewinly-clean-apps'.customApps
+                                }
+                                Refresh-CleanAppsSubOptions -Module $mod
+                            } elseif ($item.ValueType -eq 'customApp') {
+                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
+                                if ($custObj -is [bool]) {
+                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
+                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
+                                    $custObj.enabled = -not [bool]$custObj.enabled
+                                }
+                            } elseif ($item.ValueType -eq 'drive') {
                                 Toggle-DriveSubOption -Item $item
                             } elseif ($item.ValueType -eq 'bool') {
-                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
+                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
+                                } else {
+                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                }
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {
                                 $presets = Get-IntPresets -Key $item.SubKey
@@ -922,6 +1062,29 @@ if (-not $Run) {
                                 $nextIdx = if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) { $idx + 1 } else { 0 }
                                 $mod.Settings.$($item.SubKey) = $presets[$nextIdx]
                                 Update-ModuleDynamicProps -Module $mod
+                            }
+                        }
+                    }
+                }
+                { $_ -in @("Delete", "Back") } {
+                    if ($selectedIndex -lt $visibleItems.Count) {
+                        $delItem = $visibleItems[$selectedIndex]
+                        if ($delItem.Type -eq 'SubOption' -and $delItem.ValueType -eq 'customApp') {
+                            $appName = $delItem.CustomAppName
+                            Write-Host ""
+                            $delConfirm = Read-Host "Are you sure you want to remove custom app '$appName'? (y/N)"
+                            if ($delConfirm -match '^[Yy]$') {
+                                & (Join-Path $coreDir "freewinly-add-app.ps1") -Remove $appName -ConfigPath $configPath
+                                $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+                                $config = $configLoad.Config
+                                $configWasCorrupted = [bool]$configLoad.IsCorrupted
+                                if ($config.modulesExecutionOrder -and $config.modulesExecutionOrder.'freewinly-clean-apps') {
+                                    $delItem.Module.Settings.customApps = $config.modulesExecutionOrder.'freewinly-clean-apps'.customApps
+                                }
+                                Refresh-CleanAppsSubOptions -Module $delItem.Module
+                                if ($selectedIndex -ge $visibleItems.Count) {
+                                    $selectedIndex = [math]::Max(0, $visibleItems.Count - 1)
+                                }
                             }
                         }
                     }
@@ -968,7 +1131,9 @@ if (-not $Run) {
                 "W" {
                     Clear-Host
                     & (Join-Path $coreDir "freewinly-setup-schedule.ps1")
-                    $config = Get-SafeConfig -Path $configPath
+                    $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+                    $config = $configLoad.Config
+                    $configWasCorrupted = [bool]$configLoad.IsCorrupted
                 }
                 "P" {
                     & (Join-Path $coreDir "freewinly-setup-path.ps1") -Action Toggle
@@ -981,7 +1146,9 @@ if (-not $Run) {
                 }
                 "O" {
                     & (Join-Path $coreDir "freewinly-init-config.ps1") -ConfigPath $configPath
-                    $config = Get-SafeConfig -Path $configPath
+                    $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+                    $config = $configLoad.Config
+                    $configWasCorrupted = [bool]$configLoad.IsCorrupted
                 }
                 "I" {
                     & (Join-Path $coreDir "freewinly-setup-launcher.ps1")
@@ -1035,7 +1202,7 @@ if ($needsAdmin -and -not $isAdmin) {
 # ==================================================================
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.3.0 Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.4.0 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
@@ -1129,6 +1296,11 @@ if ($configModified -and (Test-Path (Split-Path -Parent $configPath))) {
 
 Write-Log "`n=== FreeWinly Finished Successfully ===" "Green"
 Write-Host "`nLog saved to: $logFile" -ForegroundColor Gray
+
+# Update verified last-good state preservation after run completes without unhandled error
+if (-not $configWasCorrupted) {
+    Update-LastGoodConfigFile -Path $configPath
+}
 
 if ($isInteractiveSession) {
     Read-Host "Press Enter to close this window"

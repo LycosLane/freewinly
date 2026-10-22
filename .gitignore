@@ -1,5 +1,7 @@
 # Local machine configuration (generated on first run onboarding)
 config.json
+config.previous.json
+config.last-good.json
 !config.example.json
 
 # Logs and runtime traces

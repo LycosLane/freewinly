@@ -95,7 +95,7 @@ if ($Action -eq 'Info') {
     return [PSCustomObject]@{
         Name                 = "Mechanical HDD Defragmentation"
         Description          = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
-        Order                = 35
+        Order                = 36
         Default              = $false
         RequiresAdmin        = $true
         Applicable           = ($drives.Count -gt 0)
