@@ -258,9 +258,15 @@ FreeWinly/
 Each module works both as a standalone CLI tool (using its own built-in `DefaultSettings`) and as an orchestrated module inside `freewinly.ps1` (which overlays the module's block from `config.json` and passes it via `-Settings`):
 
 ```powershell
+# Standalone execution with custom options
 .\modules\freewinly-trim-ssd.ps1 -Action Info
 .\modules\freewinly-trim-ssd.ps1 -Action Check
 .\modules\freewinly-trim-ssd.ps1 -Action Run -Settings @{ excludedDrives = @('D'); minIntervalDays = 30 }
+
+# Targeted event log & crash debugging over custom timeframes (e.g. debugging last weekend):
+.\modules\freewinly-check-eventlog.ps1 -Days 14
+.\modules\freewinly-check-eventlog.ps1 -Since "2026-10-18"
+.\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-17" -EndDate "2026-10-19"
 ```
 
 Before loading any `.ps1` file in `modules/`, FreeWinly runs a static **AST & Metadata Gatekeeper (`Test-ModuleContract`)**:

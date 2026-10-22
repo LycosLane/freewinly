@@ -394,8 +394,13 @@ foreach ($baseName in $orderedBaseNames) {
     $displayName = $info.Name
     if ($baseName -eq 'freewinly-clean-cache' -and $settingsObj.minAgeDays) {
         $displayName = "Safe Cache & Temp Cleanup (>$($settingsObj.minAgeDays) days)"
-    } elseif ($baseName -eq 'freewinly-check-eventlog' -and $settingsObj.lookbackDays) {
-        $displayName = "System Stability & Event Logs (Last $($settingsObj.lookbackDays)d)"
+    } elseif ($baseName -eq 'freewinly-check-eventlog') {
+        if ($settingsObj.startDate -or $settingsObj.since) {
+            $sDate = if ($settingsObj.startDate) { $settingsObj.startDate } else { $settingsObj.since }
+            $displayName = "System Stability & Event Logs (Since $sDate)"
+        } elseif ($settingsObj.lookbackDays) {
+            $displayName = "System Stability & Event Logs (Last $($settingsObj.lookbackDays)d)"
+        }
     }
 
     $isApplicable = if ($null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }

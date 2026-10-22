@@ -68,6 +68,13 @@ Step 3: AI sets up Start Menu launcher (if not present)
 Step 4: AI informs user to execute elevated maintenance
         - "I checked your PC and updated config.json.
            Press Windows Key, type 'FreeWinly', and press Enter."
+
+### Targeted Crash & Stability Debugging
+When the user reports instability or asks what happened at a specific time (e.g., "my PC crashed last weekend" or "check errors over the last two weeks"):
+* **Inspect specific day counts:** `.\modules\freewinly-check-eventlog.ps1 -Days 14`
+* **Inspect since a specific date:** `.\modules\freewinly-check-eventlog.ps1 -Since "2026-10-18"`
+* **Inspect an exact date range:** `.\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-17" -EndDate "2026-10-19"`
+This gives instant, grouped crash forensics with root-cause advice without running full maintenance.
 ```
 
 ### Managing Postponements in Natural Language

@@ -4,7 +4,8 @@
     Analyzes Windows Application and System event logs for recurring errors.
 .DESCRIPTION
     Scans the Windows Event Log over a configurable lookback window (default: 7 days)
-    for repeated application crashes, unexpected shutdowns (Kernel-Power), and storage warnings.
+    or custom date range (Since / StartDate to Until / EndDate) for repeated application crashes,
+    unexpected shutdowns (Kernel-Power), and storage warnings.
     Filters out background DCOM noise and provides guidance for identified error sources.
     This module is read-only and does not clear or alter event logs.
 .PARAMETER Action
@@ -12,24 +13,50 @@
     'Check' - Inspects recent event logs and displays recurring patterns.
     'Run'   - Scans recent event logs and records findings to the log file.
 .PARAMETER Settings
-    Optional module settings object or hashtable (supports lookbackDays).
+    Optional module settings object or hashtable (supports lookbackDays, startDate, since, endDate, until).
 .PARAMETER LogFile
     Optional file path to append diagnostic results.
+.PARAMETER LookbackDays
+    Number of days back to inspect (aliases: -Days, -Lookback).
+.PARAMETER StartDate
+    Starting timestamp or date string e.g. '2026-10-18' (aliases: -Since, -From).
+.PARAMETER EndDate
+    Ending timestamp or date string e.g. '2026-10-20' (aliases: -Until, -To).
 .EXAMPLE
     .\modules\freewinly-check-eventlog.ps1 -Action Check
+.EXAMPLE
+    .\modules\freewinly-check-eventlog.ps1 -Days 14
+.EXAMPLE
+    .\modules\freewinly-check-eventlog.ps1 -Since "2026-10-18"
+.EXAMPLE
+    .\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-18" -EndDate "2026-10-20"
 .EXAMPLE
     .\modules\freewinly-check-eventlog.ps1 -Action Run -Settings @{ lookbackDays = 14 }
 #>
 [CmdletBinding()]
 param(
+    [Parameter(Position = 0)]
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
+    [Parameter()]
     [object]$Settings = $null,
-    [string]$LogFile = $null
-)
 
-$days = if ($Settings -and $Settings.lookbackDays) { [int]$Settings.lookbackDays } else { 7 }
+    [Parameter()]
+    [string]$LogFile = $null,
+
+    [Parameter()]
+    [Alias('Days', 'Lookback')]
+    [int]$LookbackDays = 0,
+
+    [Parameter()]
+    [Alias('Since', 'From')]
+    [object]$StartDate = $null,
+
+    [Parameter()]
+    [Alias('Until', 'To')]
+    [object]$EndDate = $null
+)
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
@@ -40,18 +67,84 @@ if ($Action -eq 'Info') {
         RequiresAdmin   = $false
         DefaultSettings = [ordered]@{
             lookbackDays = 7
+            startDate    = $null
+            endDate      = $null
         }
     }
 }
 
-Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
-Write-Host "Lookback window: Last $days day(s) (Application & System error logs)" -ForegroundColor Gray
+function ConvertTo-DateTimeOrNull {
+    param([object]$InputVal)
+    if ($null -eq $InputVal) { return $null }
+    if ($InputVal -is [datetime]) { return $InputVal }
+    $str = [string]$InputVal
+    if ([string]::IsNullOrWhiteSpace($str)) { return $null }
+    try {
+        return [datetime]$str
+    } catch {
+        try {
+            return [datetime]::ParseExact($str, @('yyyy-MM-dd', 'yyyy-MM-dd HH:mm', 'yyyy-MM-dd HH:mm:ss', 'yyyy/MM/dd'), [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None)
+        } catch {
+            throw "Invalid date format: '$str'. Please use 'YYYY-MM-DD' or a valid date/time string."
+        }
+    }
+}
 
-$start = (Get-Date).AddDays(-$days)
+# 1. Resolve Start Date / Since
+$rawStart = if ($StartDate) {
+    $StartDate
+} elseif ($Settings) {
+    if ($Settings.startDate) { $Settings.startDate } elseif ($Settings.since) { $Settings.since } else { $null }
+} else { $null }
+
+$start = ConvertTo-DateTimeOrNull $rawStart
+
+# 2. Resolve End Date / Until
+$rawEnd = if ($EndDate) {
+    $EndDate
+} elseif ($Settings) {
+    if ($Settings.endDate) { $Settings.endDate } elseif ($Settings.until) { $Settings.until } else { $null }
+} else { $null }
+
+$end = ConvertTo-DateTimeOrNull $rawEnd
+
+# 3. If no explicit StartDate, resolve LookbackDays (default: 7)
+$days = 0
+if (-not $start) {
+    $days = if ($LookbackDays -gt 0) {
+        $LookbackDays
+    } elseif ($Settings -and $Settings.lookbackDays) {
+        [int]$Settings.lookbackDays
+    } else {
+        7
+    }
+    $start = (Get-Date).AddDays(-$days)
+}
+
+$windowDesc = if ($end) {
+    "$($start.ToString('yyyy-MM-dd HH:mm')) to $($end.ToString('yyyy-MM-dd HH:mm'))"
+} elseif ($days -gt 0) {
+    "Last $days day(s) (Since $($start.ToString('yyyy-MM-dd HH:mm')))"
+} else {
+    "Since $($start.ToString('yyyy-MM-dd HH:mm'))"
+}
+
+Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
+Write-Host "Time window: $windowDesc (Application & System error logs)" -ForegroundColor Gray
+
 $events = [System.Collections.Generic.List[object]]::new()
 
 try {
-    $rawEvents = Get-WinEvent -FilterHashtable @{LogName='System','Application'; Level=1,2; StartTime=$start} -ErrorAction SilentlyContinue |
+    $filter = @{
+        LogName   = 'System', 'Application'
+        Level     = 1, 2 # Critical, Error
+        StartTime = $start
+    }
+    if ($end) {
+        $filter.EndTime = $end
+    }
+
+    $rawEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue |
                  Where-Object { $_.ProviderName -ne 'Microsoft-Windows-DistributedCOM' }
 
     if ($rawEvents) {
@@ -100,12 +193,12 @@ try {
 }
 
 if ($events.Count -eq 0) {
-    Write-Host "[OK] Clean stability record. No recurring crashes or critical warnings in the last $days day(s)." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log Health: Clean record over last $days days." -Encoding UTF8 }
+    Write-Host "[OK] Clean stability record. No recurring crashes or critical warnings in the specified window ($windowDesc)." -ForegroundColor Green
+    if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log Health: Clean record ($windowDesc)." -Encoding UTF8 }
     return
 }
 
-Write-Host "Found $($events.Count) recurring error pattern(s) in the last $days days:" -ForegroundColor Yellow
+Write-Host "Found $($events.Count) recurring error pattern(s) ($windowDesc):" -ForegroundColor Yellow
 
 foreach ($ev in $events) {
     Write-Host "`n  * [$($ev.Count)x] $($ev.Provider) (Event ID $($ev.EventId))" -ForegroundColor White
