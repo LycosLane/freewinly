@@ -39,7 +39,7 @@ FreeWinly/
     ├── freewinly-update-windows.ps1     <-- Native Windows OS & Defender Updates (Order 21)
     ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days) (Order 30)
     ├── freewinly-clean-browsers.ps1     <-- Disposable browser cache cleanup (Edge, Chrome, Firefox, Brave) (Order 31)
-    ├── freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, custom) (Order 32)
+    ├── freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, Obsidian, Telegram, custom) (Order 32)
     ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics (Order 33)
     ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification (Order 34)
     ├── freewinly-trim-ssd.ps1           <-- SSD NVMe TRIM ReTrim optimization (Order 35)
@@ -132,7 +132,7 @@ The AI agent should:
 * **[ Q ]** -> **Quit Without Running**.
 
 ### 3. Desktop Application Cache Cleaner (`freewinly-clean-apps`)
-* Generic data-driven cleaner for app caches. Ships built-in definitions for Discord, Microsoft Teams, Slack, Steam, and VS Code.
+* Generic data-driven cleaner for app caches. Ships built-in definitions for Discord, Microsoft Teams, Slack, Steam, VS Code, Obsidian, and Telegram.
 * **Built-in definitions stay in code:** Built-in path and process rules live inside the module. `config.json` only stores boolean overrides (`discord: true`), preserving automatic updates for future built-ins without config bloat.
 * **Strict path safety engine:** All paths (built-in and custom) must reside strictly under `%APPDATA%`, `%LOCALAPPDATA%`, or `%TEMP%`, at least 2 segments below base. Reparse points and symlinks are never traversed. Running apps are skipped safely. Forward slashes (`/`) and backward slashes (`\`) are normalized transparently.
 * **Custom App Management via CLI:**
@@ -168,7 +168,7 @@ The AI agent should:
   - `freewinly-update-windows`: `{ "enabled": false }`
   - `freewinly-clean-cache`: `{ "enabled": true, "minAgeDays": 7, "cleanRecycleBin": false }`
   - `freewinly-clean-browsers`: `{ "enabled": true, "minAgeDays": 3, "cleanEdge": true, "cleanChrome": true, "cleanFirefox": true, "cleanBrave": true }`
-  - `freewinly-clean-apps`: `{ "enabled": true, "minAgeDays": 3, "discord": true, "teams": true, "slack": true, "steam": true, "vscode": true, "customApps": {} }`
+  - `freewinly-clean-apps`: `{ "enabled": true, "minAgeDays": 3, "discord": true, "teams": true, "slack": true, "steam": true, "vscode": true, "obsidian": true, "telegram": true, "customApps": {} }`
   - `freewinly-clean-network`: `{ "enabled": true, "flushDns": true, "clearArpCache": true, "checkConnectivity": true, "clearNetBios": false, "resetWinsock": false }`
   - `freewinly-clean-winsxs`: `{ "enabled": false, "verifySystemFiles": false, "resetBase": false }`
   - `freewinly-trim-ssd`: `{ "enabled": true, "excludedDrives": [], "minIntervalDays": 0, "lastRun": null }`

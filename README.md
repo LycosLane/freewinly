@@ -133,6 +133,8 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
             [x] Slack cache (skips if open)
             [x] Steam web & HTML cache (skips if open)
             [x] Visual Studio Code cache (skips if open)
+            [x] Obsidian cache (skips if open)
+            [x] Telegram Desktop media cache (skips if open)
             [ + Add new app... ]
   [x] [+] Network Cache & Connectivity
   [ ] [+] Windows Component Store Cleanup (DISM) [Admin]
@@ -283,7 +285,7 @@ FreeWinly/
     ├── freewinly-update-windows.ps1     <-- Windows Update COM API (Order 21)
     ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days) (Order 30)
     ├── freewinly-clean-browsers.ps1     <-- Disposable browser cache cleanup (Edge, Chrome, Firefox, Brave) (Order 31)
-    ├── freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, custom) (Order 32)
+    ├── freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, Obsidian, Telegram, custom) (Order 32)
     ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics (Order 33)
     ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification (Order 34)
     ├── freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization (Order 35)
@@ -423,6 +425,8 @@ FreeWinly stores global settings and per-module scoped settings in `config.json`
       "slack": true,
       "steam": true,
       "vscode": true,
+      "obsidian": true,
+      "telegram": true,
       "customApps": {}
     },
     "freewinly-clean-network": {
@@ -456,7 +460,7 @@ FreeWinly stores global settings and per-module scoped settings in `config.json`
 }
 ```
 
-* **Desktop Application Cache Cleaner (`freewinly-clean-apps`):** Data-driven cleanup for application caches. Built-in definitions (Discord, Teams, Slack, Steam web cache, and VS Code) live in module code so future updates apply automatically without config bloat. `config.json` stores only your enable toggles and custom apps.
+* **Desktop Application Cache Cleaner (`freewinly-clean-apps`):** Data-driven cleanup for application caches. Built-in definitions (Discord, Teams, Slack, Steam web cache, VS Code, Obsidian, and Telegram) live in module code so future updates apply automatically without config bloat. `config.json` stores only your enable toggles and custom apps.
 * **Adding & Removing Custom Apps:** Add custom applications via the interactive TUI menu (`[ + Add new app... ]`) or via CLI:
   ```powershell
   # Add a custom application cache with running process detection

@@ -4,7 +4,7 @@
     Cleans disposable desktop application disk, code, and shader caches.
 .DESCRIPTION
     A generic, data-driven application cache cleaner. Safely cleans temporary caches
-    for Discord, Microsoft Teams, Slack, Steam, Visual Studio Code, and user-configured
+    for Discord, Microsoft Teams, Slack, Steam, VS Code, Obsidian, Telegram, and user-configured
     custom applications.
     
     Safety Guarantee:
@@ -93,6 +93,25 @@ $builtinAppDefinitions = [ordered]@{
             '%APPDATA%\Code\GPUCache'
         )
     }
+    'obsidian' = [ordered]@{
+        name    = "Obsidian"
+        enabled = $true
+        process = @('Obsidian')
+        paths   = @(
+            '%APPDATA%\obsidian\Cache\Cache_Data',
+            '%APPDATA%\obsidian\Code Cache',
+            '%APPDATA%\obsidian\GPUCache'
+        )
+    }
+    'telegram' = [ordered]@{
+        name    = "Telegram Desktop"
+        enabled = $true
+        process = @('Telegram')
+        paths   = @(
+            '%APPDATA%\Telegram Desktop\tdata\user_data\cache',
+            '%APPDATA%\Telegram Desktop\tdata\user_data\media_cache'
+        )
+    }
 }
 
 if ($Action -eq 'Info') {
@@ -111,7 +130,7 @@ if ($Action -eq 'Info') {
 
     return [PSCustomObject]@{
         Name                 = "Desktop App Cache Cleanup"
-        Description          = "Purges disposable application caches for Discord, Teams, Slack, Steam, VS Code, and custom apps"
+        Description          = "Purges disposable app caches for Discord, Teams, Slack, Steam, VS Code, Obsidian, Telegram & custom apps"
         Order                = 32
         Default              = $true
         RequiresAdmin        = $false
@@ -123,6 +142,8 @@ if ($Action -eq 'Info') {
             slack      = "Slack cache (skips if open)"
             steam      = "Steam web & HTML cache (skips if open)"
             vscode     = "Visual Studio Code cache (skips if open)"
+            obsidian   = "Obsidian cache (skips if open)"
+            telegram   = "Telegram Desktop media cache (skips if open)"
         }
     }
 }

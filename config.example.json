@@ -49,6 +49,8 @@
       "slack": true,
       "steam": true,
       "vscode": true,
+      "obsidian": true,
+      "telegram": true,
       "customApps": {}
     },
     "freewinly-clean-network": {

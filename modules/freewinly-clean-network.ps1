@@ -41,6 +41,7 @@ $clearArpCache     = if ($null -ne $Settings -and $null -ne $Settings.clearArpCa
 $checkConnectivity = if ($null -ne $Settings -and $null -ne $Settings.checkConnectivity) { [bool]$Settings.checkConnectivity } else { $true }
 $clearNetBios      = if ($null -ne $Settings -and $null -ne $Settings.clearNetBios) { [bool]$Settings.clearNetBios } else { $false }
 $resetWinsock      = if ($null -ne $Settings -and $null -ne $Settings.resetWinsock) { [bool]$Settings.resetWinsock } else { $false }
+$testDomain        = if ($null -ne $Settings -and $null -ne $Settings.testDomain -and -not [string]::IsNullOrWhiteSpace($Settings.testDomain)) { [string]$Settings.testDomain } else { 'microsoft.com' }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
@@ -55,6 +56,7 @@ if ($Action -eq 'Info') {
             checkConnectivity = $true
             clearNetBios      = $false
             resetWinsock      = $false
+            testDomain        = 'microsoft.com'
         }
         SettingsDescriptions = [ordered]@{
             flushDns          = "Flush DNS Resolver Cache (Clear-DnsClientCache / ipconfig /flushdns)"
@@ -103,7 +105,7 @@ if ($checkConnectivity) {
     $dnsSw = [System.Diagnostics.Stopwatch]::StartNew()
     $dnsOk = $false
     try {
-        $dnsRes = Resolve-DnsName -Name 'microsoft.com' -Type A -ErrorAction Stop
+        $dnsRes = Resolve-DnsName -Name $testDomain -Type A -ErrorAction Stop
         $dnsSw.Stop()
         $dnsOk = $true
     } catch {
@@ -111,9 +113,9 @@ if ($checkConnectivity) {
     }
 
     if ($dnsOk) {
-        Write-Host "  [+] DNS Resolution: 'microsoft.com' resolved in $($dnsSw.ElapsedMilliseconds) ms" -ForegroundColor Green
+        Write-Host "  [+] DNS Resolution: '$testDomain' resolved in $($dnsSw.ElapsedMilliseconds) ms" -ForegroundColor Green
     } else {
-        Write-Host "  [-] DNS Resolution: Failed to resolve 'microsoft.com' ($($dnsSw.ElapsedMilliseconds) ms)" -ForegroundColor Yellow
+        Write-Host "  [-] DNS Resolution: Failed to resolve '$testDomain' ($($dnsSw.ElapsedMilliseconds) ms)" -ForegroundColor Yellow
     }
 }
 
