@@ -27,7 +27,7 @@ Windows already has solid built-in tools for almost everything (official package
 
 I built FreeWinly for three simple reasons:
 
-1. **Use standard Windows tools:** No third-party background services, no registry modifications, and no subscription fees.
+1. **Use standard Windows tools:** No third-party background services, no registry clutter (all settings stay in local JSON), and no subscription fees.
 2. **Turn Windows error noise into clear actions:** Instead of digging through cryptic Device Manager error codes or thousands of Event Viewer logs, the script filters out the noise, spots actual problems (like crashing apps or missing drivers), and tells you what to do.
 3. **Make diagnostics easy for AI assistants:** Asking an AI to read raw event logs or run exploratory commands wastes tokens and fills up context quickly. FreeWinly runs the checks locally and produces a short, structured summary, so your AI assistant can spot issues and suggest fixes immediately.
 
@@ -47,7 +47,7 @@ It will check your system health, update your programs, clean old temp files, an
 | **Software Updates** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
 | **Notifications and Ads** | Sits in your system tray; shows popups | **No background processes, no tray icons, no ads** |
 | **Unattended Execution** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults automatically |
-| **System Safety** | Cleans the registry (which Microsoft advises against) | **Does not touch the registry**; only deletes old temp files (>7 days) |
+| **System Safety** | Blanket "registry cleaners" delete thousands of keys (which Microsoft advises against) | **Safe by design**: Never touches working registry entries, keeps settings in JSON, and only cleans verified dead launch pointers |
 | **Storage Optimization** | May defragment modern SSDs, causing wear | **Hardware-aware**: sends TRIM to SSDs, defragments only HDDs |
 | **Setup** | Requires installer and setup wizards | **No installation needed**: unzip and run |
 | **Privacy** | Collects telemetry and analytics | **Fully offline and local**: sends no data anywhere |
