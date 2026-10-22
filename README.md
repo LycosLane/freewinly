@@ -54,6 +54,21 @@ It will check your system health, update your programs, clean old temp files, an
 
 ---
 
+### Migrating from CCleaner: The "Sleep Mode" Trap
+
+When CCleaner puts applications "to sleep" (via its Performance Optimizer feature), it modifies the Windows Registry (`Image File Execution Options`) to intercept application launches with its own reactivator (`CCleanerReactivator.exe`).
+
+If CCleaner is uninstalled while applications are in sleep mode:
+1. Windows continues trying to run `CCleanerReactivator.exe` whenever you open Steam, Epic Games, Zoom, OneDrive, etc.
+2. Because CCleaner was uninstalled, that reactivator file no longer exists.
+3. Windows throws an error stating: `Windows cannot find 'C:\...\app.exe'. Make sure you've typed the name correctly, then try again.`
+
+**How to handle this:**
+* **If CCleaner is still installed:** Open CCleaner, navigate to **Performance Optimizer**, and **wake up all sleeping programs** before uninstalling CCleaner.
+* **If CCleaner is already uninstalled:** Run FreeWinly. Module `07_app_hijack_repair` automatically detects all trapped applications and cleanly removes the dead hooks so your programs launch normally again.
+
+---
+
 ## Features
 
 - **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
@@ -62,6 +77,7 @@ It will check your system health, update your programs, clean old temp files, an
 - **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only.
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
+- **App Launch Hijack Repair (CCleaner / IFEO Doctor):** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to broken debugger hooks left behind by CCleaner's "Performance Optimizer / Sleep Mode".
 - **Modular Design:** Add custom maintenance tasks by placing numbered `.ps1` files into the `modules/` folder.
 - **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
@@ -229,6 +245,7 @@ FreeWinly/
 └── modules/
     ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
     ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
+    ├── 07_app_hijack_repair.ps1 <-- Restores apps broken by orphaned CCleaner sleep hooks
     ├── 10_software_updates.ps1  <-- Winget updates
     ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
     ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
