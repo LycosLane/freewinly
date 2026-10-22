@@ -16,9 +16,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\05_hardware_health.ps1 -Action Check
+    .\10_hardware_health.ps1 -Action Check
 .EXAMPLE
-    .\05_hardware_health.ps1 -Action Run -LogFile "run.log"
+    .\10_hardware_health.ps1 -Action Run -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(
@@ -40,7 +40,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 05] Hardware & Driver Health [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 10] Hardware & Driver Health [$Action] ---" -ForegroundColor Cyan
 
 function Get-ProblemAdvice {
     param([int]$Code)

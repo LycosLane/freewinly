@@ -16,9 +16,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\10_software_updates.ps1 -Action Check
+    .\20_software_updates.ps1 -Action Check
 .EXAMPLE
-    .\10_software_updates.ps1 -Action Run
+    .\20_software_updates.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -40,7 +40,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 10] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 20] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
 
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "Winget CLI is not available on this system. Skipping." -ForegroundColor Yellow

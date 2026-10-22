@@ -18,7 +18,7 @@
     Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, memory, updates, storage).
 
 .PARAMETER Modules
-    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 05_hardware_health,10_software_updates).
+    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 10_hardware_health,20_software_updates).
 
 .PARAMETER ConfigPath
     Optional path to a custom configuration JSON file (defaults to .\config.json).
@@ -106,14 +106,14 @@ CLI Usage:
   .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
   .\freewinly.ps1 -Audit               Alias for -Check (read-only health & stability audit)
   .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
-  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 05_hardware_health,10_software_updates)
+  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 10_hardware_health,20_software_updates)
   .\freewinly.ps1 -HelpMe              Show this help message
 
 Module CLI Invocations:
   Individual modules in .\modules\ can also be called directly:
-  .\modules\05_hardware_health.ps1 -Action Check
-  .\modules\06_event_log_health.ps1 -Action Check
-  .\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+  .\modules\10_hardware_health.ps1 -Action Check
+  .\modules\11_event_log_health.ps1 -Action Check
+  .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
 "@ -ForegroundColor Yellow
     exit 0
 }
@@ -164,7 +164,7 @@ function Run-OnboardingWizard {
     $enabled = if ($existingConfig -and $existingConfig.enabledModules) {
         $existingConfig.enabledModules
     } else {
-        @('05_hardware_health', '06_event_log_health', '07_app_launch_repair', '10_software_updates', '20_cache_cleanup', '30_ssd_trim')
+        @('10_hardware_health', '11_event_log_health', '12_app_launch_repair', '20_software_updates', '30_cache_cleanup', '31_ssd_trim')
     }
 
     $newConfig = [ordered]@{

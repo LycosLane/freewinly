@@ -23,14 +23,14 @@ FreeWinly/
 ├── config.json                  <-- Exclusions, enabled modules, generic hooks
 ├── SKILL.md                     <-- AI Agent Playbook
 └── modules/
-    ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
-    ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
-    ├── 07_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
-    ├── 10_software_updates.ps1  <-- Winget updates (respects config exclusions)
-    ├── 20_cache_cleanup.ps1     <-- Safe temp/cache cleaning (> 7 days)
-    ├── 30_ssd_trim.ps1          <-- SSD NVMe TRIM ReTrim optimization
-    ├── 35_hdd_defrag.ps1        <-- Mechanical HDD Defrag (auto-skips on SSD-only PCs)
-    └── 40_windows_updates.ps1   <-- Native Windows OS & Defender Updates
+    ├── 10_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
+    ├── 11_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
+    ├── 12_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
+    ├── 20_software_updates.ps1  <-- Winget updates (respects config exclusions)
+    ├── 21_windows_updates.ps1   <-- Native Windows OS & Defender Updates
+    ├── 30_cache_cleanup.ps1     <-- Safe temp/cache cleaning (> 7 days)
+    ├── 31_ssd_trim.ps1          <-- SSD NVMe TRIM ReTrim optimization
+    └── 32_hdd_defrag.ps1        <-- Mechanical HDD Defrag (auto-skips on SSD-only PCs)
 ```
 
 ---

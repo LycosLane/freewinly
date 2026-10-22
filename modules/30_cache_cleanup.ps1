@@ -16,9 +16,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\20_cache_cleanup.ps1 -Action Check
+    .\30_cache_cleanup.ps1 -Action Check
 .EXAMPLE
-    .\20_cache_cleanup.ps1 -Action Run
+    .\30_cache_cleanup.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -45,7 +45,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 20] Safe Cache & Temp Cleanup [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 30] Safe Cache & Temp Cleanup [$Action] ---" -ForegroundColor Cyan
 
 $cutoff = (Get-Date).AddDays(-$minAgeDays)
 Write-Host "Age threshold: files older than $minAgeDays days (before $($cutoff.ToString('yyyy-MM-dd HH:mm')))" -ForegroundColor Gray

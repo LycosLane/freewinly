@@ -16,9 +16,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters (e.g. @{ Drives = @('D') }).
 .EXAMPLE
-    .\35_hdd_defrag.ps1 -Action Check
+    .\32_hdd_defrag.ps1 -Action Check
 .EXAMPLE
-    .\35_hdd_defrag.ps1 -Action Run
+    .\32_hdd_defrag.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -70,7 +70,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 35] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 32] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan
 
 if ($detectedLetters.Count -eq 0) {
     Write-Host "No mechanical rotational hard drives (HDDs) detected on this PC." -ForegroundColor Green

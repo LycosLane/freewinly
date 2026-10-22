@@ -14,11 +14,11 @@
 .PARAMETER Options
     Optional hashtable of module-specific options.
 .EXAMPLE
-    .\modules\40_windows_updates.ps1 -Action Info
+    .\modules\21_windows_updates.ps1 -Action Info
 .EXAMPLE
-    .\modules\40_windows_updates.ps1 -Action Check
+    .\modules\21_windows_updates.ps1 -Action Check
 .EXAMPLE
-    .\modules\40_windows_updates.ps1 -Action Run
+    .\modules\21_windows_updates.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -40,7 +40,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 40] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 21] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
 
 try {
     $Session = New-Object -ComObject Microsoft.Update.Session

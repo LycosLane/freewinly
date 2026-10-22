@@ -21,9 +21,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\07_app_launch_repair.ps1 -Action Check
+    .\12_app_launch_repair.ps1 -Action Check
 .EXAMPLE
-    .\07_app_launch_repair.ps1 -Action Run
+    .\12_app_launch_repair.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -138,7 +138,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 07] App Launch Repair [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 12] App Launch Repair [$Action] ---" -ForegroundColor Cyan
 
 # Informational section: Active tools
 if ($activeHooks.Count -gt 0) {

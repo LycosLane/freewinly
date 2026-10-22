@@ -65,7 +65,7 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
 - **App Launch Repair:** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities. [Learn more](#deep-dive-app-launch-interceptions--sleep-tools)
-- **Modular Design:** Add custom maintenance tasks by placing numbered `.ps1` files into the `modules/` folder.
+- **Modular Architecture:** Add or customize maintenance tasks by placing numbered `.ps1` files into the `modules/` folder. [Read the architecture deep dive](#modular-architecture)
 - **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
 ---
@@ -208,7 +208,7 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 .\freewinly.ps1 -ConfigPath "custom-profile.json" -Run
 
 # Run specific modules by name
-.\freewinly.ps1 -Modules 05_hardware_health,10_software_updates -Run
+.\freewinly.ps1 -Modules 10_hardware_health,20_software_updates -Run
 
 # Show help
 .\freewinly.ps1 -HelpMe
@@ -218,7 +218,12 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 
 ## Modular Architecture
 
-Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple parameter contract (`Info`, `Check`, `Run`):
+Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple parameter contract (`Info`, `Check`, `Run`).
+
+Modules are numbered by category (`1x`, `2x`, `3x`) and executed in a strict cause-and-effect sequence:
+1. **`1x` - Diagnostics & System Integrity:** Checks baseline hardware health, scans recent crash event logs, and repairs broken application launch hooks before attempting updates.
+2. **`2x` - Software & OS Updates:** Updates user applications via Winget and applies pending Windows OS/Defender definitions.
+3. **`3x` - Storage & Disk Maintenance:** Purges expired caches and temp files, immediately followed by physical SSD TRIM and HDD defragmentation on the newly freed disk sectors.
 
 ```text
 FreeWinly/
@@ -230,14 +235,14 @@ FreeWinly/
 ├── config.json                  <-- Exclusions, enabled modules & drive settings
 ├── SKILL.md                     <-- AI Agent Playbook
 └── modules/
-    ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
-    ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
-    ├── 07_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
-    ├── 10_software_updates.ps1  <-- Winget updates
-    ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
-    ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
-    ├── 35_hdd_defrag.ps1        <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
-    └── 40_windows_updates.ps1   <-- Windows Update COM API
+    ├── 10_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
+    ├── 11_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
+    ├── 12_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
+    ├── 20_software_updates.ps1  <-- Winget updates
+    ├── 21_windows_updates.ps1   <-- Windows Update COM API
+    ├── 30_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
+    ├── 31_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
+    └── 32_hdd_defrag.ps1        <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
 ```
 
 ### Module Contract (`Info / Check / Run`)
@@ -245,9 +250,9 @@ FreeWinly/
 Each module can be executed directly as a standalone CLI tool:
 
 ```powershell
-.\modules\30_ssd_trim.ps1 -Action Info
-.\modules\30_ssd_trim.ps1 -Action Check
-.\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C', 'D') }
+.\modules\31_ssd_trim.ps1 -Action Info
+.\modules\31_ssd_trim.ps1 -Action Check
+.\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C', 'D') }
 ```
 
 ### Adding Your Own Module
@@ -296,7 +301,7 @@ When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Wi
 **How FreeWinly safely handles this:**
 * **Active tools are ignored:** If an interceptor file exists on your drive (e.g. you still actively use CCleaner or Process Explorer), FreeWinly reports it as an informational note and leaves it completely untouched. You can run FreeWinly alongside any tools you choose.
 * **Broken pointers are repaired:** FreeWinly only acts when the target helper file no longer exists on disk. It safely deletes the dead pointer, immediately restoring direct launching without touching your files or shortcuts.
-* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `07_app_launch_repair` fixes it in one click.
+* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `12_app_launch_repair` fixes it in one click.
 
 ---
 
@@ -311,9 +316,9 @@ FreeWinly stores settings in `config.json`:
     "EpicGames.EpicGamesLauncher"
   ],
   "enabledModules": [
-    "10_software_updates",
-    "20_cache_cleanup",
-    "30_ssd_trim"
+    "20_software_updates",
+    "30_cache_cleanup",
+    "31_ssd_trim"
   ],
   "cleanupTempMinAgeDays": 7
 }

@@ -16,11 +16,11 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters (e.g. @{ Drives = @('C', 'D') }).
 .EXAMPLE
-    .\30_ssd_trim.ps1 -Action Check
+    .\31_ssd_trim.ps1 -Action Check
 .EXAMPLE
-    .\30_ssd_trim.ps1 -Action Run
+    .\31_ssd_trim.ps1 -Action Run
 .EXAMPLE
-    .\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+    .\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
 #>
 [CmdletBinding()]
 param(
@@ -88,7 +88,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 30] SSD TRIM Optimization [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 31] SSD TRIM Optimization [$Action] ---" -ForegroundColor Cyan
 
 # Resolve target drives to trim (Options > Config > All detected)
 $targetDriveLetters = if ($Options -and $Options.ContainsKey('Drives') -and $Options['Drives']) {

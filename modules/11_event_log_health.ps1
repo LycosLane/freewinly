@@ -17,9 +17,9 @@
 .PARAMETER Options
     Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\06_event_log_health.ps1 -Action Check
+    .\11_event_log_health.ps1 -Action Check
 .EXAMPLE
-    .\06_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
+    .\11_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(
@@ -45,7 +45,7 @@ if ($Action -eq 'Info') {
     }
 }
 
-Write-Host "`n--- [Module 06] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [Module 11] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
 Write-Host "Lookback window: Last $days day(s) (Application & System error logs)" -ForegroundColor Gray
 
 $start = (Get-Date).AddDays(-$days)
