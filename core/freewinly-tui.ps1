@@ -214,7 +214,7 @@ function Invoke-InteractiveMenu {
             @{ Label = "[   S   ]  Save Selection & Order as Default"; Key = "S" },
             @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O" },
             @{ Label = "[   I   ]  Install / Update Start Menu Launcher"; Key = "I" },
-            @{ Label = "[   U   ]  Uninstall FreeWinly Completely"; Key = "U" },
+            @{ Label = "[   U   ]  Clean Windows Integrations & Shortcuts"; Key = "U" },
             @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
         )
         $totalOptions = $visibleItems.Count + $actions.Count
