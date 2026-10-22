@@ -132,9 +132,6 @@ if ($cleanAppsInfo -and $cleanAppsInfo.DefaultSettings) {
         }
     }
 }
-if ($builtinKeys.Count -eq 0) {
-    $builtinKeys.AddRange(@('discord', 'teams', 'slack', 'steam', 'vscode'))
-}
 
 # 2. Interactive prompt workflow (when no parameters supplied)
 $isInteractive = [string]::IsNullOrWhiteSpace($Name)
