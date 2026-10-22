@@ -7,38 +7,47 @@
     USB drives and mechanical hard drives. Executes Optimize-Volume with the -ReTrim
     parameter to maintain flash memory performance and endurance.
 .PARAMETER Action
-    'Info'  - Outputs module metadata and detected SSD drive letters.
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Displays detected SSD partitions and TRIM support status without trimming.
     'Run'   - Issues TRIM commands to eligible SSD volumes. Requires Administrator rights.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json (reads trimDrives).
+.PARAMETER Settings
+    Optional module settings object or hashtable (supports excludedDrives, minIntervalDays, lastRun).
 .PARAMETER LogFile
     Optional file path to append TRIM results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters (e.g. @{ Drives = @('C', 'D') }).
 .EXAMPLE
-    .\modules\31_ssd_trim.ps1 -Action Check
+    .\modules\freewinly-trim-ssd.ps1 -Action Check
 .EXAMPLE
-    .\modules\31_ssd_trim.ps1 -Action Run
-.EXAMPLE
-    .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+    .\modules\freewinly-trim-ssd.ps1 -Action Run -Settings @{ excludedDrives = @('D') }
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
+
+if ($Action -eq 'Info') {
+    return [PSCustomObject]@{
+        Name            = "SSD TRIM Optimization"
+        Description     = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
+        Order           = 31
+        Default         = $true
+        RequiresAdmin   = $true
+        DefaultSettings = [ordered]@{
+            excludedDrives  = @()
+            minIntervalDays = 0
+            lastRun         = $null
+        }
+    }
+}
 
 function Get-InstalledFixedSSDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
     $allDisks = @()
     try {
         $allDisks = @(Get-PhysicalDisk -ErrorAction SilentlyContinue)
-        # Query physical SSDs (excluding USB) plus thin-provisioned Virtual Machine disks
         $disks = $allDisks | Where-Object {
             ($_.MediaType -eq 'SSD' -and $_.BusType -ne 'USB') -or
             ($_.MediaType -eq 'Unspecified' -and ($_.BusType -eq 'Virtual' -or $_.FriendlyName -match 'Virtual|VBOX|VMware|QEMU|VirtIO|Msft'))
@@ -61,8 +70,6 @@ function Get-InstalledFixedSSDs {
         }
     } catch { }
 
-    # Only fall back to C: if Get-PhysicalDisk returned no disks at all (WMI storage provider unavailable).
-    # Never fall back if Get-PhysicalDisk succeeded and confirmed the system only has mechanical HDDs.
     if ($found.Count -eq 0 -and $allDisks.Count -eq 0 -and (Test-Path 'C:\')) {
         $cVol = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
         if ($cVol -and $cVol.DriveType -eq 'Fixed') {
@@ -79,37 +86,34 @@ function Get-InstalledFixedSSDs {
     return @($found)
 }
 
+Write-Host "`n--- [freewinly-trim-ssd] SSD TRIM Optimization [$Action] ---" -ForegroundColor Cyan
+
 $detectedDrives = Get-InstalledFixedSSDs
 $detectedDriveLetters = @($detectedDrives | Select-Object -ExpandProperty DriveLetter)
 
-if ($Action -eq 'Info') {
-    return [PSCustomObject]@{
-        Name          = "SSD TRIM Optimization"
-        Description   = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
-        Default       = $true
-        RequiresAdmin = $true
-        Options       = @{
-            DetectedDrives = $detectedDriveLetters
-            DrivesDetail   = $detectedDrives
-        }
-    }
-}
-
-Write-Host "`n--- [Module 31] SSD TRIM Optimization [$Action] ---" -ForegroundColor Cyan
-
-# Resolve target drives to trim (Options > Config > All detected)
-$targetDriveLetters = if ($Options -and $Options.ContainsKey('Drives') -and $Options['Drives']) {
-    @($Options['Drives'])
-} elseif ($Config -and $Config.trimDrives) {
-    @($Config.trimDrives)
-} else {
-    $detectedDriveLetters
-}
-
-if ($targetDriveLetters.Count -eq 0) {
-    Write-Host "No fixed SSD drives found to optimize." -ForegroundColor Yellow
+if ($detectedDriveLetters.Count -eq 0) {
+    Write-Host "No fixed SSD drives detected on this PC." -ForegroundColor Yellow
     return
 }
+
+# Resolve excluded drives and target drives
+$excludedLetters = @()
+if ($Settings -and $Settings.excludedDrives) {
+    $excludedLetters = @($Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+}
+
+$targetDriveLetters = if ($Settings -and $Settings.drives) {
+    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+} else {
+    @($detectedDriveLetters | Where-Object { $excludedLetters -notcontains $_.ToUpper() })
+}
+
+# Resolve optional cadence interval
+$minDays = if ($Settings -and $Settings.minIntervalDays) { [int]$Settings.minIntervalDays } else { 0 }
+$lastRunStr = if ($Settings -and $Settings.lastRun) { [string]$Settings.lastRun } else { $null }
+$lastRunDate = if ($lastRunStr) { try { [datetime]$lastRunStr } catch { $null } } else { $null }
+$daysSince = if ($lastRunDate) { ((Get-Date) - $lastRunDate).TotalDays } else { [double]::MaxValue }
+$isDue = ($minDays -le 0) -or ($daysSince -ge $minDays)
 
 if ($Action -eq 'Check') {
     Write-Host "[Check Mode] Querying operating system TRIM support..." -ForegroundColor Gray
@@ -122,13 +126,39 @@ if ($Action -eq 'Check') {
     Write-Host "`nDetected SSD Physical Drives & Partitions (Removable USB excluded):" -ForegroundColor Yellow
     $detectedDrives | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
 
-    Write-Host "Configured target drives for TRIM: $($targetDriveLetters -join ', ')" -ForegroundColor Cyan
+    if ($excludedLetters.Count -gt 0) {
+        Write-Host "Excluded drives: $($excludedLetters -join ', ')" -ForegroundColor Gray
+    }
+    Write-Host "Target drives for TRIM: $(if ($targetDriveLetters.Count -gt 0) { $targetDriveLetters -join ', ' } else { 'None (all excluded)' })" -ForegroundColor Cyan
+
+    if ($minDays -gt 0) {
+        if ($lastRunDate) {
+            Write-Host "Cadence: Every $minDays day(s) | Last run: $($lastRunDate.ToString('yyyy-MM-dd')) ($([math]::Round($daysSince, 0)) days ago)." -ForegroundColor Gray
+        } else {
+            Write-Host "Cadence: Every $minDays day(s) | Last run: Never recorded." -ForegroundColor Gray
+        }
+        if (-not $isDue) {
+            $nextDate = $lastRunDate.AddDays($minDays).ToString('yyyy-MM-dd')
+            Write-Host "Status: SKIPPED (Next eligible run is $nextDate)." -ForegroundColor Yellow
+        }
+    }
+
     Write-Host "Dry run complete. No TRIM commands were sent." -ForegroundColor Green
     return
 }
 
-# Run execution
-Write-Host "Executing TRIM on $( $targetDriveLetters.Count ) drive(s): $( $targetDriveLetters -join ', ' )" -ForegroundColor Cyan
+if ($targetDriveLetters.Count -eq 0) {
+    Write-Host "All detected SSD drives are excluded in settings. Skipping TRIM." -ForegroundColor Yellow
+    return
+}
+
+if (-not $isDue) {
+    Write-Host "SSD TRIM skipped: Only $([math]::Round($daysSince, 0)) days since last run (configured interval: $minDays days)." -ForegroundColor Yellow
+    if ($LogFile) { Add-Content -Path $LogFile -Value "SSD TRIM skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
+    return
+}
+
+Write-Host "Executing TRIM on $($targetDriveLetters.Count) drive(s): $($targetDriveLetters -join ', ')" -ForegroundColor Cyan
 
 foreach ($dl in $targetDriveLetters) {
     Write-Host "Sending TRIM hint to Drive $dl`: ..." -ForegroundColor White
@@ -147,4 +177,8 @@ foreach ($dl in $targetDriveLetters) {
             if ($LogFile) { Add-Content -Path $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
+}
+
+if ($Settings -is [PSCustomObject]) {
+    $Settings | Add-Member -NotePropertyName lastRun -NotePropertyValue ((Get-Date).ToString("yyyy-MM-dd")) -Force
 }

@@ -7,29 +7,43 @@
     drives (SSDs) and removable USB drives. Checks if the configured interval (default: 30 days)
     has elapsed and runs defragmentation only when recommended by Windows.
 .PARAMETER Action
-    'Info'  - Outputs module metadata and detected HDD drive letters.
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Displays fragmentation analysis and elapsed time without modifying disks.
     'Run'   - Defragments eligible HDD volumes if due. Requires Administrator rights.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json (reads hddDefragMinDays and hddDefragLastRun).
+.PARAMETER Settings
+    Optional module settings object or hashtable (supports excludedDrives, minIntervalDays, lastRun).
 .PARAMETER LogFile
     Optional file path to append defragmentation results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters (e.g. @{ Drives = @('D') }).
 .EXAMPLE
-    .\modules\32_hdd_defrag.ps1 -Action Check
+    .\modules\freewinly-defrag-hdd.ps1 -Action Check
 .EXAMPLE
-    .\modules\32_hdd_defrag.ps1 -Action Run
+    .\modules\freewinly-defrag-hdd.ps1 -Action Run -Settings @{ excludedDrives = @('E'); minIntervalDays = 30 }
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
+
+if ($Action -eq 'Info') {
+    $hasHDD = @(Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'HDD' }).Count -gt 0
+    return [PSCustomObject]@{
+        Name            = "Mechanical HDD Defragmentation"
+        Description     = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
+        Order           = 32
+        Default         = $false
+        RequiresAdmin   = $true
+        Applicable      = $hasHDD
+        DefaultSettings = [ordered]@{
+            excludedDrives  = @()
+            minIntervalDays = 30
+            lastRun         = $null
+        }
+    }
+}
 
 function Get-InstalledFixedHDDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
@@ -55,23 +69,10 @@ function Get-InstalledFixedHDDs {
     return @($found)
 }
 
+Write-Host "`n--- [freewinly-defrag-hdd] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan
+
 $detectedHDDs = Get-InstalledFixedHDDs
 $detectedLetters = @($detectedHDDs | Select-Object -ExpandProperty DriveLetter)
-
-if ($Action -eq 'Info') {
-    return [PSCustomObject]@{
-        Name          = "Mechanical HDD Defragmentation"
-        Description   = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
-        Default       = $false
-        RequiresAdmin = $true
-        Options       = @{
-            DetectedDrives = $detectedLetters
-            DrivesDetail   = $detectedHDDs
-        }
-    }
-}
-
-Write-Host "`n--- [Module 32] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan
 
 if ($detectedLetters.Count -eq 0) {
     Write-Host "No mechanical rotational hard drives (HDDs) detected on this PC." -ForegroundColor Green
@@ -80,30 +81,32 @@ if ($detectedLetters.Count -eq 0) {
 }
 
 # Resolve minimum days threshold and last run timestamp
-$minDays = if ($Config -and $Config.hddDefragMinDays) { [int]$Config.hddDefragMinDays } else { 30 }
-$lastRunStr = if ($Config -and $Config.hddDefragLastRun) { [string]$Config.hddDefragLastRun } else { $null }
+$minDays = if ($Settings -and $null -ne $Settings.minIntervalDays) { [int]$Settings.minIntervalDays } else { 30 }
+$lastRunStr = if ($Settings -and $Settings.lastRun) { [string]$Settings.lastRun } else { $null }
+$lastRunDate = if ($lastRunStr) { try { [datetime]$lastRunStr } catch { $null } } else { $null }
+$daysSince = if ($lastRunDate) { ((Get-Date) - $lastRunDate).TotalDays } else { [double]::MaxValue }
+$isDue = ($minDays -le 0) -or ($daysSince -ge $minDays)
 
-$lastRunDate = $null
-if ($lastRunStr) {
-    try { $lastRunDate = [datetime]$lastRunStr } catch {}
+# Resolve excluded drives and target drives
+$excludedLetters = @()
+if ($Settings -and $Settings.excludedDrives) {
+    $excludedLetters = @($Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
 }
 
-$daysSince = if ($lastRunDate) { ((Get-Date) - $lastRunDate).TotalDays } else { [double]::MaxValue }
-$isDue = ($daysSince -ge $minDays)
-
-# Target drives (Options > Config > Detected)
-$targetLetters = if ($Options -and $Options.ContainsKey('Drives') -and $Options['Drives']) {
-    @($Options['Drives'])
-} elseif ($Config -and $Config.hddDefragDrives) {
-    @($Config.hddDefragDrives)
+$targetLetters = if ($Settings -and $Settings.drives) {
+    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
 } else {
-    $detectedLetters
+    @($detectedLetters | Where-Object { $excludedLetters -notcontains $_.ToUpper() })
 }
 
 if ($Action -eq 'Check') {
     Write-Host "Detected Mechanical HDD Drives (Removable USB excluded):" -ForegroundColor Yellow
     $detectedHDDs | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
 
+    if ($excludedLetters.Count -gt 0) {
+        Write-Host "Excluded drives:   $($excludedLetters -join ', ')" -ForegroundColor Gray
+    }
+    Write-Host "Target HDD drives: $(if ($targetLetters.Count -gt 0) { $targetLetters -join ', ' } else { 'None (all excluded)' })" -ForegroundColor Cyan
     Write-Host "Cadence Threshold: Minimum $minDays day(s) between defragmentation runs." -ForegroundColor Gray
     if ($lastRunDate) {
         Write-Host "Last Defrag Run:   $($lastRunDate.ToString('yyyy-MM-dd')) ($([math]::Round($daysSince, 0)) days ago)." -ForegroundColor Gray
@@ -120,7 +123,7 @@ if ($Action -eq 'Check') {
     Write-Host "Status: DUE for analysis & potential defragmentation." -ForegroundColor Green
 
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdmin) {
+    if ($isAdmin -and $targetLetters.Count -gt 0) {
         foreach ($dl in $targetLetters) {
             Write-Host "Analyzing Drive $dl`: for fragmentation..." -ForegroundColor Cyan
             try {
@@ -138,14 +141,18 @@ if ($Action -eq 'Check') {
     return
 }
 
-# Run Action
-if (-not $isDue) {
-    Write-Host "HDD defragmentation skipped: Only $([math]::Round($daysSince, 0)) days since last run (minimum threshold: $minDays days)." -ForegroundColor Yellow
-    if ($LogFile) { Add-Content -Path $LogFile -Value "HDD Defrag skipped: $daysSince days elapsed (min $minDays days)." -Encoding UTF8 }
+if ($targetLetters.Count -eq 0) {
+    Write-Host "All detected HDD drives are excluded in settings. Skipping defragmentation." -ForegroundColor Yellow
     return
 }
 
-Write-Host "Optimizing $( $targetLetters.Count ) HDD drive(s): $( $targetLetters -join ', ' )" -ForegroundColor Cyan
+if (-not $isDue) {
+    Write-Host "HDD defragmentation skipped: Only $([math]::Round($daysSince, 0)) days since last run (minimum threshold: $minDays days)." -ForegroundColor Yellow
+    if ($LogFile) { Add-Content -Path $LogFile -Value "HDD Defrag skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
+    return
+}
+
+Write-Host "Optimizing $($targetLetters.Count) HDD drive(s): $($targetLetters -join ', ')" -ForegroundColor Cyan
 
 foreach ($dl in $targetLetters) {
     Write-Host "Analyzing and defragmenting Drive $dl`: (skips automatically if not fragmented)..." -ForegroundColor Cyan
@@ -160,17 +167,6 @@ foreach ($dl in $targetLetters) {
     }
 }
 
-# Update timestamp in config (in-memory for runner, or on disk if run standalone)
-$todayStr = (Get-Date).ToString("yyyy-MM-dd")
-if ($Config) {
-    $Config | Add-Member -NotePropertyName hddDefragLastRun -NotePropertyValue $todayStr -Force
-} else {
-    $defaultCfgPath = Join-Path (Split-Path -Parent $PSScriptRoot) "config.json"
-    if (Test-Path $defaultCfgPath) {
-        try {
-            $diskCfg = Get-Content $defaultCfgPath -Raw | ConvertFrom-Json
-            $diskCfg | Add-Member -NotePropertyName hddDefragLastRun -NotePropertyValue $todayStr -Force
-            $diskCfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $defaultCfgPath -Encoding UTF8
-        } catch { }
-    }
+if ($Settings -is [PSCustomObject]) {
+    $Settings | Add-Member -NotePropertyName lastRun -NotePropertyValue ((Get-Date).ToString("yyyy-MM-dd")) -Force
 }

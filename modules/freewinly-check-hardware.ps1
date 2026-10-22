@@ -7,41 +7,39 @@
     Maps numeric problem codes (e.g. Code 28, Code 43) to actionable troubleshooting guidance.
     This module is read-only and does not modify drivers or hardware configuration.
 .PARAMETER Action
-    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Scans hardware devices and displays detected warnings to console.
     'Run'   - Scans hardware devices and records findings to the specified log file.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+.PARAMETER Settings
+    Optional module settings object or hashtable.
 .PARAMETER LogFile
     Optional file path to append diagnostic results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\10_hardware_health.ps1 -Action Check
+    .\modules\freewinly-check-hardware.ps1 -Action Info
 .EXAMPLE
-    .\modules\10_hardware_health.ps1 -Action Run -LogFile "run.log"
+    .\modules\freewinly-check-hardware.ps1 -Action Check
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "Hardware & Driver Health"
-        Description   = "Scans Windows Device Manager for hardware faults and missing drivers with actionable advice"
-        Default       = $true
-        RequiresAdmin = $false
-        Options       = @{}
+        Name            = "Hardware & Driver Health"
+        Description     = "Scans Windows Device Manager for hardware faults and missing drivers with actionable advice"
+        Order           = 10
+        Default         = $true
+        RequiresAdmin   = $false
+        DefaultSettings = [ordered]@{}
     }
 }
 
-Write-Host "`n--- [Module 10] Hardware & Driver Health [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-check-hardware] Hardware & Driver Health [$Action] ---" -ForegroundColor Cyan
 
 $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
 $isVM = $cs -and ("$($cs.Manufacturer) $($cs.Model)" -match 'Virtual|VMware|KVM|QEMU|Bochs|Parallels|HVM|Xen|innotek')
@@ -64,10 +62,8 @@ function Get-ProblemAdvice {
 $problemDevices = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 try {
-    # Query WMI PnPEntity which natively provides ConfigManagerErrorCode
     $entities = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
                 Where-Object { $_.ConfigManagerErrorCode -ne 0 -and $_.ConfigManagerErrorCode -ne 22 }
-                # Exclude Code 22 (intentionally disabled by user) from being treated as critical hardware failure
 
     foreach ($e in $entities) {
         $problemDevices.Add([PSCustomObject]@{
@@ -79,7 +75,6 @@ try {
         })
     }
 } catch {
-    # Resilient fallback to Get-PnpDevice
     $pnp = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'OK' }
     foreach ($p in $pnp) {
         $problemDevices.Add([PSCustomObject]@{

@@ -12,28 +12,25 @@
     - Active launch interceptors: The configured tool exists on disk. These are reported for
       situational awareness, but are ignored and left untouched.
 .PARAMETER Action
-    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Inspects registry for broken launch pointers without making changes.
     'Run'   - Removes broken launch pointers from the registry. Requires Administrator rights.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+.PARAMETER Settings
+    Optional module settings object or hashtable.
 .PARAMETER LogFile
     Optional file path to append diagnostic and repair results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\12_app_launch_repair.ps1 -Action Check
+    .\modules\freewinly-repair-applaunch.ps1 -Action Check
 .EXAMPLE
-    .\modules\12_app_launch_repair.ps1 -Action Run
+    .\modules\freewinly-repair-applaunch.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
 function Get-LikelyAssociatedTool {
@@ -126,20 +123,16 @@ $activeApps = @($activeHooks | Select-Object -ExpandProperty AppName -Unique)
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "App Launch Repair (Broken Sleep Hooks & Debuggers)"
-        Description   = "Repairs applications blocked by missing launch interceptors (e.g. from uninstalled sleep utilities)"
-        Default       = ($brokenHooks.Count -gt 0)
-        RequiresAdmin = ($brokenHooks.Count -gt 0)
-        Options       = @{
-            BrokenCount = $brokenHooks.Count
-            BrokenApps  = $brokenApps
-            ActiveCount = $activeHooks.Count
-            ActiveApps  = $activeApps
-        }
+        Name            = "App Launch Repair (Sleep Hooks)"
+        Description     = "Repairs applications blocked by missing launch interceptors (e.g. from uninstalled sleep utilities)"
+        Order           = 12
+        Default         = $true
+        RequiresAdmin   = ($brokenHooks.Count -gt 0)
+        DefaultSettings = [ordered]@{}
     }
 }
 
-Write-Host "`n--- [Module 12] App Launch Repair [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-repair-applaunch] App Launch Repair [$Action] ---" -ForegroundColor Cyan
 
 # Informational section: Active tools
 if ($activeHooks.Count -gt 0) {

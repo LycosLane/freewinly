@@ -10,11 +10,11 @@
     'Remove'  - Deletes the shortcut from the Start Menu.
     'Status'  - Checks if the shortcut is currently installed.
 .EXAMPLE
-    .\core\shortcut.ps1
+    .\core\freewinly-setup-launcher.ps1
 .EXAMPLE
-    .\core\shortcut.ps1 -Action Remove
+    .\core\freewinly-setup-launcher.ps1 -Action Remove
 .EXAMPLE
-    .\core\shortcut.ps1 -Action Status
+    .\core\freewinly-setup-launcher.ps1 -Action Status
 #>
 [CmdletBinding()]
 param(

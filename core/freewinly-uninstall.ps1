@@ -11,11 +11,11 @@
 .PARAMETER Force
     Skips the confirmation prompt and proceeds immediately with uninstallation.
 .EXAMPLE
-    .\core\uninstall.ps1
+    .\core\freewinly-uninstall.ps1
 .EXAMPLE
-    .\core\uninstall.ps1 -Check
+    .\core\freewinly-uninstall.ps1 -Check
 .EXAMPLE
-    .\core\uninstall.ps1 -Force
+    .\core\freewinly-uninstall.ps1 -Force
 #>
 [CmdletBinding()]
 param(
@@ -30,7 +30,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "                FreeWinly Complete Uninstaller              " -ForegroundColor White
-Write-Host "          Removes scheduled tasks, shortcuts, and files     " -ForegroundColor Gray
+Write-Host "       Removes scheduled tasks, PATH, shortcuts & files     " -ForegroundColor Gray
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 1. Inspect Components
@@ -40,6 +40,15 @@ try {
     $taskFound = ($null -ne $task)
 } catch {
     $taskFound = $false
+}
+
+$userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
+$normRoot = $projectRoot.TrimEnd('\')
+$pathFound = $false
+if ($userPathRaw) {
+    $pathFound = ($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
+        $_.Trim().TrimEnd('\').Equals($normRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    }).Count -gt 0
 }
 
 $startMenuPrograms = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
@@ -55,6 +64,12 @@ if ($taskFound) {
     Write-Host "  [x] Windows Scheduled Task:    'FreeWinly' (Windows Task Scheduler)" -ForegroundColor White
 } else {
     Write-Host "  [ ] Windows Scheduled Task:    Not installed" -ForegroundColor DarkGray
+}
+
+if ($pathFound) {
+    Write-Host "  [x] User PATH Registration:    $projectRoot" -ForegroundColor White
+} else {
+    Write-Host "  [ ] User PATH Registration:    Not registered" -ForegroundColor DarkGray
 }
 
 if ($shortcutsFound.Count -gt 0) {
@@ -87,9 +102,18 @@ Write-Host "`nProceeding with uninstallation..." -ForegroundColor Cyan
 # 3. Remove Scheduled Task
 if ($taskFound) {
     Write-Host "Removing scheduled task..." -ForegroundColor Gray
-    $taskInstaller = Join-Path $PSScriptRoot "scheduler.ps1"
+    $taskInstaller = Join-Path $PSScriptRoot "freewinly-setup-schedule.ps1"
     if (Test-Path $taskInstaller) {
         & $taskInstaller -Action Remove
+    }
+}
+
+# 4. Remove User PATH Registration
+if ($pathFound) {
+    Write-Host "Removing User PATH registration..." -ForegroundColor Gray
+    $pathManager = Join-Path $PSScriptRoot "freewinly-setup-path.ps1"
+    if (Test-Path $pathManager) {
+        & $pathManager -Action Remove
     }
 }
 

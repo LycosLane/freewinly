@@ -7,41 +7,41 @@
     Supports excluding specific package identifiers, including temporary postponements
     with expiration dates configured in config.json.
 .PARAMETER Action
-    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Lists available software updates without installing them.
     'Run'   - Downloads and installs eligible updates sequentially.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json (reads excluded packages).
+.PARAMETER Settings
+    Optional module settings object or hashtable (supports excluded list).
 .PARAMETER LogFile
     Optional file path to append update results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\20_software_updates.ps1 -Action Check
+    .\modules\freewinly-update-software.ps1 -Action Check
 .EXAMPLE
-    .\modules\20_software_updates.ps1 -Action Run
+    .\modules\freewinly-update-software.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "Software Updates (Winget)"
-        Description   = "Checks and installs pending Winget application updates (skipping excluded packages)"
-        Default       = $true
-        RequiresAdmin = $false
-        Options       = @{}
+        Name            = "Software Updates (Winget)"
+        Description     = "Checks and installs pending Winget application updates (skipping excluded packages)"
+        Order           = 20
+        Default         = $true
+        RequiresAdmin   = $false
+        DefaultSettings = [ordered]@{
+            excluded = @()
+        }
     }
 }
 
-Write-Host "`n--- [Module 20] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-update-software] Software Updates (Winget) [$Action] ---" -ForegroundColor Cyan
 
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "Winget CLI is not available on this system. Skipping." -ForegroundColor Yellow
@@ -51,17 +51,29 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 
 $today = (Get-Date).Date
 $activeExcludes = [System.Collections.Generic.List[string]]::new()
-$excludedSource = if ($Config -and $Config.excluded) { $Config.excluded } else { @() }
+$cleanExcludes  = [System.Collections.Generic.List[object]]::new()
+$excludedSource = if ($Settings -and $Settings.excluded) { $Settings.excluded } else { @() }
+$excludesModified = $false
 
 foreach ($item in $excludedSource) {
     if ($item -is [string]) {
         $activeExcludes.Add($item)
+        $cleanExcludes.Add($item)
     } elseif ($item.id -and $item.until) {
-        if ($today -le [datetime]$item.until) {
+        $untilDate = try { [datetime]$item.until } catch { $null }
+        if ($untilDate -and $today -le $untilDate) {
             $activeExcludes.Add($item.id)
+            $cleanExcludes.Add($item)
             Write-Host "Exclusion active (postponed until $($item.until)): $($item.id)" -ForegroundColor Gray
+        } else {
+            Write-Host "Expired postponement removed: $($item.id)" -ForegroundColor Yellow
+            $excludesModified = $true
         }
     }
+}
+
+if ($excludesModified -and $Settings -is [PSCustomObject]) {
+    $Settings | Add-Member -NotePropertyName excluded -NotePropertyValue @($cleanExcludes) -Force
 }
 
 if ($activeExcludes.Count -gt 0) {

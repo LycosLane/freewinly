@@ -1,10 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.1.0 - Open Source Windows Maintenance & Optimization Engine.
+    FreeWinly v1.2.0 - Open Source Windows Maintenance & Optimization Engine.
 .DESCRIPTION
     Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, and TRIM.
-    Supports headless CLI automation, interactive TUI menu, dry-run check previews, and JIT elevation.
+    Supports headless CLI automation, interactive TUI menu, dry-run check previews,
+    strict module contract validation, per-module scoped settings, and JIT elevation.
 .PARAMETER Run
     Executes the enabled or specified modules immediately without opening the interactive menu.
 .PARAMETER Check
@@ -12,7 +13,7 @@
 .PARAMETER Audit
     Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, updates, storage).
 .PARAMETER Modules
-    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 10_hardware_health,20_software_updates).
+    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules freewinly-check-hardware,freewinly-update-software).
 .PARAMETER ConfigPath
     Optional path to a custom configuration JSON file (defaults to .\config.json).
 .PARAMETER CountdownSeconds
@@ -28,7 +29,7 @@
 .EXAMPLE
     .\freewinly.ps1 -Run
 .EXAMPLE
-    .\freewinly.ps1 -Modules 10_hardware_health,20_software_updates -Run
+    .\freewinly.ps1 -Modules freewinly-check-hardware,freewinly-update-software -Run
 #>
 [CmdletBinding()]
 param(
@@ -67,7 +68,7 @@ if (-not (Test-Path $logsDir)) {
 
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.1.0 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "         FreeWinly v1.2.0 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -89,19 +90,138 @@ function Get-SafeConfig {
         }
     }
     return [PSCustomObject]@{
-        preCommands           = @()
-        uninstall             = @()
-        install               = @()
-        excluded              = @()
-        postCommands          = @()
-        enabledModules        = $null
-        cleanupTempMinAgeDays = 7
-        eventLogLookbackDays  = 7
-        hddDefragMinDays      = 30
         countdownSeconds      = 10
         scheduleType          = "Weekly"
         scheduleDay           = "Sunday"
         scheduleTime          = "12:00"
+        preCommands           = @()
+        uninstall             = @()
+        install               = @()
+        postCommands          = @()
+        modulesExecutionOrder = $null
+    }
+}
+
+function Test-UserPathRegistered {
+    $userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not $userPathRaw) { return $false }
+    $normRoot = $projectRoot.TrimEnd('\')
+    return (($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
+        $_.Trim().TrimEnd('\').Equals($normRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    }).Count -gt 0)
+}
+
+function Test-ModuleContract {
+    param([string]$FilePath)
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($FilePath, [ref]$tokens, [ref]$parseErrors)
+
+    if ($parseErrors -and $parseErrors.Count -gt 0) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Syntax error at line $($parseErrors[0].Extent.StartLineNumber): $($parseErrors[0].Message)"
+            Info    = $null
+        }
+    }
+
+    if (-not $ast.ParamBlock -or -not $ast.ParamBlock.Parameters) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Missing param() block with required '-Action' parameter (Info, Check, Run)."
+            Info    = $null
+        }
+    }
+
+    $hasActionParam = ($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -ieq 'Action' }).Count -gt 0
+    if (-not $hasActionParam) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Missing required '-Action' parameter (Info, Check, Run)."
+            Info    = $null
+        }
+    }
+
+    $info = $null
+    try {
+        $info = & $FilePath -Action Info -ErrorAction Stop
+    } catch {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Execution of '-Action Info' failed: $($_.Exception.Message)"
+            Info    = $null
+        }
+    }
+
+    if (-not $info) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "'-Action Info' returned null instead of a metadata object."
+            Info    = $null
+        }
+    }
+
+    if (-not ($info.Name -is [string]) -or [string]::IsNullOrWhiteSpace($info.Name)) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Metadata is missing a valid 'Name' string."
+            Info    = $null
+        }
+    }
+
+    $cleanName = $info.Name.Trim()
+    if ($cleanName.Length -lt 3 -or $cleanName.Length -gt 50) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Name '$($cleanName.Substring(0, [math]::Min(25, $cleanName.Length)))...' must be 3-50 characters (got $($cleanName.Length) chars)."
+            Info    = $null
+        }
+    }
+
+    if ($cleanName -match '[\r\n]') {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Name must be a single line without newline characters."
+            Info    = $null
+        }
+    }
+
+    if (-not ($info.Description -is [string]) -or [string]::IsNullOrWhiteSpace($info.Description)) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Metadata is missing a valid 'Description' string."
+            Info    = $null
+        }
+    }
+
+    if ($info.Description.Trim().Length -gt 120) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Description exceeds maximum length of 120 characters ($($info.Description.Trim().Length) chars)."
+            Info    = $null
+        }
+    }
+
+    if (-not ($info.Default -is [bool])) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Metadata 'Default' property must be a boolean (`$true or `$false)."
+            Info    = $null
+        }
+    }
+
+    if (-not ($info.RequiresAdmin -is [bool])) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Metadata 'RequiresAdmin' property must be a boolean (`$true or `$false)."
+            Info    = $null
+        }
+    }
+
+    return [PSCustomObject]@{
+        IsValid = $true
+        Reason  = $null
+        Info    = $info
     }
 }
 
@@ -115,19 +235,20 @@ CLI Usage:
   .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
   .\freewinly.ps1 -Audit               Alias for -Check (read-only health & stability audit)
   .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
-  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 10_hardware_health,20_software_updates)
+  .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules freewinly-check-hardware,freewinly-update-software)
   .\freewinly.ps1 -Help                Show this help message
 
 Core Utilities:
-  .\core\onboarding.ps1                First-run setup & exclusion wizard
-  .\core\scheduler.ps1                 Configure Windows Task Scheduler automation
-  .\core\shortcut.ps1                  Manage Start Menu shortcut (Install / Remove / Status)
-  .\core\uninstall.ps1                 Cleanly remove FreeWinly from this PC
+  .\core\freewinly-init-config.ps1     Initialize config.json & Winget exclusion wizard
+  .\core\freewinly-setup-schedule.ps1  Configure Windows Task Scheduler automation
+  .\core\freewinly-setup-launcher.ps1  Manage Start Menu shortcut (Install / Remove / Status)
+  .\core\freewinly-setup-path.ps1      Manage User PATH registration (Install / Remove / Toggle / Status)
+  .\core\freewinly-uninstall.ps1       Cleanly remove FreeWinly from this PC
 
 Standalone Module Invocations:
-  .\modules\10_hardware_health.ps1 -Action Check
-  .\modules\11_event_log_health.ps1 -Action Check
-  .\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+  .\modules\freewinly-check-hardware.ps1 -Action Check
+  .\modules\freewinly-check-eventlog.ps1 -Action Check
+  .\modules\freewinly-trim-ssd.ps1 -Action Run -Settings @{ excludedDrives = @('D') }
 "@ -ForegroundColor Yellow
     exit 0
 }
@@ -136,14 +257,13 @@ if ($Audit) {
     $Check = $true
 }
 
-# Track whether this session was started interactively by a human (vs headless -Run)
 $isInteractiveSession = (-not $Run) -or $Interactive
 
-# 1. First-Run Onboarding (if config.json does not exist yet)
+# 1. First-Run Configuration Initialization (if config.json does not exist yet)
 if (-not (Test-Path $configPath)) {
-    $onboardingScript = Join-Path $coreDir "onboarding.ps1"
-    if (Test-Path $onboardingScript) {
-        & $onboardingScript -ConfigPath $configPath
+    $initScript = Join-Path $coreDir "freewinly-init-config.ps1"
+    if (Test-Path $initScript) {
+        & $initScript -ConfigPath $configPath
     }
 }
 
@@ -162,58 +282,186 @@ if ($Modules -and $Modules.Count -eq 1 -and $Modules[0] -match ',') {
 }
 
 # ==================================================================
-# 2. DISCOVER MODULES DYNAMICALLY (Via -Action Info)
+# 2. DISCOVER, VALIDATE & ORDER MODULES DYNAMICALLY
 # ==================================================================
-$moduleFiles = Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue | Sort-Object Name
-$discoveredModules = [System.Collections.Generic.List[PSCustomObject]]::new()
+$moduleFiles = Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue
+$validFileMap = @{}
+$ignoredWarnings = [System.Collections.Generic.List[string]]::new()
 
 foreach ($mf in $moduleFiles) {
-    $baseName = $mf.BaseName
-    $info = $null
-
-    try {
-        $info = & $mf.FullName -Action Info -Config $config -ErrorAction Stop
-    } catch { }
-
-    $name          = if ($info -and $info.Name) { $info.Name } else { $baseName }
-    $description   = if ($info -and $info.Description) { $info.Description } else { "" }
-    $defaultVal    = if ($info -and $null -ne $info.Default) { $info.Default } else { $true }
-    $requiresAdmin = if ($info -and $null -ne $info.RequiresAdmin) { $info.RequiresAdmin } else { $false }
-    $options       = if ($info -and $info.Options) { $info.Options } else { @{} }
-
-    $hasEmptyDrives = ($options -and $options.ContainsKey('DetectedDrives') -and (@($options['DetectedDrives']).Count -eq 0))
-    if ($hasEmptyDrives -and -not ($Modules -and $Modules -contains $baseName)) {
+    $validation = Test-ModuleContract -FilePath $mf.FullName
+    if (-not $validation.IsValid) {
+        $msg = "[Module Ignored] '$($mf.Name)' was not loaded: $($validation.Reason)"
+        $ignoredWarnings.Add($msg)
+        Write-Host $msg -ForegroundColor Yellow
         continue
     }
+    $validFileMap[$mf.BaseName] = [PSCustomObject]@{
+        File = $mf
+        Info = $validation.Info
+    }
+}
 
+# Reconcile execution order:
+# 1. First in the sequence defined in config.modulesExecutionOrder
+# 2. Followed by any newly added modules sorted by their Info.Order
+$orderedBaseNames = [System.Collections.Generic.List[string]]::new()
+$hasModOrderConfig = ($null -ne $config.modulesExecutionOrder)
+
+if ($hasModOrderConfig) {
+    $cfgKeys = if ($config.modulesExecutionOrder -is [System.Collections.IDictionary]) {
+        $config.modulesExecutionOrder.Keys
+    } else {
+        $config.modulesExecutionOrder.PSObject.Properties.Name
+    }
+    foreach ($k in $cfgKeys) {
+        if ($validFileMap.ContainsKey($k) -and -not $orderedBaseNames.Contains($k)) {
+            $orderedBaseNames.Add($k)
+        }
+    }
+}
+
+$newModules = @($validFileMap.Keys | Where-Object { -not $orderedBaseNames.Contains($_) } | ForEach-Object {
+    [PSCustomObject]@{
+        BaseName = $_
+        Order    = if ($null -ne $validFileMap[$_].Info.Order) { [int]$validFileMap[$_].Info.Order } else { 99 }
+    }
+} | Sort-Object Order, BaseName)
+
+foreach ($nm in $newModules) {
+    $orderedBaseNames.Add($nm.BaseName)
+}
+
+$discoveredModules = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+foreach ($baseName in $orderedBaseNames) {
+    $entry = $validFileMap[$baseName]
+    $mf    = $entry.File
+    $info  = $entry.Info
+
+    # Build merged settings object (DefaultSettings overlaid with user's config block)
+    $modSettings = [ordered]@{}
+    if ($info.DefaultSettings) {
+        $defKeys = if ($info.DefaultSettings -is [System.Collections.IDictionary]) {
+            $info.DefaultSettings.Keys
+        } else {
+            $info.DefaultSettings.PSObject.Properties.Name
+        }
+        foreach ($dk in $defKeys) {
+            $modSettings[$dk] = $info.DefaultSettings[$dk]
+        }
+    }
+
+    $cfgEntry = if ($hasModOrderConfig) { $config.modulesExecutionOrder.$baseName } else { $null }
+    $enabledInCfg = $null
+
+    if ($null -ne $cfgEntry) {
+        if ($cfgEntry -is [bool]) {
+            $enabledInCfg = $cfgEntry
+        } else {
+            if ($null -ne $cfgEntry.enabled) {
+                $enabledInCfg = [bool]$cfgEntry.enabled
+            }
+            $uKeys = if ($cfgEntry -is [System.Collections.IDictionary]) {
+                $cfgEntry.Keys
+            } else {
+                $cfgEntry.PSObject.Properties.Name
+            }
+            foreach ($uk in $uKeys) {
+                if ($uk -ne 'enabled') {
+                    $modSettings[$uk] = $cfgEntry.$uk
+                }
+            }
+        }
+    }
+
+    # Determine if enabled:
+    # - CLI -Modules override > config.modulesExecutionOrder > (if brand-new unconfigured module & config exists: false, else Info.Default)
     $isEnabled = if ($Modules) {
         $Modules -contains $baseName
-    } elseif ($config.enabledModules) {
-        $config.enabledModules -contains $baseName
+    } elseif ($null -ne $enabledInCfg) {
+        $enabledInCfg
+    } elseif ($hasModOrderConfig) {
+        # A brand-new module dropped into modules/ that was not in config.json yet defaults to disabled for safety
+        $false
     } else {
-        $defaultVal
+        $info.Default
+    }
+
+    $settingsObj = [PSCustomObject]$modSettings
+
+    # Update dynamic title if minAgeDays or lookbackDays was customized in settings
+    $displayName = $info.Name
+    if ($baseName -eq 'freewinly-clean-cache' -and $settingsObj.minAgeDays) {
+        $displayName = "Safe Cache & Temp Cleanup (>$($settingsObj.minAgeDays) days)"
+    } elseif ($baseName -eq 'freewinly-check-eventlog' -and $settingsObj.lookbackDays) {
+        $displayName = "System Stability & Event Logs (Last $($settingsObj.lookbackDays)d)"
+    }
+
+    $isApplicable = if ($null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }
+
+    # Skip inapplicable hardware modules (e.g. HDD Defrag on SSD-only PC) from menu unless explicitly requested via -Modules
+    if (-not $isApplicable -and -not ($Modules -and $Modules -contains $baseName)) {
+        continue
     }
 
     $discoveredModules.Add([PSCustomObject]@{
         BaseName      = $baseName
-        Name          = $name
-        Description   = $description
+        Name          = $displayName
+        Description   = $info.Description
         Path          = $mf.FullName
         Enabled       = [bool]$isEnabled
-        RequiresAdmin = [bool]$requiresAdmin
-        Options       = $options
+        RequiresAdmin = [bool]$info.RequiresAdmin
+        Settings      = $settingsObj
     })
+}
+
+function Save-ConfigState {
+    $modOrder = [ordered]@{}
+    foreach ($dm in $discoveredModules) {
+        $block = [ordered]@{
+            enabled = [bool]$dm.Enabled
+        }
+        if ($dm.Settings) {
+            foreach ($prop in $dm.Settings.PSObject.Properties) {
+                $block[$prop.Name] = $prop.Value
+            }
+        }
+        $modOrder[$dm.BaseName] = $block
+    }
+    # Preserve valid modules that were hidden due to hardware applicability (e.g., freewinly-defrag-hdd on SSD-only PCs)
+    foreach ($baseName in $orderedBaseNames) {
+        if (-not $modOrder.Contains($baseName) -and $validFileMap.ContainsKey($baseName)) {
+            $existing = if ($config.modulesExecutionOrder) { $config.modulesExecutionOrder.$baseName } else { $null }
+            if ($null -ne $existing) {
+                $modOrder[$baseName] = $existing
+            }
+        }
+    }
+    $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
+    $config | Add-Member -NotePropertyName modulesExecutionOrder -NotePropertyValue ([PSCustomObject]$modOrder) -Force
+    if ($config.PSObject.Properties['enabledModules']) {
+        $config.PSObject.Properties.Remove('enabledModules')
+    }
+    if ($config.PSObject.Properties['excluded']) {
+        $config.PSObject.Properties.Remove('excluded')
+    }
+    $config | ConvertTo-Json -Depth 6 | Out-File -FilePath $configPath -Encoding UTF8
 }
 
 function Invoke-DryRunCheck {
     param([array]$TargetModules)
     Show-Banner
+    if ($ignoredWarnings.Count -gt 0) {
+        Write-Host ""
+        foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
+    }
     Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($TargetModules.Count) module(s) ===" -ForegroundColor Yellow
     Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
     foreach ($m in $TargetModules) {
         try {
-            & $m.Path -Action Check -Config $config -LogFile $logFile -Options $m.Options
+            & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile
         } catch {
             Write-Host "Error during check for $($m.Name): $($_.Exception.Message)" -ForegroundColor Red
         }
@@ -236,7 +484,11 @@ if ($Check) {
 if (-not $Run) {
     Clear-Host
     Show-Banner
-    Write-Host "`nScheduled Tasks to Run:" -ForegroundColor Yellow
+    if ($ignoredWarnings.Count -gt 0) {
+        Write-Host ""
+        foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
+    }
+    Write-Host "`nScheduled Tasks to Run (in execution order):" -ForegroundColor Yellow
 
     foreach ($m in $discoveredModules) {
         $mark  = if ($m.Enabled) { "[x]" } else { "[ ]" }
@@ -280,14 +532,17 @@ if (-not $Run) {
             } else {
                 "Disabled"
             }
+            $pathStatus = if (Test-UserPathRegistered) { "Enabled" } else { "Disabled" }
+
             $actions = @(
                 @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
                 @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
-                @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)"; Key = "T" },
+                @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
                 @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
-                @{ Label = "[   S   ]  Save Selection as Default"; Key = "S" },
-                @{ Label = "[   O   ]  Run First-Time Onboarding Wizard"; Key = "O" },
-                @{ Label = "[   I   ]  Install / Update Start Menu Shortcut"; Key = "I" },
+                @{ Label = "[   P   ]  User PATH CLI Auto-Complete: [ $pathStatus ] (Press P to toggle)"; Key = "P" },
+                @{ Label = "[   S   ]  Save Selection & Order as Default"; Key = "S" },
+                @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O" },
+                @{ Label = "[   I   ]  Install / Update Start Menu Launcher"; Key = "I" },
                 @{ Label = "[   U   ]  Uninstall FreeWinly Completely"; Key = "U" },
                 @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
             )
@@ -295,7 +550,10 @@ if (-not $Run) {
 
             Clear-Host
             Show-Banner
-            Write-Host "Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:`n" -ForegroundColor Gray
+            if ($ignoredWarnings.Count -gt 0) {
+                foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
+            }
+            Write-Host "Use [Up/Down] to navigate, [Space] to toggle, [+/-] to reorder, [Enter] to run:`n" -ForegroundColor Gray
 
             for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
                 $m = $discoveredModules[$i]
@@ -317,6 +575,27 @@ if (-not $Run) {
 
             $key = [Console]::ReadKey($true)
             $cmdKey = $key.Key.ToString()
+
+            # Reorder module up/down with [+] / [-]
+            if ($selectedIndex -lt $discoveredModules.Count) {
+                if ($key.KeyChar -eq '-' -or $key.Key -eq 'Subtract') {
+                    if ($selectedIndex -gt 0) {
+                        $temp = $discoveredModules[$selectedIndex - 1]
+                        $discoveredModules[$selectedIndex - 1] = $discoveredModules[$selectedIndex]
+                        $discoveredModules[$selectedIndex] = $temp
+                        $selectedIndex--
+                    }
+                    continue
+                } elseif ($key.KeyChar -eq '+' -or $key.Key -eq 'Add' -or $key.KeyChar -eq '=') {
+                    if ($selectedIndex -lt ($discoveredModules.Count - 1)) {
+                        $temp = $discoveredModules[$selectedIndex + 1]
+                        $discoveredModules[$selectedIndex + 1] = $discoveredModules[$selectedIndex]
+                        $discoveredModules[$selectedIndex] = $temp
+                        $selectedIndex++
+                    }
+                    continue
+                }
+            }
 
             if ($cmdKey -eq "Enter") {
                 if ($selectedIndex -lt $discoveredModules.Count) {
@@ -353,33 +632,33 @@ if (-not $Run) {
                     $curIdx = $timerPresets.IndexOf($countdown)
                     $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
                     $countdown = $timerPresets[$nextIdx]
-                    $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
-                    $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+                    Save-ConfigState
                 }
                 "W" {
                     Clear-Host
-                    & (Join-Path $coreDir "scheduler.ps1")
+                    & (Join-Path $coreDir "freewinly-setup-schedule.ps1")
                     $config = Get-SafeConfig -Path $configPath
                 }
+                "P" {
+                    & (Join-Path $coreDir "freewinly-setup-path.ps1") -Action Toggle
+                    Start-Sleep -Milliseconds 900
+                }
                 "S" {
-                    $enabledList = @($discoveredModules | Where-Object { $_.Enabled } | Select-Object -ExpandProperty BaseName)
-                    $config | Add-Member -NotePropertyName enabledModules -NotePropertyValue $enabledList -Force
-                    $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
-                    $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
-                    Write-Host "`n  -> Default tasks and settings saved to config.json!" -ForegroundColor Green
+                    Save-ConfigState
+                    Write-Host "`n  -> Module selection, order, and settings saved to config.json!" -ForegroundColor Green
                     Start-Sleep -Milliseconds 800
                 }
                 "O" {
-                    & (Join-Path $coreDir "onboarding.ps1") -ConfigPath $configPath
+                    & (Join-Path $coreDir "freewinly-init-config.ps1") -ConfigPath $configPath
                     $config = Get-SafeConfig -Path $configPath
                 }
                 "I" {
-                    & (Join-Path $coreDir "shortcut.ps1")
+                    & (Join-Path $coreDir "freewinly-setup-launcher.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
                 "U" {
                     Clear-Host
-                    & (Join-Path $coreDir "uninstall.ps1")
+                    & (Join-Path $coreDir "freewinly-uninstall.ps1")
                     Read-Host "`nPress Enter to return to menu"
                 }
                 { $_ -in @("Q", "Escape") } {
@@ -417,11 +696,11 @@ if ($needsAdmin -and -not $isAdmin) {
 # ==================================================================
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.1.0 Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.2.0 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
-$configSnapshotBefore = if ($config) { $config | ConvertTo-Json -Depth 5 -Compress } else { "" }
+$settingsSnapshotBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
 
 # 6.0 PRE-COMMANDS HOOK
 if ($config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
@@ -469,12 +748,12 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
     $configModified = $true
 }
 
-# 6.3 RUN ENABLED MODULES
+# 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
 Write-Log "`nExecuting $($activeModules.Count) active maintenance module(s)..." "Cyan"
 
 foreach ($m in $activeModules) {
     try {
-        & $m.Path -Action Run -Config $config -LogFile $logFile -Options $m.Options
+        & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile
     } catch {
         Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
     }
@@ -498,34 +777,14 @@ if ($config -and $config.postCommands -and $config.postCommands.Count -gt 0) {
     $configModified = $true
 }
 
-# Auto-cleanup expired postponements in exclusions
-if ($config -and $config.excluded) {
-    $today = (Get-Date).Date
-    $cleanExcludes = [System.Collections.Generic.List[object]]::new()
-    foreach ($item in $config.excluded) {
-        if ($item -is [string]) {
-            $cleanExcludes.Add($item)
-        } elseif ($item.id -and $item.until) {
-            $untilDate = try { [datetime]$item.until } catch { $null }
-            if ($untilDate -and $today -le $untilDate) {
-                $cleanExcludes.Add($item)
-            } else {
-                Write-Log "Postponement expired & removed: $($item.id)" "Yellow"
-                $configModified = $true
-            }
-        }
-    }
-    $config.excluded = @($cleanExcludes)
-}
-
-# Check if any module updated properties on $config (such as hddDefragLastRun)
-$configSnapshotAfter = if ($config) { $config | ConvertTo-Json -Depth 5 -Compress } else { "" }
-if ($configSnapshotBefore -ne $configSnapshotAfter) {
+# Persist if any module updated its Settings (e.g. lastRun or expired postponements)
+$settingsSnapshotAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
+if ($settingsSnapshotBefore -ne $settingsSnapshotAfter) {
     $configModified = $true
 }
 
 if ($configModified -and (Test-Path (Split-Path -Parent $configPath))) {
-    $config | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+    Save-ConfigState
     Write-Log "Configuration updated." "Green"
 }
 

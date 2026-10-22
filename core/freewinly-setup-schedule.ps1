@@ -18,11 +18,11 @@
 .PARAMETER DayOfWeek
     Day of week for weekly schedule (default: 'Sunday').
 .EXAMPLE
-    .\core\scheduler.ps1
+    .\core\freewinly-setup-schedule.ps1
 .EXAMPLE
-    .\core\scheduler.ps1 -Action Weekly -DayOfWeek Sunday -At 14:00
+    .\core\freewinly-setup-schedule.ps1 -Action Weekly -DayOfWeek Sunday -At 14:00
 .EXAMPLE
-    .\core\scheduler.ps1 -Action Remove
+    .\core\freewinly-setup-schedule.ps1 -Action Remove
 #>
 [CmdletBinding()]
 param(

@@ -5,43 +5,41 @@
 .DESCRIPTION
     Scans, previews, downloads, and installs pending Windows OS Updates and Microsoft Defender definitions via native COM API.
 .PARAMETER Action
-    'Info'  - Returns module metadata object (Name, Description, Default, RequiresAdmin).
+    'Info'  - Returns module metadata object (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Searches for pending updates and displays titles/sizes without downloading or installing.
     'Run'   - Searches, downloads, and installs pending updates.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+.PARAMETER Settings
+    Optional module settings object or hashtable.
 .PARAMETER LogFile
     Optional path to the execution log file.
-.PARAMETER Options
-    Optional hashtable of module-specific options.
 .EXAMPLE
-    .\modules\21_windows_updates.ps1 -Action Info
+    .\modules\freewinly-update-windows.ps1 -Action Info
 .EXAMPLE
-    .\modules\21_windows_updates.ps1 -Action Check
+    .\modules\freewinly-update-windows.ps1 -Action Check
 .EXAMPLE
-    .\modules\21_windows_updates.ps1 -Action Run
+    .\modules\freewinly-update-windows.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "Windows OS & Security Updates"
-        Description   = "Scans, downloads, and installs pending Windows Updates and Microsoft Defender definitions via native COM API"
-        Default       = $false
-        RequiresAdmin = $true
-        Options       = @{}
+        Name            = "Windows OS & Security Updates"
+        Description     = "Scans, downloads, and installs pending Windows Updates and Microsoft Defender definitions via native COM API"
+        Order           = 21
+        Default         = $false
+        RequiresAdmin   = $true
+        DefaultSettings = [ordered]@{}
     }
 }
 
-Write-Host "`n--- [Module 21] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-update-windows] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
 
 try {
     $Session = New-Object -ComObject Microsoft.Update.Session

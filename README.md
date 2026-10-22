@@ -60,12 +60,12 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 
 - **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
 - **Auto-Start Countdown:** Counts down 10 seconds before running default tasks automatically. Press any key to open the interactive menu.
-- **Interactive Console Menu:** Toggle tasks on or off with `[Space]`, run them immediately with `[Enter]`, or save your selection as default with `[S]`.
-- **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only.
+- **Interactive Console Menu:** Toggle tasks on or off with `[Space]`, reorder execution sequence with `[+]` / `[-]`, run them immediately with `[Enter]`, or save your selection and order as default with `[S]`.
+- **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only, with per-drive exclusions and minimum interval controls.
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
 - **App Launch Repair:** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities. [Learn more](#deep-dive-app-launch-interceptions--sleep-tools)
-- **Modular Architecture:** Add or customize maintenance tasks by placing numbered `.ps1` files into the `modules/` folder. [Read the architecture deep dive](#modular-architecture)
+- **Modular Architecture & CLI Auto-Complete:** Every core tool and maintenance task uses standardized `freewinly-<verb>-<noun>.ps1` names with optional User `PATH` registration (`[P]`) and strict AST/metadata validation. [Read the architecture deep dive](#modular-architecture)
 - **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
 ---
@@ -79,7 +79,7 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 
 A console window opens with a countdown:
 * **Wait 10 seconds:** Runs safe maintenance automatically and exits when done.
-* **Press any key:** Customize which tasks run, or press **`[ I ]`** to add a shortcut to your Windows Start Menu.
+* **Press any key:** Customize which tasks run, reorder modules with **`[ + ]`** / **`[ - ]`**, or press **`[ I ]`** to add a shortcut to your Windows Start Menu.
 
 ---
 
@@ -108,23 +108,25 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
            FreeWinly - Open Source Windows Engine           
         Freeing Windows from bloatware, caches & fees       
 ============================================================
-Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
+Use [Up/Down] to navigate, [Space] to toggle, [+/-] to reorder, [Enter] to run:
 
   [x] Hardware & Driver Health
-  [x] System Stability & Event Logs (Last 7 days)
+  [x] System Stability & Event Logs (Last 7d)
+  [x] Broken App Launch & Sleep Repair [Admin]
   [x] Software Updates (Winget)
+  [ ] Windows OS & Security Updates [Admin]
   [x] Safe Cache & Temp Cleanup (>7 days)
   [x] SSD TRIM Optimization [Admin]
-  [ ] Windows OS & Security Updates [Admin]
 
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
-  [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle: 0s, 3s, 5s, 10s, 20s, 30s)
+  [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle)
   [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
-  [   S   ]  Save Selection as Default
-  [   O   ]  Run First-Time Onboarding Wizard
-  [   I   ]  Install / Update Start Menu Shortcut
+  [   P   ]  User PATH CLI Auto-Complete: [ Disabled ] (Press P to toggle)
+  [   S   ]  Save Selection & Order as Default
+  [   O   ]  Run Configuration & Exclusion Wizard
+  [   I   ]  Install / Update Start Menu Launcher
   [   U   ]  Uninstall FreeWinly Completely
   [   Q   ]  Quit Without Running
 ```
@@ -133,14 +135,16 @@ Use [Up/Down] arrows to navigate, [Space] to toggle, [Enter] to run:
 | :--- | :--- |
 | **`Up` / `Down`** | Navigate between modules and actions |
 | **`Space`** | Toggle module checkbox `[x]` / `[ ]` |
+| **`+` / `-`** | Move the highlighted module up or down in the execution order |
 | **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
 | **`W`** | Open **Windows Task Scheduler** panel (press `D` to cycle weekdays, `+`/`-` to adjust hours, `Enter` to save) |
-| **`S`** | Save current checkbox selection and timer to `config.json` as permanent defaults |
-| **`O`** | Run onboarding wizard (scans for standalone apps and suggests exclusions) |
-| **`I`** | Install or update Start Menu shortcut |
-| **`U`** | Complete **Uninstaller** (previews and removes Task Scheduler tasks, shortcuts, and files) |
+| **`P`** | Toggle **User `PATH` CLI Auto-Complete** (registers FreeWinly in your user `PATH` without needing Admin rights) |
+| **`S`** | Save current checkbox selection, module execution order, and timer to `config.json` as permanent defaults |
+| **`O`** | Run configuration & exclusion wizard (scans for standalone apps and suggests exclusions) |
+| **`I`** | Install or update Start Menu launcher (`FreeWinly.lnk`) |
+| **`U`** | Complete **Uninstaller** (previews and removes Task Scheduler tasks, shortcuts, User `PATH`, and files) |
 | **`Q`** | Exit without making any changes |
 
 ---
@@ -158,12 +162,12 @@ Inside the interactive panel (or by pressing **`[ W ]`** in the main menu):
 You can also run the scheduler directly:
 ```powershell
 # Interactive schedule panel
-powershell -ExecutionPolicy Bypass -File .\core\scheduler.ps1
+powershell -ExecutionPolicy Bypass -File .\core\freewinly-setup-schedule.ps1
 
 # Or automate directly from CLI:
-.\core\scheduler.ps1 -Action Weekly -DayOfWeek Sunday -At 12:00
-.\core\scheduler.ps1 -Action Logon
-.\core\scheduler.ps1 -Action Remove
+.\core\freewinly-setup-schedule.ps1 -Action Weekly -DayOfWeek Sunday -At 12:00
+.\core\freewinly-setup-schedule.ps1 -Action Logon
+.\core\freewinly-setup-schedule.ps1 -Action Remove
 ```
 
 ---
@@ -173,23 +177,24 @@ powershell -ExecutionPolicy Bypass -File .\core\scheduler.ps1
 FreeWinly leaves no background services, registry entries, or leftover files behind. You can remove it anytime using the uninstaller:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\core\uninstall.ps1
+powershell -ExecutionPolicy Bypass -File .\core\freewinly-uninstall.ps1
 ```
 * Or press **`[ U ]`** directly inside the FreeWinly interactive menu.
 
 **What it does:**
 1. Scans for and displays all active components:
    - Windows Task Scheduler job (`FreeWinly`)
-   - Start Menu shortcut (`FreeWinly.lnk`)
+   - Start Menu launcher (`FreeWinly.lnk`)
+   - User `PATH` CLI environment registration
    - Application folder (including local configs and logs)
 2. Asks for explicit confirmation: `Are you sure you want to completely remove FreeWinly? (y/N)`
-3. Cleanly unregisters the scheduled task, deletes the shortcut, and removes the application directory via a detached background process.
+3. Cleanly unregisters the scheduled task, deletes the shortcut, removes User `PATH` entries, and removes the application directory via a detached background process.
 
 ---
 
 ## Command-Line Usage
 
-FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom shortcuts:
+FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom shortcuts. If you toggle **`[ P ]`** in the menu (or run `.\core\freewinly-setup-path.ps1 -Action Add`), you can type `freewinly-` and press `Tab` from any terminal to auto-complete any tool or module:
 
 ```powershell
 # Interactive mode (unelevated start, 10s countdown, menu)
@@ -208,7 +213,7 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 .\freewinly.ps1 -ConfigPath "custom-profile.json" -Run
 
 # Run specific modules by name
-.\freewinly.ps1 -Modules 10_hardware_health,20_software_updates -Run
+.\freewinly.ps1 -Modules freewinly-check-hardware,freewinly-update-software -Run
 
 # Show help
 .\freewinly.ps1 -Help
@@ -218,76 +223,92 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 
 ## Modular Architecture
 
-Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a simple parameter contract (`Info`, `Check`, `Run`).
+Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a standardized `<prefix>-<verb>-<noun>.ps1` naming convention and parameter contract (`Info`, `Check`, `Run`).
 
-Modules are numbered by category (`1x`, `2x`, `3x`) and executed in a strict cause-and-effect sequence:
-1. **`1x` - Diagnostics & System Integrity:** Checks baseline hardware health, scans recent crash event logs, and repairs broken application launch hooks before attempting updates.
-2. **`2x` - Software & OS Updates:** Updates user applications via Winget and applies pending Windows OS/Defender definitions.
-3. **`3x` - Storage & Disk Maintenance:** Purges expired caches and temp files, immediately followed by physical SSD TRIM and HDD defragmentation on the newly freed disk sectors.
+Execution order is controlled via `modulesExecutionOrder` in `config.json` (and can be reordered live in the TUI with `[+]` / `[-]`), following a logical cause-and-effect sequence by default:
+1. **Diagnostics & System Integrity (`Order 10–19`):** Checks baseline hardware health, scans recent crash event logs, and repairs broken application launch hooks before attempting updates.
+2. **Software & OS Updates (`Order 20–29`):** Updates user applications via Winget and applies pending Windows OS/Defender definitions.
+3. **Storage & Disk Maintenance (`Order 30–39`):** Purges expired caches and temp files, immediately followed by physical SSD TRIM and HDD defragmentation on the newly freed disk sectors.
 
 ```text
 FreeWinly/
-├── freewinly.ps1                <-- Master runner (CLI + TUI + JIT elevation + -ConfigPath)
-├── freewinly.cmd                <-- Double-clickable launcher
-├── config.json                  <-- Exclusions, enabled modules & drive settings
-├── SKILL.md                     <-- AI Agent Playbook
+├── freewinly.ps1                        <-- Master runner (CLI + TUI + AST Gatekeeper + JIT elevation)
+├── freewinly.cmd                        <-- Double-clickable launcher
+├── config.json                          <-- Execution order & per-module scoped settings
+├── SKILL.md                             <-- AI Agent Playbook
 ├── core/
-│   ├── onboarding.ps1           <-- First-run setup & exclusion wizard
-│   ├── scheduler.ps1            <-- Windows Task Scheduler automation
-│   ├── shortcut.ps1             <-- Start Menu shortcut manager
-│   └── uninstall.ps1            <-- Uninstaller with preview & confirmation
+│   ├── freewinly-init-config.ps1        <-- First-run setup & exclusion wizard
+│   ├── freewinly-setup-schedule.ps1     <-- Windows Task Scheduler automation
+│   ├── freewinly-setup-launcher.ps1     <-- Start Menu launcher manager
+│   ├── freewinly-setup-path.ps1         <-- User PATH CLI auto-complete manager
+│   └── freewinly-uninstall.ps1          <-- Uninstaller with preview & confirmation
 └── modules/
-    ├── 10_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
-    ├── 11_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
-    ├── 12_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
-    ├── 20_software_updates.ps1  <-- Winget updates
-    ├── 21_windows_updates.ps1   <-- Windows Update COM API
-    ├── 30_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
-    ├── 31_ssd_trim.ps1          <-- Multi-SSD TRIM optimization
-    └── 32_hdd_defrag.ps1        <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
+    ├── freewinly-check-hardware.ps1     <-- Device Manager & driver faults with actionable advice
+    ├── freewinly-check-eventlog.ps1     <-- Recurring crashes & BSODs with plain-language fixes
+    ├── freewinly-repair-applaunch.ps1   <-- Restores apps broken by dead sleep hooks & debuggers
+    ├── freewinly-update-software.ps1    <-- Winget updates with per-app exclusions & postponements
+    ├── freewinly-update-windows.ps1     <-- Windows Update COM API
+    ├── freewinly-clean-cache.ps1        <-- Temp & cache cleaning (> 7 days)
+    ├── freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization
+    └── freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
 ```
 
-### Module Contract (`Info / Check / Run`)
+### Module Contract (`Info / Check / Run`) & AST Gatekeeper
 
-Each module can be executed directly as a standalone CLI tool:
+Each module works both as a standalone CLI tool (using its own built-in `DefaultSettings`) and as an orchestrated module inside `freewinly.ps1` (which overlays the module's block from `config.json` and passes it via `-Settings`):
 
 ```powershell
-.\modules\31_ssd_trim.ps1 -Action Info
-.\modules\31_ssd_trim.ps1 -Action Check
-.\modules\31_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C', 'D') }
+.\modules\freewinly-trim-ssd.ps1 -Action Info
+.\modules\freewinly-trim-ssd.ps1 -Action Check
+.\modules\freewinly-trim-ssd.ps1 -Action Run -Settings @{ excludedDrives = @('D'); minIntervalDays = 30 }
 ```
+
+Before loading any `.ps1` file in `modules/`, FreeWinly runs a static **AST & Metadata Gatekeeper (`Test-ModuleContract`)**:
+- Verifies zero PowerShell syntax errors via `[System.Management.Automation.Language.Parser]::ParseFile` before executing a single line.
+- Verifies `-Action Info` returns a valid `Name` (3–50 characters, single-line so TUI borders never break), `Description` ($\le 120$ chars), and boolean `Default` / `RequiresAdmin`.
+- If a script fails validation, FreeWinly safely skips it and displays `[Module Ignored] '<file>' was not loaded: <Reason>`.
+- Brand-new valid modules dropped into `modules/` when `config.json` already exists are automatically appended and default to **disabled (`[ ]`)** until explicitly enabled by the user.
 
 ### Adding Your Own Module
 
-Create `modules/25_my_task.ps1`:
+Create `modules/freewinly-clean-custom.ps1`:
 ```powershell
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
+    [Parameter(Position = 0)]
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+
+    [Parameter()]
+    [PSObject]$Settings = $null,
+
+    [Parameter()]
+    [string]$LogFile = $null
 )
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "My Custom Task"
-        Description   = "Describe your task here"
-        Default       = $true
-        RequiresAdmin = $false
-        Options       = @{}
+        Name            = "My Custom Cleanup"
+        Description     = "Describe your task here (max 120 chars)"
+        Order           = 35
+        Default         = $false
+        RequiresAdmin   = $false
+        DefaultSettings = [ordered]@{
+            maxDays = 14
+        }
     }
 }
 
+$maxDays = if ($Settings -and $null -ne $Settings.maxDays) { [int]$Settings.maxDays } else { 14 }
+
 if ($Action -eq 'Check') {
-    Write-Host "Dry run preview: would perform my task." -ForegroundColor Yellow
+    Write-Host "Dry run preview: would clean items older than $maxDays days." -ForegroundColor Yellow
     return
 }
 
-Write-Host "Executing custom task..." -ForegroundColor Green
+Write-Host "Executing custom task (maxDays=$maxDays)..." -ForegroundColor Green
 ```
-FreeWinly automatically discovers new modules, queries their metadata, adds them to the menu, and runs them in numerical order.
 
 ---
 
@@ -303,30 +324,66 @@ When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Wi
 **How FreeWinly safely handles this:**
 * **Active tools are ignored:** If an interceptor file exists on your drive (e.g. you still actively use CCleaner or Process Explorer), FreeWinly reports it as an informational note and leaves it completely untouched. You can run FreeWinly alongside any tools you choose.
 * **Broken pointers are repaired:** FreeWinly only acts when the target helper file no longer exists on disk. It safely deletes the dead pointer, immediately restoring direct launching without touching your files or shortcuts.
-* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `12_app_launch_repair` fixes it in one click.
+* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's module `freewinly-repair-applaunch` fixes it in one click.
 
 ---
 
 ## Configuration and Exclusions
 
-FreeWinly stores settings in `config.json`:
+FreeWinly stores global settings and per-module scoped settings in `config.json`. The top-to-bottom key order inside `modulesExecutionOrder` defines the exact sequence in which modules are displayed and executed:
 
 ```json
 {
-  "excluded": [
-    "Blizzard.BattleNet",
-    "EpicGames.EpicGamesLauncher"
-  ],
-  "enabledModules": [
-    "20_software_updates",
-    "30_cache_cleanup",
-    "31_ssd_trim"
-  ],
-  "cleanupTempMinAgeDays": 7
+  "countdownSeconds": 10,
+  "scheduleType": "Disabled",
+  "scheduleDay": "Sunday",
+  "scheduleTime": "12:00",
+  "modulesExecutionOrder": {
+    "freewinly-check-hardware": {
+      "enabled": true
+    },
+    "freewinly-check-eventlog": {
+      "enabled": true,
+      "lookbackDays": 7
+    },
+    "freewinly-repair-applaunch": {
+      "enabled": true
+    },
+    "freewinly-update-software": {
+      "enabled": true,
+      "excluded": [
+        "Blizzard.BattleNet",
+        "EpicGames.EpicGamesLauncher"
+      ]
+    },
+    "freewinly-update-windows": {
+      "enabled": false
+    },
+    "freewinly-clean-cache": {
+      "enabled": true,
+      "minAgeDays": 7,
+      "cleanRecycleBin": false
+    },
+    "freewinly-trim-ssd": {
+      "enabled": true,
+      "excludedDrives": [
+        "D"
+      ],
+      "minIntervalDays": 30,
+      "lastRun": null
+    },
+    "freewinly-defrag-hdd": {
+      "enabled": true,
+      "excludedDrives": [],
+      "minIntervalDays": 30,
+      "lastRun": null
+    }
+  }
 }
 ```
 
-* **Excluding Self-Updating Launchers:** Add app IDs or names to `excluded` so Winget skips them.
+* **Per-Drive Storage Controls (`excludedDrives` & `minIntervalDays`):** Exclude specific drive letters (e.g. `"D"`) from SSD TRIM or HDD Defrag, or set `minIntervalDays` (e.g. `30` for monthly TRIM) so FreeWinly automatically records `lastRun` and skips the drive until the interval elapses.
+* **Excluding Self-Updating Launchers:** Add app IDs or names to `modulesExecutionOrder.freewinly-update-software.excluded` so Winget skips them.
 * **Temporary Postponements:**  
   To postpone an update while working on an important project, you can add an entry with an expiration date:  
   ```json

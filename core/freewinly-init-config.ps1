@@ -1,17 +1,18 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly First-Run Onboarding & Configuration Wizard.
+    FreeWinly Configuration Initializer & Winget Exclusion Wizard.
 .DESCRIPTION
     Scans installed packages via WinGet to identify standalone or self-updating applications
     with unknown version reporting, allowing the user to exclude them from automated upgrades.
-    Generates or updates config.json with dynamically discovered default modules.
+    Generates or updates config.json with dynamically discovered modules, their execution order,
+    and each module's communicated DefaultSettings.
 .PARAMETER ConfigPath
     Optional path to the configuration JSON file (defaults to .\config.json in project root).
 .EXAMPLE
-    .\core\onboarding.ps1
+    .\core\freewinly-init-config.ps1
 .EXAMPLE
-    .\core\onboarding.ps1 -ConfigPath "C:\path\to\config.json"
+    .\core\freewinly-init-config.ps1 -ConfigPath "C:\path\to\config.json"
 #>
 [CmdletBinding()]
 param(
@@ -29,7 +30,7 @@ if (-not $ConfigPath) {
 
 Clear-Host
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "        FreeWinly v1.1.0 - First-Run Onboarding Setup       " -ForegroundColor White
+Write-Host "     FreeWinly v1.2.0 - Configuration & Exclusion Wizard    " -ForegroundColor White
 Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
 Write-Host "============================================================`n" -ForegroundColor Cyan
 
@@ -37,13 +38,17 @@ $existingConfig = if (Test-Path $ConfigPath) {
     try { Get-Content $ConfigPath -Raw | ConvertFrom-Json } catch { $null }
 } else { $null }
 
-$detectedExcludes = [System.Collections.Generic.List[string]]::new()
-if ($existingConfig -and $existingConfig.excluded) {
-    foreach ($ex in $existingConfig.excluded) {
-        if ($ex -is [string] -and -not $detectedExcludes.Contains($ex)) {
-            $detectedExcludes.Add($ex)
-        }
-    }
+$detectedExcludes = [System.Collections.Generic.List[object]]::new()
+
+# Preserve existing exclusions (from v1.2.0 module settings or legacy root excluded)
+$existingExcludedList = if ($existingConfig -and $existingConfig.modulesExecutionOrder -and $existingConfig.modulesExecutionOrder.'freewinly-update-software' -and $existingConfig.modulesExecutionOrder.'freewinly-update-software'.excluded) {
+    $existingConfig.modulesExecutionOrder.'freewinly-update-software'.excluded
+} elseif ($existingConfig -and $existingConfig.excluded) {
+    $existingConfig.excluded
+} else { @() }
+
+foreach ($ex in $existingExcludedList) {
+    $detectedExcludes.Add($ex)
 }
 
 if (Get-Command winget -ErrorAction SilentlyContinue) {
@@ -66,9 +71,8 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
                         $verLen  = [math]::Min($availStart - $verStart, $line.Length - $verStart)
                         $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
 
-                        # If version contains no digits (e.g. 'Unknown', 'Unbekannt', 'Inconnu', '<unknown>')
                         if ($verText -and $verText -notmatch '\d' -and $pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
-                            if (-not $detectedExcludes.Contains($pkgId)) {
+                            if (-not ($detectedExcludes -contains $pkgId)) {
                                 Write-Host "Detected independent app: $appName (ID: $pkgId)" -ForegroundColor Yellow
                                 $choice = Read-Host "Exclude '$pkgId' from automated Winget upgrades? (Y/n) [Default: Y]"
                                 if ($choice -notmatch '^[Nn]$') {
@@ -86,30 +90,53 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
     }
 }
 
-$enabled = if ($existingConfig -and $existingConfig.enabledModules) {
-    $existingConfig.enabledModules
-} else {
-    @(Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue | Sort-Object Name | Where-Object {
-        try { (& $_.FullName -Action Info).Default -eq $true } catch { $true }
-    } | Select-Object -ExpandProperty BaseName)
+# Discover modules and sort by their communicated Order property
+$rawModules = [System.Collections.Generic.List[PSCustomObject]]::new()
+foreach ($mf in (Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue)) {
+    try {
+        $info = & $mf.FullName -Action Info -ErrorAction Stop
+        if ($info -and $info.Name) {
+            $rawModules.Add([PSCustomObject]@{
+                BaseName        = $mf.BaseName
+                Order           = if ($null -ne $info.Order) { [int]$info.Order } else { 99 }
+                Default         = if ($null -ne $info.Default) { [bool]$info.Default } else { $false }
+                DefaultSettings = if ($info.DefaultSettings) { $info.DefaultSettings } else { [ordered]@{} }
+            })
+        }
+    } catch { }
+}
+
+$sortedModules = $rawModules | Sort-Object Order, BaseName
+$modulesExecutionOrder = [ordered]@{}
+
+foreach ($m in $sortedModules) {
+    $modBlock = [ordered]@{
+        enabled = $m.Default
+    }
+    if ($m.DefaultSettings) {
+        $keys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) { $m.DefaultSettings.Keys } else { $m.DefaultSettings.PSObject.Properties.Name }
+        foreach ($k in $keys) {
+            $modBlock[$k] = $m.DefaultSettings[$k]
+        }
+    }
+    if ($m.BaseName -eq 'freewinly-update-software') {
+        $modBlock['excluded'] = @($detectedExcludes)
+    }
+    $modulesExecutionOrder[$m.BaseName] = $modBlock
 }
 
 $newConfig = [ordered]@{
-    preCommands           = if ($existingConfig -and $existingConfig.preCommands) { @($existingConfig.preCommands) } else { @() }
-    uninstall             = if ($existingConfig -and $existingConfig.uninstall) { @($existingConfig.uninstall) } else { @() }
-    install               = if ($existingConfig -and $existingConfig.install) { @($existingConfig.install) } else { @() }
-    excluded              = @($detectedExcludes)
-    postCommands          = if ($existingConfig -and $existingConfig.postCommands) { @($existingConfig.postCommands) } else { @() }
-    enabledModules        = @($enabled)
-    cleanupTempMinAgeDays = if ($existingConfig -and $existingConfig.cleanupTempMinAgeDays) { [int]$existingConfig.cleanupTempMinAgeDays } else { 7 }
-    eventLogLookbackDays  = if ($existingConfig -and $existingConfig.eventLogLookbackDays) { [int]$existingConfig.eventLogLookbackDays } else { 7 }
-    hddDefragMinDays      = if ($existingConfig -and $existingConfig.hddDefragMinDays) { [int]$existingConfig.hddDefragMinDays } else { 30 }
     countdownSeconds      = if ($existingConfig -and $null -ne $existingConfig.countdownSeconds) { [int]$existingConfig.countdownSeconds } else { 10 }
     scheduleType          = if ($existingConfig -and $existingConfig.scheduleType) { $existingConfig.scheduleType } else { "Weekly" }
     scheduleDay           = if ($existingConfig -and $existingConfig.scheduleDay) { $existingConfig.scheduleDay } else { "Sunday" }
     scheduleTime          = if ($existingConfig -and $existingConfig.scheduleTime) { $existingConfig.scheduleTime } else { "12:00" }
+    preCommands           = if ($existingConfig -and $existingConfig.preCommands) { @($existingConfig.preCommands) } else { @() }
+    uninstall             = if ($existingConfig -and $existingConfig.uninstall) { @($existingConfig.uninstall) } else { @() }
+    install               = if ($existingConfig -and $existingConfig.install) { @($existingConfig.install) } else { @() }
+    postCommands          = if ($existingConfig -and $existingConfig.postCommands) { @($existingConfig.postCommands) } else { @() }
+    modulesExecutionOrder = $modulesExecutionOrder
 }
 
-$newConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $ConfigPath -Encoding UTF8
+$newConfig | ConvertTo-Json -Depth 6 | Out-File -FilePath $ConfigPath -Encoding UTF8
 Write-Host "`nConfiguration saved to: $ConfigPath" -ForegroundColor Green
 Start-Sleep -Seconds 2

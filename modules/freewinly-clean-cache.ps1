@@ -7,46 +7,44 @@
     DirectX shader caches, and local crash dump archives. Files newer than the minimum
     age threshold (default: 7 days) are preserved to avoid disrupting running processes.
 .PARAMETER Action
-    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Calculates files and reclaimable bytes without deleting anything.
     'Run'   - Deletes files meeting the age criteria.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json (reads cleanupTempMinAgeDays).
+.PARAMETER Settings
+    Optional module settings object or hashtable (supports minAgeDays and cleanRecycleBin).
 .PARAMETER LogFile
     Optional file path to append cleanup statistics.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\30_cache_cleanup.ps1 -Action Check
+    .\modules\freewinly-clean-cache.ps1 -Action Check
 .EXAMPLE
-    .\modules\30_cache_cleanup.ps1 -Action Run
+    .\modules\freewinly-clean-cache.ps1 -Action Run -Settings @{ minAgeDays = 14 }
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
-$minAgeDays = if ($Config -and $Config.cleanupTempMinAgeDays) { $Config.cleanupTempMinAgeDays } else { 7 }
+$minAgeDays = if ($Settings -and $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "Safe Cache & Temp Cleanup (>$minAgeDays days)"
-        Description   = "Safely purges temporary user & system files, installer caches, crash dumps and shader caches older than $minAgeDays days"
-        Default       = $true
-        RequiresAdmin = $false
-        Options       = @{
-            MinAgeDays      = $minAgeDays
-            CleanRecycleBin = if ($Config -and $Config.cleanRecycleBin) { [bool]$Config.cleanRecycleBin } else { $false }
+        Name            = "Safe Cache & Temp Cleanup (>$minAgeDays days)"
+        Description     = "Safely purges temporary user & system files, installer caches, crash dumps and shader caches"
+        Order           = 30
+        Default         = $true
+        RequiresAdmin   = $false
+        DefaultSettings = [ordered]@{
+            minAgeDays      = 7
+            cleanRecycleBin = $false
         }
     }
 }
 
-Write-Host "`n--- [Module 30] Safe Cache & Temp Cleanup [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-clean-cache] Safe Cache & Temp Cleanup [$Action] ---" -ForegroundColor Cyan
 
 $cutoff = (Get-Date).AddDays(-$minAgeDays)
 $wuCutoff = (Get-Date).AddDays(-([math]::Max($minAgeDays, 14)))
@@ -125,7 +123,7 @@ if ($Action -eq 'Check') {
 }
 
 # Optional Recycle Bin Emptying (if explicitly enabled in config)
-if ($Config -and $Config.cleanRecycleBin -eq $true) {
+if ($Settings -and $Settings.cleanRecycleBin -eq $true) {
     Write-Host "Emptying Recycle Bin..." -ForegroundColor Gray
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
     Write-Host "Recycle Bin emptied." -ForegroundColor Green

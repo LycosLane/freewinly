@@ -8,45 +8,43 @@
     Filters out background DCOM noise and provides guidance for identified error sources.
     This module is read-only and does not clear or alter event logs.
 .PARAMETER Action
-    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Info'  - Outputs module metadata (Name, Description, Order, Default, RequiresAdmin, DefaultSettings).
     'Check' - Inspects recent event logs and displays recurring patterns.
     'Run'   - Scans recent event logs and records findings to the log file.
-.PARAMETER Config
-    Optional PSCustomObject loaded from config.json (reads eventLogLookbackDays).
+.PARAMETER Settings
+    Optional module settings object or hashtable (supports lookbackDays).
 .PARAMETER LogFile
     Optional file path to append diagnostic results.
-.PARAMETER Options
-    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\11_event_log_health.ps1 -Action Check
+    .\modules\freewinly-check-eventlog.ps1 -Action Check
 .EXAMPLE
-    .\modules\11_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
+    .\modules\freewinly-check-eventlog.ps1 -Action Run -Settings @{ lookbackDays = 14 }
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Info', 'Check', 'Run')]
     [string]$Action = 'Run',
 
-    [PSCustomObject]$Config = $null,
-    [string]$LogFile = $null,
-    [hashtable]$Options = @{}
+    [object]$Settings = $null,
+    [string]$LogFile = $null
 )
 
-$days = if ($Config -and $Config.eventLogLookbackDays) { [int]$Config.eventLogLookbackDays } else { 7 }
+$days = if ($Settings -and $Settings.lookbackDays) { [int]$Settings.lookbackDays } else { 7 }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name          = "System Stability & Event Logs (Last $days days)"
-        Description   = "Scans Windows Event Logs for recurring application crashes, BSODs, and hardware errors with plain-language advice"
-        Default       = $true
-        RequiresAdmin = $false
-        Options       = @{
-            LookbackDays = $days
+        Name            = "System Stability & Event Logs"
+        Description     = "Scans Windows Event Logs for recurring application crashes, BSODs, and hardware errors with plain-language advice"
+        Order           = 11
+        Default         = $true
+        RequiresAdmin   = $false
+        DefaultSettings = [ordered]@{
+            lookbackDays = 7
         }
     }
 }
 
-Write-Host "`n--- [Module 11] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
+Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
 Write-Host "Lookback window: Last $days day(s) (Application & System error logs)" -ForegroundColor Gray
 
 $start = (Get-Date).AddDays(-$days)

@@ -1,22 +1,46 @@
 {
-  "preCommands": [],
-  "uninstall": [],
-  "install": [],
-  "excluded": [],
-  "postCommands": [],
-  "enabledModules": [
-    "10_hardware_health",
-    "11_event_log_health",
-    "12_app_launch_repair",
-    "20_software_updates",
-    "30_cache_cleanup",
-    "31_ssd_trim"
-  ],
-  "cleanupTempMinAgeDays": 7,
-  "eventLogLookbackDays": 7,
-  "hddDefragMinDays": 30,
   "countdownSeconds": 10,
   "scheduleType": "Weekly",
   "scheduleDay": "Sunday",
-  "scheduleTime": "12:00"
+  "scheduleTime": "12:00",
+  "preCommands": [],
+  "uninstall": [],
+  "install": [],
+  "postCommands": [],
+  "modulesExecutionOrder": {
+    "freewinly-check-hardware": {
+      "enabled": true
+    },
+    "freewinly-check-eventlog": {
+      "enabled": true,
+      "lookbackDays": 7
+    },
+    "freewinly-repair-applaunch": {
+      "enabled": true
+    },
+    "freewinly-update-software": {
+      "enabled": true,
+      "excluded": []
+    },
+    "freewinly-update-windows": {
+      "enabled": false
+    },
+    "freewinly-clean-cache": {
+      "enabled": true,
+      "minAgeDays": 7,
+      "cleanRecycleBin": false
+    },
+    "freewinly-trim-ssd": {
+      "enabled": true,
+      "excludedDrives": [],
+      "minIntervalDays": 0,
+      "lastRun": null
+    },
+    "freewinly-defrag-hdd": {
+      "enabled": false,
+      "excludedDrives": [],
+      "minIntervalDays": 30,
+      "lastRun": null
+    }
+  }
 }
