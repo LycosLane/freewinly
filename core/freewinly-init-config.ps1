@@ -59,13 +59,12 @@ if (Test-Path $updateModule) {
     try {
         $availablePackages = & $updateModule -Action Scan -ErrorAction Stop
         foreach ($pkg in $availablePackages) {
-            $isDevRuntime    = ($pkg.Id -match '^(OpenJS\.NodeJS|Python\.Python|GoLang\.Go|Docker\.DockerDesktop|Git\.Git|Rustlang\.Rustup)')
+            # Detect applications with non-numeric / missing versions (frequently cause infinite upgrade loops in WinGet)
             $hasVersionQuirk = ($pkg.InstalledVersion -and $pkg.InstalledVersion -notmatch '\d')
 
-            if ($hasVersionQuirk -or $isDevRuntime) {
+            if ($hasVersionQuirk) {
                 if (-not ($detectedExcludes -contains $pkg.Id)) {
-                    $reason = if ($isDevRuntime) { "developer runtime / toolchain" } else { "independent auto-updater" }
-                    Write-Host "Detected $reason: $($pkg.Name) (ID: $($pkg.Id))" -ForegroundColor Yellow
+                    Write-Host "Detected app with version quirk: $($pkg.Name) (ID: $($pkg.Id))" -ForegroundColor Yellow
                     $choice = Read-Host "Exclude '$($pkg.Id)' from automated Winget upgrades? (Y/n) [Default: Y]"
                     if ($choice -notmatch '^[Nn]$') {
                         $detectedExcludes.Add($pkg.Id)
@@ -75,9 +74,6 @@ if (Test-Path $updateModule) {
             }
         }
     } catch {
-        Write-Host "Winget scan skipped: $($_.Exception.Message)" -ForegroundColor Gray
-    }
-}
         Write-Host "Winget scan skipped: $($_.Exception.Message)" -ForegroundColor Gray
     }
 }

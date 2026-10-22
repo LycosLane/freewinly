@@ -472,7 +472,7 @@ FreeWinly stores global settings and per-module scoped settings in `config.json`
   - **`config.last-good.json`:** A verified snapshot is saved after runs that finish without unhandled errors.
   - **Syntax corruption recovery:** Corrupted JSON files are never overwritten or deleted. In interactive mode, FreeWinly displays the error and offers `[R]` to restore from backup; in automated runs, it runs safely in memory using the last good configuration.
 * **Per-Drive Storage Controls (`excludedDrives` & `minIntervalDays`):** Exclude specific drive letters (e.g. `"D"`) from SSD TRIM or HDD Defrag, or set `minIntervalDays` (e.g. `30` for monthly TRIM) so FreeWinly automatically records `lastRun` and skips the drive until the interval elapses.
-* **Excluding Self-Updating Launchers:** Add app IDs or names to `modulesExecutionOrder.freewinly-update-software.excluded` so Winget skips them.
+* **Excluding Self-Updating Launchers & Pinned Runtimes:** Add app IDs or names (e.g. `"Blizzard.BattleNet"`, or pinned developer runtimes like `"OpenJS.NodeJS"`, `"Python.Python.3.11"`) to `modulesExecutionOrder.freewinly-update-software.excluded` in `config.json` so Winget skips them.
 * **Temporary Postponements:**  
   To postpone an update while working on an important project, you can add an entry with an expiration date:  
   ```json
