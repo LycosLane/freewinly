@@ -59,15 +59,18 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "System Stability & Event Logs"
-        Description     = "Scans Windows Event Logs for recurring application crashes, BSODs, and hardware errors with plain-language advice"
-        Order           = 11
-        Default         = $true
-        RequiresAdmin   = $false
-        DefaultSettings = [ordered]@{
+        Name                 = "System Stability & Event Logs"
+        Description          = "Scans Windows Event Logs for recurring application crashes, BSODs, and hardware errors with plain-language advice"
+        Order                = 11
+        Default              = $true
+        RequiresAdmin        = $false
+        DefaultSettings      = [ordered]@{
             lookbackDays = 7
             startDate    = $null
             endDate      = $null
+        }
+        SettingsDescriptions = [ordered]@{
+            lookbackDays = "Number of days back to scan Windows Event Logs"
         }
     }
 }

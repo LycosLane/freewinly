@@ -30,15 +30,18 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "SSD TRIM Optimization"
-        Description     = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
-        Order           = 31
-        Default         = $true
-        RequiresAdmin   = $true
-        DefaultSettings = [ordered]@{
+        Name                 = "SSD TRIM Optimization"
+        Description          = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
+        Order                = 34
+        Default              = $true
+        RequiresAdmin        = $true
+        DefaultSettings      = [ordered]@{
             excludedDrives  = @()
             minIntervalDays = 0
             lastRun         = $null
+        }
+        SettingsDescriptions = [ordered]@{
+            minIntervalDays = "Minimum days between SSD TRIM runs (0 = every run)"
         }
     }
 }

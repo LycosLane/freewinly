@@ -123,12 +123,13 @@ $activeApps = @($activeHooks | Select-Object -ExpandProperty AppName -Unique)
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "App Launch Repair (Sleep Hooks)"
-        Description     = "Repairs applications blocked by missing launch interceptors (e.g. from uninstalled sleep utilities)"
-        Order           = 12
-        Default         = $true
-        RequiresAdmin   = ($brokenHooks.Count -gt 0)
-        DefaultSettings = [ordered]@{}
+        Name                 = "App Launch Repair (Sleep Hooks)"
+        Description          = "Repairs applications blocked by missing launch interceptors (e.g. from uninstalled sleep utilities)"
+        Order                = 12
+        Default              = $true
+        RequiresAdmin        = ($brokenHooks.Count -gt 0)
+        DefaultSettings      = [ordered]@{}
+        SettingsDescriptions = [ordered]@{}
     }
 }
 

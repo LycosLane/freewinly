@@ -30,12 +30,13 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "Hardware & Driver Health"
-        Description     = "Scans Windows Device Manager for hardware faults and missing drivers with actionable advice"
-        Order           = 10
-        Default         = $true
-        RequiresAdmin   = $false
-        DefaultSettings = [ordered]@{}
+        Name                 = "Hardware & Driver Health"
+        Description          = "Scans Windows Device Manager for hardware faults and missing drivers with actionable advice"
+        Order                = 10
+        Default              = $true
+        RequiresAdmin        = $false
+        DefaultSettings      = [ordered]@{}
+        SettingsDescriptions = [ordered]@{}
     }
 }
 

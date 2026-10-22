@@ -32,14 +32,18 @@ $minAgeDays = if ($Settings -and $Settings.minAgeDays) { [int]$Settings.minAgeDa
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "Safe Cache & Temp Cleanup (>$minAgeDays days)"
-        Description     = "Safely purges temporary user & system files, installer caches, crash dumps and shader caches"
-        Order           = 30
-        Default         = $true
-        RequiresAdmin   = $false
-        DefaultSettings = [ordered]@{
+        Name                 = "Safe Cache & Temp Cleanup (>$minAgeDays days)"
+        Description          = "Safely purges temporary user & system files, installer caches, crash dumps and shader caches"
+        Order                = 30
+        Default              = $true
+        RequiresAdmin        = $false
+        DefaultSettings      = [ordered]@{
             minAgeDays      = 7
             cleanRecycleBin = $false
+        }
+        SettingsDescriptions = [ordered]@{
+            minAgeDays      = "Minimum file age in days before deleting temp files"
+            cleanRecycleBin = "Empty Windows Recycle Bin during cleanup"
         }
     }
 }

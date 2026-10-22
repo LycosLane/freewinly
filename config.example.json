@@ -1,5 +1,7 @@
 {
   "countdownSeconds": 10,
+  "submenuView": "Hidden",
+  "expandedModules": [],
   "scheduleType": "Weekly",
   "scheduleDay": "Sunday",
   "scheduleTime": "12:00",
@@ -29,6 +31,28 @@
       "enabled": true,
       "minAgeDays": 7,
       "cleanRecycleBin": false
+    },
+    "freewinly-clean-browsers": {
+      "enabled": true,
+      "minAgeDays": 3,
+      "cleanEdge": true,
+      "cleanChrome": true,
+      "cleanFirefox": true,
+      "cleanBrave": true,
+      "cleanDesktopApps": true
+    },
+    "freewinly-clean-network": {
+      "enabled": true,
+      "flushDns": true,
+      "clearArpCache": true,
+      "checkConnectivity": true,
+      "clearNetBios": false,
+      "resetWinsock": false
+    },
+    "freewinly-clean-winsxs": {
+      "enabled": false,
+      "verifySystemFiles": false,
+      "resetBase": false
     },
     "freewinly-trim-ssd": {
       "enabled": true,

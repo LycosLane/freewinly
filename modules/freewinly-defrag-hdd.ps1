@@ -31,16 +31,19 @@ param(
 if ($Action -eq 'Info') {
     $hasHDD = @(Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'HDD' }).Count -gt 0
     return [PSCustomObject]@{
-        Name            = "Mechanical HDD Defragmentation"
-        Description     = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
-        Order           = 32
-        Default         = $false
-        RequiresAdmin   = $true
-        Applicable      = $hasHDD
-        DefaultSettings = [ordered]@{
+        Name                 = "Mechanical HDD Defragmentation"
+        Description          = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
+        Order                = 35
+        Default              = $false
+        RequiresAdmin        = $true
+        Applicable           = $hasHDD
+        DefaultSettings      = [ordered]@{
             excludedDrives  = @()
             minIntervalDays = 30
             lastRun         = $null
+        }
+        SettingsDescriptions = [ordered]@{
+            minIntervalDays = "Minimum days between HDD defragmentation runs"
         }
     }
 }

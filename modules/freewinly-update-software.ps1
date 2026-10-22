@@ -30,14 +30,15 @@ param(
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
-        Name            = "Software Updates (Winget)"
-        Description     = "Checks and installs pending Winget application updates (skipping excluded packages)"
-        Order           = 20
-        Default         = $true
-        RequiresAdmin   = $false
-        DefaultSettings = [ordered]@{
+        Name                 = "Software Updates (Winget)"
+        Description          = "Checks and installs pending Winget application updates (skipping excluded packages)"
+        Order                = 20
+        Default              = $true
+        RequiresAdmin        = $false
+        DefaultSettings      = [ordered]@{
             excluded = @()
         }
+        SettingsDescriptions = [ordered]@{}
     }
 }
 

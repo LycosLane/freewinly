@@ -32,6 +32,9 @@ FreeWinly/
     ├── freewinly-update-software.ps1    <-- Winget updates (respects per-module exclusions)
     ├── freewinly-update-windows.ps1     <-- Native Windows OS & Defender Updates
     ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days)
+    ├── freewinly-clean-browsers.ps1     <-- Disposable browser & desktop app cache cleanup
+    ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics
+    ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification
     ├── freewinly-trim-ssd.ps1           <-- SSD NVMe TRIM ReTrim optimization
     └── freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defrag (auto-skips on SSD-only PCs)
 ```
@@ -100,16 +103,19 @@ The AI agent should:
 * **Unattended Mode:** If no key is pressed, it executes default tasks and cleanly exits.
 * **Interactive Mode:** Pressing any key opens the interactive console menu.
 
-### 2. Interactive Checkbox Menu & Hotkeys
-* Navigate with **[Up/Down]** arrows.
-* Toggle individual modules with **[Space]** (`[x]` / `[ ]`).
-* Reorder module execution sequence with **[+]** / **[-]** (`Move Up` / `Move Down`).
+### 2. Interactive Tree-View Menu (`[+]` / `[-]`) & Hotkeys
+* Navigate with **[Up/Down]** arrows across modules, editable sub-options, and action items.
+* Toggle individual modules or boolean sub-options with **[Space]** (`[x]` / `[ ]`).
+* Expand or collapse sub-options for the highlighted module with **[Tab]**.
+* Fine-tune sub-options with **[Left/Right]** arrows (collapse/expand, toggle bools, step integer slider presets).
+* Reorder module execution sequence with **[+]** / **[-]** (`Move Up` / `Move Down`), keeping selection anchored.
 * **[ Enter ]** -> **Run All Checked Tasks [x]** (executes all checked modules immediately; prompts for UAC only if required).
 * **[ C ] / [ A ]** -> **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
+* **[ E ]** -> **Cycle Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`).
 * **[ T ]** -> **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
 * **[ W ]** -> **Schedule Maintenance in Windows Task Scheduler** (interactive panel with `D` weekday cycler and `+`/`-` hour adjustments).
 * **[ P ]** -> **Toggle User `PATH` CLI Auto-Complete** (adds/removes FreeWinly in the current User's `PATH` without requiring Admin rights).
-* **[ S ]** -> **Save Selection & Order as Default** (saves current checkboxes, execution order, and timer to `config.json` for future runs).
+* **[ S ]** -> **Save Selection & Order as Default** (saves current checkboxes, execution order, sub-options, view mode, and timer to `config.json`).
 * **[ O ]** -> **Run Configuration & Exclusion Wizard** (detects standalone/unknown packages).
 * **[ I ]** -> **Install or Update Start Menu Launcher**.
 * **[ U ]** -> **Complete Uninstaller** (previews and removes Task Scheduler jobs, shortcuts, User `PATH`, and application directory).

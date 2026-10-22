@@ -60,9 +60,12 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 
 - **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
 - **Auto-Start Countdown:** Counts down 10 seconds before running default tasks automatically. Press any key to open the interactive menu.
-- **Interactive Console Menu:** Toggle tasks on or off with `[Space]`, reorder execution sequence with `[+]` / `[-]`, run them immediately with `[Enter]`, or save your selection and order as default with `[S]`.
+- **Expandable Tree-View Menu (`[+]` / `[-]`):** Pure 7-bit ASCII tree view. Toggle tasks with `[Space]`, expand/collapse per-module sub-options with `[Tab]` or `[Left/Right]`, adjust numeric sliders, cycle view modes with `[E]`, reorder with `[+]` / `[-]`, and run immediately with `[Enter]`.
+- **Browser & App Cache Cleanup:** Purges disposable shader, code, and disk caches across Microsoft Edge, Chrome, Firefox, LibreWolf, Brave, Vivaldi, Opera, Discord, Teams, Slack, Spotify, Steam, and VS Code. Strictly preserves cookies, logins, and sessions; automatically skips running applications.
+- **Network Cache & Connectivity Diagnostics:** Tests active adapters, default gateway reachability, and DNS resolution latency. Flushes the DNS resolver cache, purges stale ARP neighbor routes, and provides optional NetBIOS reload and Winsock reset.
+- **Windows Component Store Cleanup (DISM):** Analyzes component store health and safely purges superseded Windows Update payloads from `C:\Windows\WinSxS` via native DISM, with optional `/ResetBase` and System File Checker (`sfc /verifyonly`) validation.
 - **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only, with per-drive exclusions and minimum interval controls.
-- **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
+- **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than configured threshold (default: 7 days) to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
 - **App Launch Repair:** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities. [Learn more](#deep-dive-app-launch-interceptions--sleep-tools)
 - **Modular Architecture & CLI Auto-Complete:** Every core tool and maintenance task uses standardized `freewinly-<verb>-<noun>.ps1` names with optional User `PATH` registration (`[P]`) and strict AST/metadata validation. [Read the architecture deep dive](#modular-architecture)
@@ -105,22 +108,33 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-           FreeWinly - Open Source Windows Engine           
+         FreeWinly v1.3.0 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
-Use [Up/Down] to navigate, [Space] to toggle, [+/-] to reorder, [Enter] to run:
+Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
 
-  [x] Hardware & Driver Health
-  [x] System Stability & Event Logs (Last 7d)
-  [x] Broken App Launch & Sleep Repair [Admin]
-  [x] Software Updates (Winget)
-  [ ] Windows OS & Security Updates [Admin]
-  [x] Safe Cache & Temp Cleanup (>7 days)
-  [x] SSD TRIM Optimization [Admin]
+  [x]     Hardware & Driver Health
+  [x] [-] System Stability & Event Logs (Last 7d)
+            < 7d > Number of days back to scan Windows Event Logs
+  [x]     App Launch Repair (Sleep Hooks)
+  [x]     Software Updates (Winget)
+  [ ]     Windows OS & Security Updates [Admin]
+  [x] [+] Safe Cache & Temp Cleanup (>7 days)
+  [x] [-] Browser & App Cache Cleanup
+            < 3d > Minimum file age in days before purging cache files
+            [x] Microsoft Edge disk & shader caches (skips if open)
+            [x] Google Chrome disk & shader caches (skips if open)
+            [x] Mozilla Firefox & LibreWolf disk cache (skips if open)
+            [x] Brave, Vivaldi & Opera Chromium caches (skips if open)
+            [x] Desktop app caches: Discord, Teams, Slack, Spotify, Steam, VS Code (skips if open)
+  [x] [+] Network Cache & Connectivity
+  [ ] [+] Windows Component Store Cleanup (DISM) [Admin]
+  [x] [+] SSD TRIM Optimization [Admin]
 
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
+  [   E   ]  Sub-Options View: [ Custom ] (Press E: Hidden, Custom, Expanded)
   [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle)
   [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
   [   P   ]  User PATH CLI Auto-Complete: [ Disabled ] (Press P to toggle)
@@ -133,15 +147,18 @@ Use [Up/Down] to navigate, [Space] to toggle, [+/-] to reorder, [Enter] to run:
 
 | Key | Action |
 | :--- | :--- |
-| **`Up` / `Down`** | Navigate between modules and actions |
-| **`Space`** | Toggle module checkbox `[x]` / `[ ]` |
-| **`+` / `-`** | Move the highlighted module up or down in the execution order |
+| **`Up` / `Down`** | Navigate between modules, editable sub-options, and action items |
+| **`Space`** | Toggle module / boolean sub-option `[x]` / `[ ]`, cycle integer slider preset, or execute selected action |
+| **`Tab`** | Expand or collapse sub-options `[+]` / `[-]` for the highlighted module |
+| **`Left` / `Right`** | Collapse / expand module tree, toggle sub-option, or step integer sliders down / up |
+| **`+` / `-`** | Move highlighted module up or down in the execution pipeline order |
 | **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
-| **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, and cache without modifying system) |
+| **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, caches without modifying system) |
+| **`E`** | Cycle **Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
 | **`W`** | Open **Windows Task Scheduler** panel (press `D` to cycle weekdays, `+`/`-` to adjust hours, `Enter` to save) |
 | **`P`** | Toggle **User `PATH` CLI Auto-Complete** (registers FreeWinly in your user `PATH` without needing Admin rights) |
-| **`S`** | Save current checkbox selection, module execution order, and timer to `config.json` as permanent defaults |
+| **`S`** | Save current module selection, order, sub-options, and view mode to `config.json` as permanent defaults |
 | **`O`** | Run configuration & exclusion wizard (scans for standalone apps and suggests exclusions) |
 | **`I`** | Install or update Start Menu launcher (`FreeWinly.lnk`) |
 | **`U`** | Complete **Uninstaller** (previews and removes Task Scheduler tasks, shortcuts, User `PATH`, and files) |
@@ -248,7 +265,10 @@ FreeWinly/
     ├── freewinly-repair-applaunch.ps1   <-- Restores apps broken by dead sleep hooks & debuggers
     ├── freewinly-update-software.ps1    <-- Winget updates with per-app exclusions & postponements
     ├── freewinly-update-windows.ps1     <-- Windows Update COM API
-    ├── freewinly-clean-cache.ps1        <-- Temp & cache cleaning (> 7 days)
+    ├── freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days)
+    ├── freewinly-clean-browsers.ps1     <-- Disposable browser & desktop app cache cleanup
+    ├── freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics
+    ├── freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification
     ├── freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization
     └── freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs)
 ```

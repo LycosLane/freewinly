@@ -30,7 +30,7 @@ if (-not $ConfigPath) {
 
 Clear-Host
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "     FreeWinly v1.2.0 - Configuration & Exclusion Wizard    " -ForegroundColor White
+Write-Host "     FreeWinly v1.3.0 - Configuration & Exclusion Wizard    " -ForegroundColor White
 Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
 Write-Host "============================================================`n" -ForegroundColor Cyan
 
@@ -127,6 +127,8 @@ foreach ($m in $sortedModules) {
 
 $newConfig = [ordered]@{
     countdownSeconds      = if ($existingConfig -and $null -ne $existingConfig.countdownSeconds) { [int]$existingConfig.countdownSeconds } else { 10 }
+    submenuView           = if ($existingConfig -and $existingConfig.submenuView) { [string]$existingConfig.submenuView } else { "Hidden" }
+    expandedModules       = if ($existingConfig -and $existingConfig.expandedModules) { @($existingConfig.expandedModules) } else { @() }
     scheduleType          = if ($existingConfig -and $existingConfig.scheduleType) { $existingConfig.scheduleType } else { "Weekly" }
     scheduleDay           = if ($existingConfig -and $existingConfig.scheduleDay) { $existingConfig.scheduleDay } else { "Sunday" }
     scheduleTime          = if ($existingConfig -and $existingConfig.scheduleTime) { $existingConfig.scheduleTime } else { "12:00" }

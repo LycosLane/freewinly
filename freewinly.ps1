@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.2.0 - Open Source Windows Maintenance & Optimization Engine.
+    FreeWinly v1.3.0 - Open Source Windows Maintenance & Optimization Engine.
 .DESCRIPTION
     Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, and TRIM.
     Supports headless CLI automation, interactive TUI menu, dry-run check previews,
@@ -68,7 +68,7 @@ if (-not (Test-Path $logsDir)) {
 
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.2.0 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "         FreeWinly v1.3.0 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -91,6 +91,8 @@ function Get-SafeConfig {
     }
     return [PSCustomObject]@{
         countdownSeconds      = 10
+        submenuView           = "Hidden"
+        expandedModules       = @()
         scheduleType          = "Weekly"
         scheduleDay           = "Sunday"
         scheduleTime          = "12:00"
@@ -99,6 +101,35 @@ function Get-SafeConfig {
         install               = @()
         postCommands          = @()
         modulesExecutionOrder = $null
+    }
+}
+
+function Get-IntPresets {
+    param([string]$Key)
+    if ($Key -in @('minAgeDays', 'lookbackDays')) {
+        return @(1, 3, 7, 14, 30, 60, 90)
+    }
+    return @(0, 1, 3, 7, 14, 30, 60, 90)
+}
+
+function Update-ModuleDynamicProps {
+    param([PSCustomObject]$Module)
+    if (-not $Module) { return }
+    # 1. Dynamic Admin requirement (e.g. freewinly-clean-network if clearNetBios or resetWinsock is enabled)
+    if ($Module.BaseName -eq 'freewinly-clean-network') {
+        $hasAdminOption = [bool]($Module.Settings.clearNetBios -or $Module.Settings.resetWinsock)
+        $Module.RequiresAdmin = $hasAdminOption
+    }
+    # 2. Dynamic title updates
+    if ($Module.BaseName -eq 'freewinly-clean-cache' -and $Module.Settings.minAgeDays) {
+        $Module.Name = "Safe Cache & Temp Cleanup (>$($Module.Settings.minAgeDays) days)"
+    } elseif ($Module.BaseName -eq 'freewinly-check-eventlog') {
+        if ($Module.Settings.startDate) {
+            $endLabel = if ($Module.Settings.endDate) { $Module.Settings.endDate } else { "Today" }
+            $Module.Name = "System Stability & Event Logs ($($Module.Settings.startDate) to $endLabel)"
+        } elseif ($Module.Settings.lookbackDays) {
+            $Module.Name = "System Stability & Event Logs (Last $($Module.Settings.lookbackDays)d)"
+        }
     }
 }
 
@@ -332,6 +363,8 @@ foreach ($nm in $newModules) {
     $orderedBaseNames.Add($nm.BaseName)
 }
 
+$submenuView = if ($config -and $config.submenuView) { [string]$config.submenuView } else { "Hidden" }
+$expandedCfg = if ($config -and $config.expandedModules) { @($config.expandedModules) } else { @() }
 $discoveredModules = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 foreach ($baseName in $orderedBaseNames) {
@@ -410,7 +443,44 @@ foreach ($baseName in $orderedBaseNames) {
         continue
     }
 
-    $discoveredModules.Add([PSCustomObject]@{
+    $subOptions = [System.Collections.Generic.List[PSCustomObject]]::new()
+    if ($info.SettingsDescriptions) {
+        $descKeys = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
+            $info.SettingsDescriptions.Keys
+        } else {
+            $info.SettingsDescriptions.PSObject.Properties.Name
+        }
+        foreach ($sk in $descKeys) {
+            $curVal = if ($modSettings.Contains($sk)) {
+                $modSettings[$sk]
+            } elseif ($info.DefaultSettings -and $info.DefaultSettings.Contains($sk)) {
+                $info.DefaultSettings[$sk]
+            } else { $null }
+
+            $valType = if ($curVal -is [bool]) {
+                'bool'
+            } elseif ($curVal -is [int]) {
+                'int'
+            } else {
+                if ($sk -match 'Days') { 'int' } else { 'bool' }
+            }
+
+            $subOptions.Add([PSCustomObject]@{
+                Key       = $sk
+                Label     = [string]$info.SettingsDescriptions[$sk]
+                ValueType = $valType
+            })
+        }
+    }
+
+    $hasSubs = ($subOptions.Count -gt 0)
+    $isExpanded = switch ($submenuView) {
+        "Expanded" { $hasSubs }
+        "Custom"   { $hasSubs -and ($expandedCfg -contains $baseName) }
+        default    { $false }
+    }
+
+    $modObj = [PSCustomObject]@{
         BaseName      = $baseName
         Name          = $displayName
         Description   = $info.Description
@@ -418,7 +488,12 @@ foreach ($baseName in $orderedBaseNames) {
         Enabled       = [bool]$isEnabled
         RequiresAdmin = [bool]$info.RequiresAdmin
         Settings      = $settingsObj
-    })
+        SubOptions    = $subOptions
+        Expanded      = [bool]$isExpanded
+    }
+
+    Update-ModuleDynamicProps -Module $modObj
+    $discoveredModules.Add($modObj)
 }
 
 function Save-ConfigState {
@@ -444,6 +519,9 @@ function Save-ConfigState {
         }
     }
     $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
+    $config | Add-Member -NotePropertyName submenuView -NotePropertyValue $submenuView -Force
+    $expandedList = @($discoveredModules | Where-Object { $_.Expanded } | Select-Object -ExpandProperty BaseName)
+    $config | Add-Member -NotePropertyName expandedModules -NotePropertyValue $expandedList -Force
     $config | Add-Member -NotePropertyName modulesExecutionOrder -NotePropertyValue ([PSCustomObject]$modOrder) -Force
     if ($config.PSObject.Properties['enabledModules']) {
         $config.PSObject.Properties.Remove('enabledModules')
@@ -528,8 +606,43 @@ if (-not $Run) {
         $selectedIndex = 0
         $timerPresets = @(0, 3, 5, 10, 20, 30)
         $running = $true
+        $anchorModule = $null
 
         while ($running) {
+            # Build flat list of visible items (Modules and currently expanded SubOptions)
+            $visibleItems = [System.Collections.Generic.List[hashtable]]::new()
+            for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
+                $m = $discoveredModules[$i]
+                $visibleItems.Add(@{
+                    Type        = 'Module'
+                    Module      = $m
+                    ModuleIndex = $i
+                })
+                $hasSubs = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
+                if ($m.Expanded -and $hasSubs) {
+                    foreach ($sub in $m.SubOptions) {
+                        $visibleItems.Add(@{
+                            Type        = 'SubOption'
+                            Module      = $m
+                            ModuleIndex = $i
+                            SubKey      = $sub.Key
+                            Label       = $sub.Label
+                            ValueType   = $sub.ValueType
+                        })
+                    }
+                }
+            }
+
+            if ($anchorModule) {
+                for ($v = 0; $v -lt $visibleItems.Count; $v++) {
+                    if ($visibleItems[$v].Type -eq 'Module' -and $visibleItems[$v].Module.BaseName -eq $anchorModule) {
+                        $selectedIndex = $v
+                        break
+                    }
+                }
+                $anchorModule = $null
+            }
+
             $timerText = if ($countdown -eq 0) { "0s (Instant)" } else { "${countdown}s" }
             $schedSummary = if ($config.scheduleType -and $config.scheduleType -ne "Disabled") {
                 if ($config.scheduleType -eq "Logon") { "Logon (+5m)" }
@@ -538,10 +651,16 @@ if (-not $Run) {
                 "Disabled"
             }
             $pathStatus = if (Test-UserPathRegistered) { "Enabled" } else { "Disabled" }
+            $submenuViewText = switch ($submenuView) {
+                'Expanded' { 'Expanded' }
+                'Custom'   { 'Custom' }
+                default    { 'Hidden' }
+            }
 
             $actions = @(
                 @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
                 @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
+                @{ Label = "[   E   ]  Sub-Options View: [ $submenuViewText ] (Press E: Hidden, Custom, Expanded)"; Key = "E" },
                 @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
                 @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
                 @{ Label = "[   P   ]  User PATH CLI Auto-Complete: [ $pathStatus ] (Press P to toggle)"; Key = "P" },
@@ -551,28 +670,55 @@ if (-not $Run) {
                 @{ Label = "[   U   ]  Uninstall FreeWinly Completely"; Key = "U" },
                 @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
             )
-            $totalOptions = $discoveredModules.Count + $actions.Count
+            $totalOptions = $visibleItems.Count + $actions.Count
+            if ($selectedIndex -ge $totalOptions) { $selectedIndex = $totalOptions - 1 }
+            if ($selectedIndex -lt 0) { $selectedIndex = 0 }
 
             Clear-Host
             Show-Banner
             if ($ignoredWarnings.Count -gt 0) {
                 foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
             }
-            Write-Host "Use [Up/Down] to navigate, [Space] to toggle, [+/-] to reorder, [Enter] to run:`n" -ForegroundColor Gray
+            Write-Host "Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:`n" -ForegroundColor Gray
 
-            for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
-                $m = $discoveredModules[$i]
-                $pointer   = if ($i -eq $selectedIndex) { "> " } else { "  " }
-                $checkMark = if ($m.Enabled) { "[x]" } else { "[ ]" }
-                $admin     = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
-                $color     = if ($i -eq $selectedIndex) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
-                Write-Host "$pointer$checkMark $($m.Name)$admin" -ForegroundColor $color
+            for ($v = 0; $v -lt $visibleItems.Count; $v++) {
+                $item = $visibleItems[$v]
+                $isSelected = ($v -eq $selectedIndex)
+                $pointer = if ($isSelected) { "> " } else { "  " }
+
+                if ($item.Type -eq 'Module') {
+                    $m = $item.Module
+                    $hasSubs = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
+                    $expandMark = if ($hasSubs) {
+                        if ($m.Expanded) { "[-] " } else { "[+] " }
+                    } else {
+                        "    "
+                    }
+                    $checkMark = if ($m.Enabled) { "[x]" } else { "[ ]" }
+                    $admin = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
+                    $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
+                    Write-Host "$pointer$checkMark $expandMark$($m.Name)$admin" -ForegroundColor $color
+                } else {
+                    $m = $item.Module
+                    if ($item.ValueType -eq 'bool') {
+                        $subVal = [bool]$m.Settings.$($item.SubKey)
+                        $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
+                        $line = "$pointer      $subCheck $($item.Label)"
+                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
+                        Write-Host $line -ForegroundColor $color
+                    } else {
+                        $intVal = [int]$m.Settings.$($item.SubKey)
+                        $line = "$pointer      < ${intVal}d > $($item.Label)"
+                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled) { "White" } else { "DarkGray" }
+                        Write-Host $line -ForegroundColor $color
+                    }
+                }
             }
 
             Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
 
             for ($j = 0; $j -lt $actions.Count; $j++) {
-                $actionIdx = $discoveredModules.Count + $j
+                $actionIdx = $visibleItems.Count + $j
                 $pointer = if ($actionIdx -eq $selectedIndex) { "> " } else { "  " }
                 $color   = if ($actionIdx -eq $selectedIndex) { "Yellow" } else { "White" }
                 Write-Host "$pointer$($actions[$j].Label)" -ForegroundColor $color
@@ -582,31 +728,35 @@ if (-not $Run) {
             $cmdKey = $key.Key.ToString()
 
             # Reorder module up/down with [+] / [-]
-            if ($selectedIndex -lt $discoveredModules.Count) {
-                if ($key.KeyChar -eq '-' -or $key.Key -eq 'Subtract') {
-                    if ($selectedIndex -gt 0) {
-                        $temp = $discoveredModules[$selectedIndex - 1]
-                        $discoveredModules[$selectedIndex - 1] = $discoveredModules[$selectedIndex]
-                        $discoveredModules[$selectedIndex] = $temp
-                        $selectedIndex--
+            if ($selectedIndex -lt $visibleItems.Count) {
+                $curItem = $visibleItems[$selectedIndex]
+                $targetMod = $curItem.Module
+                $modIdx = $discoveredModules.IndexOf($targetMod)
+
+                if ($key.KeyChar -eq '-' -or $key.Key -eq 'Subtract' -or $key.Key -eq 'OemMinus') {
+                    if ($modIdx -gt 0) {
+                        $temp = $discoveredModules[$modIdx - 1]
+                        $discoveredModules[$modIdx - 1] = $discoveredModules[$modIdx]
+                        $discoveredModules[$modIdx] = $temp
+                        $anchorModule = $targetMod.BaseName
                     }
                     continue
-                } elseif ($key.KeyChar -eq '+' -or $key.Key -eq 'Add' -or $key.KeyChar -eq '=') {
-                    if ($selectedIndex -lt ($discoveredModules.Count - 1)) {
-                        $temp = $discoveredModules[$selectedIndex + 1]
-                        $discoveredModules[$selectedIndex + 1] = $discoveredModules[$selectedIndex]
-                        $discoveredModules[$selectedIndex] = $temp
-                        $selectedIndex++
+                } elseif ($key.KeyChar -eq '+' -or $key.Key -eq 'Add' -or $key.KeyChar -eq '=' -or $key.Key -eq 'OemPlus') {
+                    if ($modIdx -lt ($discoveredModules.Count - 1)) {
+                        $temp = $discoveredModules[$modIdx + 1]
+                        $discoveredModules[$modIdx + 1] = $discoveredModules[$modIdx]
+                        $discoveredModules[$modIdx] = $temp
+                        $anchorModule = $targetMod.BaseName
                     }
                     continue
                 }
             }
 
             if ($cmdKey -eq "Enter") {
-                if ($selectedIndex -lt $discoveredModules.Count) {
+                if ($selectedIndex -lt $visibleItems.Count) {
                     $cmdKey = "Spacebar"
                 } else {
-                    $cmdKey = $actions[$selectedIndex - $discoveredModules.Count].Key
+                    $cmdKey = $actions[$selectedIndex - $visibleItems.Count].Key
                 }
             }
 
@@ -619,9 +769,99 @@ if (-not $Run) {
                     $selectedIndex++
                     if ($selectedIndex -ge $totalOptions) { $selectedIndex = 0 }
                 }
+                "Tab" {
+                    if ($selectedIndex -lt $visibleItems.Count) {
+                        $item = $visibleItems[$selectedIndex]
+                        $targetMod = $item.Module
+                        $hasSubs = ($targetMod.SubOptions -and $targetMod.SubOptions.Count -gt 0)
+                        if ($hasSubs) {
+                            $targetMod.Expanded = -not $targetMod.Expanded
+                            if ($submenuView -ne "Custom") { $submenuView = "Custom" }
+                            if (-not $targetMod.Expanded -and $item.Type -eq 'SubOption') {
+                                for ($k = $selectedIndex; $k -ge 0; $k--) {
+                                    if ($visibleItems[$k].Type -eq 'Module' -and $visibleItems[$k].Module.BaseName -eq $targetMod.BaseName) {
+                                        $selectedIndex = $k
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "LeftArrow" {
+                    if ($selectedIndex -lt $visibleItems.Count) {
+                        $item = $visibleItems[$selectedIndex]
+                        if ($item.Type -eq 'Module') {
+                            if ($item.Module.Expanded) {
+                                $item.Module.Expanded = $false
+                                if ($submenuView -ne "Custom") { $submenuView = "Custom" }
+                            }
+                        } elseif ($item.Type -eq 'SubOption') {
+                            $mod = $item.Module
+                            if ($item.ValueType -eq 'bool') {
+                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                Update-ModuleDynamicProps -Module $mod
+                            } elseif ($item.ValueType -eq 'int') {
+                                $presets = Get-IntPresets -Key $item.SubKey
+                                $curVal = [int]$mod.Settings.$($item.SubKey)
+                                $idx = $presets.IndexOf($curVal)
+                                if ($idx -gt 0) {
+                                    $mod.Settings.$($item.SubKey) = $presets[$idx - 1]
+                                } elseif ($idx -lt 0) {
+                                    $mod.Settings.$($item.SubKey) = $presets[0]
+                                }
+                                Update-ModuleDynamicProps -Module $mod
+                            }
+                        }
+                    }
+                }
+                "RightArrow" {
+                    if ($selectedIndex -lt $visibleItems.Count) {
+                        $item = $visibleItems[$selectedIndex]
+                        if ($item.Type -eq 'Module') {
+                            $hasSubs = ($item.Module.SubOptions -and $item.Module.SubOptions.Count -gt 0)
+                            if ($hasSubs -and -not $item.Module.Expanded) {
+                                $item.Module.Expanded = $true
+                                if ($submenuView -ne "Custom") { $submenuView = "Custom" }
+                            }
+                        } elseif ($item.Type -eq 'SubOption') {
+                            $mod = $item.Module
+                            if ($item.ValueType -eq 'bool') {
+                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                Update-ModuleDynamicProps -Module $mod
+                            } elseif ($item.ValueType -eq 'int') {
+                                $presets = Get-IntPresets -Key $item.SubKey
+                                $curVal = [int]$mod.Settings.$($item.SubKey)
+                                $idx = $presets.IndexOf($curVal)
+                                if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) {
+                                    $mod.Settings.$($item.SubKey) = $presets[$idx + 1]
+                                } elseif ($idx -lt 0) {
+                                    $mod.Settings.$($item.SubKey) = $presets[-1]
+                                }
+                                Update-ModuleDynamicProps -Module $mod
+                            }
+                        }
+                    }
+                }
                 "Spacebar" {
-                    if ($selectedIndex -lt $discoveredModules.Count) {
-                        $discoveredModules[$selectedIndex].Enabled = -not $discoveredModules[$selectedIndex].Enabled
+                    if ($selectedIndex -lt $visibleItems.Count) {
+                        $item = $visibleItems[$selectedIndex]
+                        if ($item.Type -eq 'Module') {
+                            $item.Module.Enabled = -not $item.Module.Enabled
+                        } elseif ($item.Type -eq 'SubOption') {
+                            $mod = $item.Module
+                            if ($item.ValueType -eq 'bool') {
+                                $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
+                                Update-ModuleDynamicProps -Module $mod
+                            } elseif ($item.ValueType -eq 'int') {
+                                $presets = Get-IntPresets -Key $item.SubKey
+                                $curVal = [int]$mod.Settings.$($item.SubKey)
+                                $idx = $presets.IndexOf($curVal)
+                                $nextIdx = if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) { $idx + 1 } else { 0 }
+                                $mod.Settings.$($item.SubKey) = $presets[$nextIdx]
+                                Update-ModuleDynamicProps -Module $mod
+                            }
+                        }
                     }
                 }
                 "Run" {
@@ -632,6 +872,30 @@ if (-not $Run) {
                     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
                     Invoke-DryRunCheck -TargetModules $targetModules
                     Read-Host "`nPress Enter to return to menu"
+                }
+                "E" {
+                    $submenuView = switch ($submenuView) {
+                        "Hidden"   { "Custom" }
+                        "Custom"   { "Expanded" }
+                        "Expanded" { "Hidden" }
+                        default    { "Hidden" }
+                    }
+                    switch ($submenuView) {
+                        "Hidden" {
+                            foreach ($m in $discoveredModules) { $m.Expanded = $false }
+                        }
+                        "Expanded" {
+                            foreach ($m in $discoveredModules) {
+                                $m.Expanded = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
+                            }
+                        }
+                        "Custom" {
+                            $savedExpanded = if ($config.expandedModules) { @($config.expandedModules) } else { @() }
+                            foreach ($m in $discoveredModules) {
+                                $m.Expanded = ($m.SubOptions -and $m.SubOptions.Count -gt 0) -and ($savedExpanded -contains $m.BaseName)
+                            }
+                        }
+                    }
                 }
                 "T" {
                     $curIdx = $timerPresets.IndexOf($countdown)
@@ -650,7 +914,7 @@ if (-not $Run) {
                 }
                 "S" {
                     Save-ConfigState
-                    Write-Host "`n  -> Module selection, order, and settings saved to config.json!" -ForegroundColor Green
+                    Write-Host "`n  -> Module selection, order, sub-options, and view saved to config.json!" -ForegroundColor Green
                     Start-Sleep -Milliseconds 800
                 }
                 "O" {
@@ -684,10 +948,16 @@ if ($activeModules.Count -eq 0) {
     exit 0
 }
 
+# Re-evaluate dynamic properties (e.g. requiresAdmin on network module)
+foreach ($m in $activeModules) {
+    Update-ModuleDynamicProps -Module $m
+}
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $needsAdmin = ($activeModules | Where-Object { $_.RequiresAdmin -eq $true }).Count -gt 0
 
 if ($needsAdmin -and -not $isAdmin) {
+    Save-ConfigState
     Write-Host "`nSelected tasks require Administrator privileges." -ForegroundColor Yellow
     Write-Host "Elevating FreeWinly runner..." -ForegroundColor Cyan
     $selectedNames = ($activeModules | Select-Object -ExpandProperty BaseName) -join ','
@@ -701,7 +971,7 @@ if ($needsAdmin -and -not $isAdmin) {
 # ==================================================================
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.2.0 Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.3.0 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
