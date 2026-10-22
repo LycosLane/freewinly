@@ -54,18 +54,19 @@ It will check your system health, update your programs, clean old temp files, an
 
 ---
 
-### Migrating from CCleaner: The "Sleep Mode" Trap
+### App Launch Interceptions: The "Sleep Mode" Trap
 
-When CCleaner puts applications "to sleep" (via its Performance Optimizer feature), it modifies the Windows Registry (`Image File Execution Options`) to intercept application launches with its own reactivator (`CCleanerReactivator.exe`).
+Windows includes a feature called *Image File Execution Options (IFEO)*. Originally intended for developers to attach debuggers, some PC optimization tools (such as CCleaner, Avast Cleanup, or AVG TuneUp) use it for "Sleep Mode / Performance Optimizer" to intercept an application when you click it and wake up background services before launching.
 
-If CCleaner is uninstalled while applications are in sleep mode:
-1. Windows continues trying to run `CCleanerReactivator.exe` whenever you open Steam, Epic Games, Zoom, OneDrive, etc.
-2. Because CCleaner was uninstalled, that reactivator file no longer exists.
-3. Windows throws an error stating: `Windows cannot find 'C:\...\app.exe'. Make sure you've typed the name correctly, then try again.`
+**What happens if the tool is uninstalled?**
+If a cleanup utility is uninstalled while applications are in sleep mode, the registry pointer remains behind pointing to a helper file that no longer exists on disk.
+When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Windows looks for the missing helper and displays the misleading error:
+`Windows cannot find 'C:\...\app.exe'. Make sure you've typed the name correctly, then try again.`
 
-**How to handle this:**
-* **If CCleaner is still installed:** Open CCleaner, navigate to **Performance Optimizer**, and **wake up all sleeping programs** before uninstalling CCleaner.
-* **If CCleaner is already uninstalled:** Run FreeWinly. Module `07_app_hijack_repair` automatically detects all trapped applications and cleanly removes the dead hooks so your programs launch normally again.
+**How FreeWinly safely handles this:**
+* **Active tools are ignored:** If an interceptor file exists on your drive (e.g. you still actively use CCleaner or Process Explorer), FreeWinly reports it as an informational note and leaves it completely untouched. You can run FreeWinly alongside any tools you choose.
+* **Broken pointers are repaired:** FreeWinly only acts when the target helper file no longer exists on disk. It safely deletes the dead pointer, immediately restoring direct launching without touching your files or shortcuts.
+* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `07_app_launch_repair` fixes it in one click.
 
 ---
 
@@ -77,7 +78,7 @@ If CCleaner is uninstalled while applications are in sleep mode:
 - **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only.
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
-- **App Launch Hijack Repair (CCleaner / IFEO Doctor):** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to broken debugger hooks left behind by CCleaner's "Performance Optimizer / Sleep Mode".
+- **App Launch Repair (Sleep Hooks & Debuggers):** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities.
 - **Modular Design:** Add custom maintenance tasks by placing numbered `.ps1` files into the `modules/` folder.
 - **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
@@ -245,7 +246,7 @@ FreeWinly/
 └── modules/
     ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
     ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
-    ├── 07_app_hijack_repair.ps1 <-- Restores apps broken by orphaned CCleaner sleep hooks
+    ├── 07_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
     ├── 10_software_updates.ps1  <-- Winget updates
     ├── 20_cache_cleanup.ps1     <-- Temp & cache cleaning (> 7 days)
     ├── 30_ssd_trim.ps1          <-- Multi-SSD TRIM optimization

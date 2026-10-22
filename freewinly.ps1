@@ -164,7 +164,7 @@ function Run-OnboardingWizard {
     $enabled = if ($existingConfig -and $existingConfig.enabledModules) {
         $existingConfig.enabledModules
     } else {
-        @('05_hardware_health', '06_event_log_health', '07_app_hijack_repair', '10_software_updates', '20_cache_cleanup', '30_ssd_trim')
+        @('05_hardware_health', '06_event_log_health', '07_app_launch_repair', '10_software_updates', '20_cache_cleanup', '30_ssd_trim')
     }
 
     $newConfig = [ordered]@{

@@ -25,7 +25,7 @@ FreeWinly/
 └── modules/
     ├── 05_hardware_health.ps1   <-- Device Manager & driver faults with actionable advice
     ├── 06_event_log_health.ps1  <-- Recurring crashes & BSODs with plain-language fixes
-    ├── 07_app_hijack_repair.ps1 <-- Restores apps broken by orphaned CCleaner sleep hooks
+    ├── 07_app_launch_repair.ps1 <-- Restores apps broken by dead sleep hooks & debuggers
     ├── 10_software_updates.ps1  <-- Winget updates (respects config exclusions)
     ├── 20_cache_cleanup.ps1     <-- Safe temp/cache cleaning (> 7 days)
     ├── 30_ssd_trim.ps1          <-- SSD NVMe TRIM ReTrim optimization
