@@ -4,7 +4,7 @@
 > *A transparent, modular, native Windows maintenance engine.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Windows 10 / 11](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6.svg)]()
+[![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D6.svg)]()
 [![Shell: PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE.svg)]()
 [![Zero Bloatware](https://img.shields.io/badge/Bloatware-0%25-brightgreen.svg)]()
 
