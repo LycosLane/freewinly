@@ -139,24 +139,24 @@ function Get-LaunchInterceptors {
     return @($results)
 }
 
-$allHooks = Get-LaunchInterceptors
-$brokenHooks = @($allHooks | Where-Object { $_.IsBroken })
-$activeHooks = @($allHooks | Where-Object { -not $_.IsBroken })
-
-$brokenApps = @($brokenHooks | Select-Object -ExpandProperty AppName -Unique)
-$activeApps = @($activeHooks | Select-Object -ExpandProperty AppName -Unique)
-
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
         Name                 = "App Launch Repair (Sleep Hooks)"
         Description          = "Repairs applications blocked by missing launch interceptors (e.g. from uninstalled sleep utilities)"
         Order                = 12
         Default              = $true
-        RequiresAdmin        = ($brokenHooks.Count -gt 0)
+        RequiresAdmin        = $true
         DefaultSettings      = [ordered]@{}
         SettingsDescriptions = [ordered]@{}
     }
 }
+
+$allHooks = Get-LaunchInterceptors
+$brokenHooks = @($allHooks | Where-Object { $_.IsBroken })
+$activeHooks = @($allHooks | Where-Object { -not $_.IsBroken })
+
+$brokenApps = @($brokenHooks | Select-Object -ExpandProperty AppName -Unique)
+$activeApps = @($activeHooks | Select-Object -ExpandProperty AppName -Unique)
 
 Write-Host "`n--- [freewinly-repair-applaunch] App Launch Repair [$Action] ---" -ForegroundColor Cyan
 
@@ -221,6 +221,10 @@ $ts = (Get-Date).ToString("yyyyMMdd-HHmmss")
 $regBackupFile = Join-Path $backupDir "ifeo-rollback-$ts.reg"
 try {
     & reg.exe export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $regBackupFile /y 2>&1 | Out-Null
+    if (Test-Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options") {
+        $reg32Backup = Join-Path $backupDir "ifeo32-rollback-$ts.reg"
+        & reg.exe export "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $reg32Backup /y 2>&1 | Out-Null
+    }
     if (Test-Path $regBackupFile) {
         Write-Host "Created registry safety rollback backup: $regBackupFile" -ForegroundColor Gray
         if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Created registry rollback backup: $regBackupFile" -Encoding UTF8 }

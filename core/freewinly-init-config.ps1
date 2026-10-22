@@ -56,7 +56,7 @@ foreach ($ex in $existingExcludedList) {
 
 if (Get-Command winget -ErrorAction SilentlyContinue) {
     try {
-        $lines = & winget upgrade --include-unknown --accept-source-agreements 2>&1 | Out-String -Stream
+        $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
         $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
         if ($sepIdx -ge 1) {
             $header     = $lines[$sepIdx - 1]
@@ -74,9 +74,13 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
                         $verLen  = [math]::Min($availStart - $verStart, $line.Length - $verStart)
                         $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
 
-                        if ($verText -and $verText -notmatch '\d' -and $pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
+                        $isDevRuntime = ($pkgId -match '^(OpenJS\.NodeJS|Python\.Python|GoLang\.Go|Docker\.DockerDesktop|Git\.Git|Rustlang\.Rustup)')
+                        $hasVersionQuirk = ($verText -and $verText -notmatch '\d')
+
+                        if (($hasVersionQuirk -or $isDevRuntime) -and $pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
                             if (-not ($detectedExcludes -contains $pkgId)) {
-                                Write-Host "Detected independent app: $appName (ID: $pkgId)" -ForegroundColor Yellow
+                                $reason = if ($isDevRuntime) { "developer runtime / toolchain" } else { "independent auto-updater" }
+                                Write-Host "Detected $reason: $appName (ID: $pkgId)" -ForegroundColor Yellow
                                 $choice = Read-Host "Exclude '$pkgId' from automated Winget upgrades? (Y/n) [Default: Y]"
                                 if ($choice -notmatch '^[Nn]$') {
                                     $detectedExcludes.Add($pkgId)

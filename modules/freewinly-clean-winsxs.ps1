@@ -115,16 +115,22 @@ if ($resetBase) {
 }
 
 Write-Host "Running DISM Component Store cleanup: dism.exe $($dismArgs -join ' ')..." -ForegroundColor Cyan
-Write-Host "Note: DISM execution typically takes 1 to 5 minutes. Please wait..." -ForegroundColor Gray
+if ($resetBase) {
+    Write-Host "Note: '/ResetBase' is enabled. Deep component manifest consolidation typically takes 30 to 90 minutes. Please do not close this window..." -ForegroundColor Yellow
+} else {
+    Write-Host "Note: Standard DISM cleanup typically takes 1 to 5 minutes. Please wait..." -ForegroundColor Gray
+}
 
 try {
-    $dismProcess = Start-Process -FilePath "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
-    if ($dismProcess.ExitCode -eq 0) {
+    # Direct command invocation renders live progress percentage to the console
+    & dism.exe $dismArgs
+    $dismExit = $LASTEXITCODE
+    if ($dismExit -eq 0) {
         Write-Host "  [+] DISM Component Store cleanup completed successfully." -ForegroundColor Green
         if ($LogFile) { Add-Content -Path $LogFile -Value "DISM Component Store cleanup completed successfully (ResetBase: $resetBase)" -Encoding UTF8 }
     } else {
-        Write-Host "  [-] DISM completed with exit code $($dismProcess.ExitCode)." -ForegroundColor Yellow
-        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM finished with exit code $($dismProcess.ExitCode)" -Encoding UTF8 }
+        Write-Host "  [-] DISM completed with exit code $dismExit. Review 'C:\Windows\Logs\DISM\dism.log' for diagnostic details." -ForegroundColor Yellow
+        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM finished with exit code $dismExit (See C:\Windows\Logs\DISM\dism.log)" -Encoding UTF8 }
     }
 } catch {
     Write-Host "  [-] Failed to start DISM: $($_.Exception.Message)" -ForegroundColor Red
@@ -134,13 +140,14 @@ try {
 if ($verifySystemFiles) {
     Write-Host "`nRunning System File Checker verification (sfc.exe /verifyonly)..." -ForegroundColor Cyan
     try {
-        $sfcProcess = Start-Process -FilePath "sfc.exe" -ArgumentList "/verifyonly" -NoNewWindow -Wait -PassThru
-        if ($sfcProcess.ExitCode -eq 0) {
+        & sfc.exe /verifyonly
+        $sfcExit = $LASTEXITCODE
+        if ($sfcExit -eq 0) {
             Write-Host "  [+] System file verification completed. No integrity violations found." -ForegroundColor Green
             if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification passed: No integrity violations." -Encoding UTF8 }
         } else {
-            Write-Host "  [-] System file verification finished with code $($sfcProcess.ExitCode). Check CBS.log if issues occurred." -ForegroundColor Yellow
-            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification finished with exit code $($sfcProcess.ExitCode)" -Encoding UTF8 }
+            Write-Host "  [-] System file verification finished with code $sfcExit. Review 'C:\Windows\Logs\CBS\cbs.log' for details." -ForegroundColor Yellow
+            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification finished with exit code $sfcExit (See C:\Windows\Logs\CBS\cbs.log)" -Encoding UTF8 }
         }
     } catch {
         Write-Host "  [-] Failed to start SFC: $($_.Exception.Message)" -ForegroundColor Red

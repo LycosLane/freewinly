@@ -30,7 +30,8 @@
     "freewinly-clean-cache": {
       "enabled": true,
       "minAgeDays": 7,
-      "cleanRecycleBin": false
+      "cleanRecycleBin": false,
+      "cleanShaderCache": false
     },
     "freewinly-clean-browsers": {
       "enabled": true,
@@ -53,7 +54,7 @@
     "freewinly-clean-network": {
       "enabled": true,
       "flushDns": true,
-      "clearArpCache": true,
+      "clearArpCache": false,
       "checkConnectivity": true,
       "clearNetBios": false,
       "resetWinsock": false

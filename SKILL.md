@@ -128,7 +128,7 @@ The AI agent should:
 * **[ S ]** -> **Save Selection & Order as Default** (saves current checkboxes, execution order, sub-options, view mode, and timer to `config.json`).
 * **[ O ]** -> **Run Configuration & Exclusion Wizard** (detects standalone/unknown packages).
 * **[ I ]** -> **Install or Update Start Menu Launcher**.
-* **[ U ]** -> **Complete Uninstaller** (previews and removes Task Scheduler jobs, shortcuts, User `PATH`, and application directory).
+* **[ U ]** -> **Artifact Cleaner & Uninstaller** (previews and cleanly removes Task Scheduler jobs, all shortcuts, and User `PATH` integrations; keeps scripts safe).
 * **[ Q ]** -> **Quit Without Running**.
 
 ### 3. Desktop Application Cache Cleaner (`freewinly-clean-apps`)

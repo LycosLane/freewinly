@@ -43,9 +43,26 @@ if ($Action -eq 'Info') {
 Write-Host "`n--- [freewinly-update-windows] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
 
 try {
+    $cbsReboot = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
+    $wuReboot  = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
+    if ($cbsReboot -or $wuReboot) {
+        Write-Host "System Status: A previous update is pending restart (RebootPending: $cbsReboot | RebootRequired: $wuReboot)." -ForegroundColor Yellow
+    }
+
+    # If TrustedInstaller or TiWorker is actively running (e.g. DISM or background servicing),
+    # Windows Update COM APIs will block indefinitely on the servicing mutex.
+    $isServicingActive = [bool](Get-Process -Name TiWorker, TrustedInstaller -ErrorAction SilentlyContinue)
+    if ($isServicingActive) {
+        Write-Host "  [-] Windows Servicing (TiWorker / TrustedInstaller) is actively running." -ForegroundColor Yellow
+        Write-Host "      Skipping Windows Update search to prevent lock contention." -ForegroundColor Gray
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Windows Update search skipped: Servicing worker actively running." -Encoding UTF8 }
+        return
+    }
+
+    Write-Host "Searching for pending Windows updates..." -ForegroundColor Gray
+
     $Session = New-Object -ComObject Microsoft.Update.Session
     $Searcher = $Session.CreateUpdateSearcher()
-    Write-Host "Searching for pending Windows updates..." -ForegroundColor Gray
     $SearchResult = $Searcher.Search("IsInstalled=0 and IsHidden=0")
 
     if ($SearchResult.Updates.Count -eq 0) {
@@ -61,8 +78,6 @@ try {
     }
 
     if ($Action -eq 'Check') {
-        $cbsReboot = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-        $wuReboot  = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
         Write-Host "RebootPending: $cbsReboot | RebootRequired: $wuReboot" -ForegroundColor Gray
         Write-Host "Dry run complete. No updates were downloaded or installed." -ForegroundColor Green
         return

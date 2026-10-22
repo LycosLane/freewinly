@@ -171,7 +171,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 | **`S`** | Save current module selection, order, sub-options, and view mode to `config.json` as permanent defaults |
 | **`O`** | Run configuration & exclusion wizard (scans for standalone apps and suggests exclusions) |
 | **`I`** | Install or update Start Menu launcher (`FreeWinly.lnk`) |
-| **`U`** | Complete **Uninstaller** (previews and removes Task Scheduler tasks, shortcuts, User `PATH`, and files) |
+| **`U`** | Complete **Uninstaller** (previews and cleanly removes Task Scheduler tasks, all shortcuts, and User `PATH` integrations) |
 | **`Q`** | Exit without making any changes |
 
 ---
@@ -199,9 +199,9 @@ powershell -ExecutionPolicy Bypass -File .\core\freewinly-setup-schedule.ps1
 
 ---
 
-## Uninstallation
+## Uninstallation & Artifact Cleanup
 
-FreeWinly leaves no background services, registry entries, or leftover files behind. You can remove it anytime using the uninstaller:
+FreeWinly leaves no background services or persistent system modifications behind. You can cleanly remove all Windows integrations, shortcuts, and scheduled tasks anytime using the uninstaller:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\core\freewinly-uninstall.ps1
@@ -209,13 +209,13 @@ powershell -ExecutionPolicy Bypass -File .\core\freewinly-uninstall.ps1
 * Or press **`[ U ]`** directly inside the FreeWinly interactive menu.
 
 **What it does:**
-1. Scans for and displays all active components:
+1. Scans for and displays all active Windows system artifacts:
    - Windows Task Scheduler job (`FreeWinly`)
-   - Start Menu launcher (`FreeWinly.lnk`)
+   - Shortcuts across Start Menu, Desktop, and Windows Startup folder (`shell:startup`)
    - User `PATH` CLI environment registration
-   - Application folder (including local configs and logs)
-2. Asks for explicit confirmation: `Are you sure you want to completely remove FreeWinly? (y/N)`
-3. Cleanly unregisters the scheduled task, deletes the shortcut, removes User `PATH` entries, and removes the application directory via a detached background process.
+2. Asks for explicit confirmation: `Remove all FreeWinly Windows integrations, shortcuts, and scheduled tasks? (y/N)`
+3. Cleanly unregisters the scheduled task, removes all shortcuts, and removes User `PATH` entries.
+4. **Protects your files:** The FreeWinly script folder itself is left intact, preventing accidental deletion of Git repositories, working trees, or local files. You can safely delete or archive the folder at your convenience.
 
 ---
 

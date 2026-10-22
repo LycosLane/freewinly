@@ -212,6 +212,7 @@ foreach ($target in $targets) {
         if ($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
         $found = Get-ChildItem -LiteralPath $d.FullName -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
             (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
+            (($_.Directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) -and
             $_.LastWriteTime -lt $cutoff
         }
         if ($found) {

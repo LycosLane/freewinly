@@ -1,11 +1,14 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly Complete Uninstaller.
+    FreeWinly Complete Artifact Cleaner & Uninstaller.
 .DESCRIPTION
-    Scans for all installed FreeWinly system artifacts (Scheduled Tasks in Windows Task Scheduler,
-    Start Menu shortcuts, and the application directory itself). Displays an interactive preview
-    of what will be removed and asks for confirmation before cleaning up.
+    Scans for and cleanly removes all installed FreeWinly Windows system artifacts
+    (Scheduled Tasks in Windows Task Scheduler, User PATH environment variable registration,
+    and all Start Menu, Desktop, and Startup folder shortcuts).
+    
+    Leaves the local FreeWinly script folder intact for user safety, allowing the user
+    to manually delete or archive it without file-locking or repo-destruction risks.
 .PARAMETER Check
     Displays the components that would be removed without prompting or deleting anything.
 .PARAMETER Force
@@ -29,8 +32,8 @@ $ErrorActionPreference = "Continue"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "                FreeWinly Complete Uninstaller              " -ForegroundColor White
-Write-Host "       Removes scheduled tasks, PATH, shortcuts & files     " -ForegroundColor Gray
+Write-Host "         FreeWinly Windows Artifact Cleaner & Uninstaller   " -ForegroundColor White
+Write-Host "    Cleans Task Scheduler, User PATH & all Windows shortcuts" -ForegroundColor Gray
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 1. Inspect Components
@@ -52,18 +55,30 @@ if ($userPathRaw) {
 }
 
 $startMenuPrograms = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
-$shortcutCandidates = @(
-    (Join-Path $startMenuPrograms "Utility\FreeWinly.lnk"),
-    (Join-Path $startMenuPrograms "FreeWinly.lnk")
-)
-$shortcutsFound = @($shortcutCandidates | Where-Object { Test-Path $_ })
+$desktopDir        = [Environment]::GetFolderPath('Desktop')
+$startupDir        = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
 
-Write-Host "`nComponents identified for removal:" -ForegroundColor Yellow
+$shortcutCandidates = [ordered]@{
+    "Start Menu Shortcut"       = (Join-Path $startMenuPrograms "FreeWinly.lnk")
+    "Start Menu Utility Folder" = (Join-Path $startMenuPrograms "Utility\FreeWinly.lnk")
+    "Desktop Shortcut"          = (Join-Path $desktopDir "FreeWinly.lnk")
+    "Startup Folder Shortcut"   = (Join-Path $startupDir "FreeWinly.lnk")
+}
+
+$shortcutsFound = [System.Collections.Generic.List[PSCustomObject]]::new()
+foreach ($k in $shortcutCandidates.Keys) {
+    $scPath = $shortcutCandidates[$k]
+    if (Test-Path -LiteralPath $scPath) {
+        $shortcutsFound.Add([PSCustomObject]@{ Name = $k; Path = $scPath })
+    }
+}
+
+Write-Host "`nWindows system artifacts identified for cleanup:" -ForegroundColor Yellow
 
 if ($taskFound) {
     Write-Host "  [x] Windows Scheduled Task:    'FreeWinly' (Windows Task Scheduler)" -ForegroundColor White
 } else {
-    Write-Host "  [ ] Windows Scheduled Task:    Not installed" -ForegroundColor DarkGray
+    Write-Host "  [ ] Windows Scheduled Task:    Not registered" -ForegroundColor DarkGray
 }
 
 if ($pathFound) {
@@ -74,30 +89,30 @@ if ($pathFound) {
 
 if ($shortcutsFound.Count -gt 0) {
     foreach ($sc in $shortcutsFound) {
-        Write-Host "  [x] Start Menu Shortcut:       $sc" -ForegroundColor White
+        Write-Host "  [x] $($sc.Name): $($sc.Path)" -ForegroundColor White
     }
 } else {
-    Write-Host "  [ ] Start Menu Shortcut:       Not installed" -ForegroundColor DarkGray
+    Write-Host "  [ ] Windows Shortcuts:         None detected" -ForegroundColor DarkGray
 }
 
-Write-Host "  [x] Application Directory:      $projectRoot" -ForegroundColor White
-Write-Host "      (Includes all modules, local config.json, backups, and execution logs)`n" -ForegroundColor Gray
+Write-Host "  [-] Application Directory:      $projectRoot" -ForegroundColor Gray
+Write-Host "      (Protected: Script files and Git repositories are never auto-deleted)`n" -ForegroundColor DarkGray
 
 if ($Check) {
-    Write-Host "Dry run complete. No components were removed." -ForegroundColor Green
+    Write-Host "Dry run complete. No system artifacts were removed." -ForegroundColor Green
     exit 0
 }
 
 # 2. Confirm with user
 if (-not $Force) {
-    $confirm = Read-Host "Are you sure you want to completely remove FreeWinly from this PC? (y/N)"
+    $confirm = Read-Host "Remove all FreeWinly Windows integrations, shortcuts, and scheduled tasks? (y/N)"
     if ($confirm -notmatch '^[Yy]$') {
-        Write-Host "`nUninstallation cancelled. No changes were made." -ForegroundColor Yellow
+        Write-Host "`nCleanup cancelled. No changes were made." -ForegroundColor Yellow
         exit 0
     }
 }
 
-Write-Host "`nProceeding with uninstallation..." -ForegroundColor Cyan
+Write-Host "`nProceeding with system cleanup..." -ForegroundColor Cyan
 
 # 3. Remove Scheduled Task
 if ($taskFound) {
@@ -117,20 +132,28 @@ if ($pathFound) {
     }
 }
 
-# 4. Remove Start Menu Shortcuts
-foreach ($sc in $shortcutsFound) {
-    Write-Host "Removing Start Menu shortcut: $sc ..." -ForegroundColor Gray
-    Remove-Item -Path $sc -Force -ErrorAction SilentlyContinue
+# 5. Remove Shortcuts
+if ($shortcutsFound.Count -gt 0) {
+    $launcherManager = Join-Path $PSScriptRoot "freewinly-setup-launcher.ps1"
+    if (Test-Path $launcherManager) {
+        & $launcherManager -Action Remove -Target All | Out-Null
+    }
+    foreach ($sc in $shortcutsFound) {
+        if (Test-Path -LiteralPath $sc.Path) {
+            Write-Host "Removing shortcut: $($sc.Path) ..." -ForegroundColor Gray
+            Remove-Item -LiteralPath $sc.Path -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
-# 5. Cleanly Delete Application Folder via Detached Process
-Write-Host "`nAll Windows registrations removed." -ForegroundColor Green
-Write-Host "Deleting application directory: $projectRoot ..." -ForegroundColor Green
-Write-Host "FreeWinly has been completely removed. Goodbye!`n" -ForegroundColor Cyan
-
-Start-Sleep -Seconds 1
-
-# Launch detached CMD from TEMP to delete folder after current process releases file lock
-$cleanCommand = "timeout /t 2 /nobreak >nul & rmdir /s /q `"$projectRoot`""
-Start-Process cmd.exe -ArgumentList "/c $cleanCommand" -WorkingDirectory $env:TEMP -WindowStyle Hidden
+Write-Host "`n============================================================" -ForegroundColor Green
+Write-Host "       FreeWinly Windows Cleanup Completed Successfully!    " -ForegroundColor White
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "All external Windows registrations have been completely removed:" -ForegroundColor Cyan
+Write-Host "  * Windows Scheduled Task: Unregistered" -ForegroundColor Gray
+Write-Host "  * User PATH Environment:  Cleaned" -ForegroundColor Gray
+Write-Host "  * Shortcuts:              Removed (Start Menu, Desktop, Startup folder)" -ForegroundColor Gray
+Write-Host "`nThe FreeWinly folder itself has been left intact:" -ForegroundColor Yellow
+Write-Host "  $projectRoot" -ForegroundColor White
+Write-Host "You can now safely delete or archive this folder at any time.`n" -ForegroundColor Gray
 exit 0

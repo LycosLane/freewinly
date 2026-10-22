@@ -86,7 +86,7 @@ if ($Action -eq 'Run') {
     & winget source update --disable-interactivity 2>&1 | Out-Null
 }
 
-$lines = & winget upgrade --include-unknown --accept-source-agreements | Out-String -Stream
+$lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity | Out-String -Stream
 $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
 
 $packages = [System.Collections.Generic.List[PSCustomObject]]::new()

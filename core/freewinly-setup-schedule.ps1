@@ -41,6 +41,9 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $runnerScript = Join-Path $projectRoot "freewinly.ps1"
 $configPath = Join-Path $projectRoot "config.json"
 
+# Dot-source config I/O service for atomic writes and rolling backups
+. (Join-Path $PSScriptRoot "freewinly-config-io.ps1")
+
 $weekdays = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
 $modes    = @('Weekly', 'Monthly', 'Logon')
 
@@ -115,7 +118,7 @@ function Save-ScheduleToConfig {
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue $Type -Force
             $cfg | Add-Member -NotePropertyName scheduleDay -NotePropertyValue $Day -Force
             $cfg | Add-Member -NotePropertyName scheduleTime -NotePropertyValue $Time -Force
-            $cfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+            Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
         } catch { }
     }
 }
@@ -125,7 +128,7 @@ function Remove-ScheduleFromConfig {
         try {
             $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue "Disabled" -Force
-            $cfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $configPath -Encoding UTF8
+            Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
         } catch { }
     }
 }
@@ -143,7 +146,8 @@ function Register-FreeWinlyTask {
         Write-Host "Requesting elevation..." -ForegroundColor Cyan
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action $ScheduleType -At `"$TimeStr`" -DayOfWeek `"$Day`""
+        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', $ScheduleType, '-At', $TimeStr, '-DayOfWeek', $Day)
+        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs
         return
     }
 
@@ -195,7 +199,8 @@ function Remove-FreeWinlyTask {
         Write-Host "`nRemoving scheduled task requires Administrator privileges." -ForegroundColor Yellow
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action Remove"
+        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', 'Remove')
+        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs
         return
     }
 
