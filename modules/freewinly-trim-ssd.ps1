@@ -28,24 +28,6 @@ param(
     [string]$LogFile = $null
 )
 
-if ($Action -eq 'Info') {
-    return [PSCustomObject]@{
-        Name                 = "SSD TRIM Optimization"
-        Description          = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
-        Order                = 34
-        Default              = $true
-        RequiresAdmin        = $true
-        DefaultSettings      = [ordered]@{
-            excludedDrives  = @()
-            minIntervalDays = 0
-            lastRun         = $null
-        }
-        SettingsDescriptions = [ordered]@{
-            minIntervalDays = "Minimum days between SSD TRIM runs (0 = every run)"
-        }
-    }
-}
-
 function Get-InstalledFixedSSDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
     $allDisks = @()
@@ -87,6 +69,26 @@ function Get-InstalledFixedSSDs {
         }
     }
     return @($found)
+}
+
+if ($Action -eq 'Info') {
+    $drives = Get-InstalledFixedSSDs
+    return [PSCustomObject]@{
+        Name                 = "SSD TRIM Optimization"
+        Description          = "Sends native NVMe/SATA TRIM hints to SSD volumes (never defrags)"
+        Order                = 34
+        Default              = $true
+        RequiresAdmin        = $true
+        DetectedDrives       = $drives
+        DefaultSettings      = [ordered]@{
+            excludedDrives  = @()
+            minIntervalDays = 0
+            lastRun         = $null
+        }
+        SettingsDescriptions = [ordered]@{
+            minIntervalDays = "Minimum days between SSD TRIM runs (0 = every run)"
+        }
+    }
 }
 
 Write-Host "`n--- [freewinly-trim-ssd] SSD TRIM Optimization [$Action] ---" -ForegroundColor Cyan

@@ -28,26 +28,6 @@ param(
     [string]$LogFile = $null
 )
 
-if ($Action -eq 'Info') {
-    $hasHDD = @(Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'HDD' }).Count -gt 0
-    return [PSCustomObject]@{
-        Name                 = "Mechanical HDD Defragmentation"
-        Description          = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
-        Order                = 35
-        Default              = $false
-        RequiresAdmin        = $true
-        Applicable           = $hasHDD
-        DefaultSettings      = [ordered]@{
-            excludedDrives  = @()
-            minIntervalDays = 30
-            lastRun         = $null
-        }
-        SettingsDescriptions = [ordered]@{
-            minIntervalDays = "Minimum days between HDD defragmentation runs"
-        }
-    }
-}
-
 function Get-InstalledFixedHDDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
     try {
@@ -70,6 +50,27 @@ function Get-InstalledFixedHDDs {
         }
     } catch { }
     return @($found)
+}
+
+if ($Action -eq 'Info') {
+    $drives = Get-InstalledFixedHDDs
+    return [PSCustomObject]@{
+        Name                 = "Mechanical HDD Defragmentation"
+        Description          = "Analyzes and defragments mechanical rotational HDDs (never touches SSDs)"
+        Order                = 35
+        Default              = $false
+        RequiresAdmin        = $true
+        Applicable           = ($drives.Count -gt 0)
+        DetectedDrives       = $drives
+        DefaultSettings      = [ordered]@{
+            excludedDrives  = @()
+            minIntervalDays = 30
+            lastRun         = $null
+        }
+        SettingsDescriptions = [ordered]@{
+            minIntervalDays = "Minimum days between HDD defragmentation runs"
+        }
+    }
 }
 
 Write-Host "`n--- [freewinly-defrag-hdd] Mechanical HDD Defragmentation [$Action] ---" -ForegroundColor Cyan

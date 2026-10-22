@@ -64,7 +64,7 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 - **Browser & App Cache Cleanup:** Purges disposable shader, code, and disk caches across Microsoft Edge, Chrome, Firefox, LibreWolf, Brave, Vivaldi, Opera, Discord, Teams, Slack, Spotify, Steam, and VS Code. Strictly preserves cookies, logins, and sessions; automatically skips running applications.
 - **Network Cache & Connectivity Diagnostics:** Tests active adapters, default gateway reachability, and DNS resolution latency. Flushes the DNS resolver cache, purges stale ARP neighbor routes, and provides optional NetBIOS reload and Winsock reset.
 - **Windows Component Store Cleanup (DISM):** Analyzes component store health and safely purges superseded Windows Update payloads from `C:\Windows\WinSxS` via native DISM, with optional `/ResetBase` and System File Checker (`sfc /verifyonly`) validation.
-- **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only, with per-drive exclusions and minimum interval controls.
+- **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only. Expanding either module (`[-]`) reveals interactive per-drive `[x]` / `[ ]` checkboxes that directly manage `excludedDrives` in `config.json`, alongside cadence interval sliders.
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than configured threshold (default: 7 days) to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
 - **App Launch Repair:** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities. [Learn more](#deep-dive-app-launch-interceptions--sleep-tools)
@@ -129,7 +129,9 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
             [x] Desktop app caches: Discord, Teams, Slack, Spotify, Steam, VS Code (skips if open)
   [x] [+] Network Cache & Connectivity
   [ ] [+] Windows Component Store Cleanup (DISM) [Admin]
-  [x] [+] SSD TRIM Optimization [Admin]
+  [x] [-] SSD TRIM Optimization [Admin]
+            < 0d > Minimum days between SSD TRIM runs (0 = every run)
+            [x] Optimize Drive C: (OS - WD_BLACK SN770M 2TB, 1833.7 GB)
 
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]

@@ -133,6 +133,24 @@ function Update-ModuleDynamicProps {
     }
 }
 
+function Toggle-DriveSubOption {
+    param($Item)
+    if (-not $Item -or -not $Item.Module -or -not $Item.DriveLetter) { return }
+    $mod = $Item.Module
+    $dl = ([string]$Item.DriveLetter).TrimEnd(':').ToUpper()
+    $curExcl = @()
+    if ($mod.Settings.excludedDrives) {
+        $curExcl = @($mod.Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+    }
+    if ($curExcl -contains $dl) {
+        $newExcl = @($curExcl | Where-Object { $_ -ne $dl })
+    } else {
+        $newExcl = @($curExcl) + @($dl)
+    }
+    $mod.Settings.excludedDrives = [string[]]$newExcl
+    Update-ModuleDynamicProps -Module $mod
+}
+
 function Test-UserPathRegistered {
     $userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
     if (-not $userPathRaw) { return $false }
@@ -473,6 +491,25 @@ foreach ($baseName in $orderedBaseNames) {
         }
     }
 
+    # Dynamic DetectedDrives sub-options (e.g. per-drive TRIM/Defrag targets)
+    if ($info.DetectedDrives -and $info.DetectedDrives.Count -gt 0) {
+        foreach ($d in $info.DetectedDrives) {
+            $dl = ([string]$d.DriveLetter).TrimEnd(':').ToUpper()
+            $verb = if ($baseName -eq 'freewinly-defrag-hdd') { "Defragment Drive ${dl}:" } else { "Optimize Drive ${dl}:" }
+            $labelPart = if ($d.Label) { "$($d.Label) - " } else { "" }
+            $modelPart = if ($d.Model) { "$($d.Model)" } else { "Fixed Disk" }
+            $sizePart  = if ($d.SizeGB) { ", $($d.SizeGB) GB" } else { "" }
+            $driveLabel = "$verb ($labelPart$modelPart$sizePart)"
+
+            $subOptions.Add([PSCustomObject]@{
+                Key         = "drive_$dl"
+                DriveLetter = $dl
+                Label       = $driveLabel
+                ValueType   = 'drive'
+            })
+        }
+    }
+
     $hasSubs = ($subOptions.Count -gt 0)
     $isExpanded = switch ($submenuView) {
         "Expanded" { $hasSubs }
@@ -626,6 +663,7 @@ if (-not $Run) {
                             Module      = $m
                             ModuleIndex = $i
                             SubKey      = $sub.Key
+                            DriveLetter = $sub.DriveLetter
                             Label       = $sub.Label
                             ValueType   = $sub.ValueType
                         })
@@ -705,6 +743,16 @@ if (-not $Run) {
                         $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
                         $line = "$pointer      $subCheck $($item.Label)"
                         $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
+                        Write-Host $line -ForegroundColor $color
+                    } elseif ($item.ValueType -eq 'drive') {
+                        $excl = @()
+                        if ($m.Settings.excludedDrives) {
+                            $excl = @($m.Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+                        }
+                        $isDriveEnabled = ($excl -notcontains $item.DriveLetter)
+                        $subCheck = if ($isDriveEnabled) { "[x]" } else { "[ ]" }
+                        $line = "$pointer      $subCheck $($item.Label)"
+                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $isDriveEnabled) { "Green" } elseif ($m.Enabled) { "DarkGray" } else { "DarkGray" }
                         Write-Host $line -ForegroundColor $color
                     } else {
                         $intVal = [int]$m.Settings.$($item.SubKey)
@@ -798,7 +846,9 @@ if (-not $Run) {
                             }
                         } elseif ($item.Type -eq 'SubOption') {
                             $mod = $item.Module
-                            if ($item.ValueType -eq 'bool') {
+                            if ($item.ValueType -eq 'drive') {
+                                Toggle-DriveSubOption -Item $item
+                            } elseif ($item.ValueType -eq 'bool') {
                                 $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {
@@ -826,7 +876,9 @@ if (-not $Run) {
                             }
                         } elseif ($item.Type -eq 'SubOption') {
                             $mod = $item.Module
-                            if ($item.ValueType -eq 'bool') {
+                            if ($item.ValueType -eq 'drive') {
+                                Toggle-DriveSubOption -Item $item
+                            } elseif ($item.ValueType -eq 'bool') {
                                 $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {
@@ -850,7 +902,9 @@ if (-not $Run) {
                             $item.Module.Enabled = -not $item.Module.Enabled
                         } elseif ($item.Type -eq 'SubOption') {
                             $mod = $item.Module
-                            if ($item.ValueType -eq 'bool') {
+                            if ($item.ValueType -eq 'drive') {
+                                Toggle-DriveSubOption -Item $item
+                            } elseif ($item.ValueType -eq 'bool') {
                                 $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
                                 Update-ModuleDynamicProps -Module $mod
                             } elseif ($item.ValueType -eq 'int') {

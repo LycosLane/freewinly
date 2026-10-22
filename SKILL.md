@@ -105,9 +105,9 @@ The AI agent should:
 
 ### 2. Interactive Tree-View Menu (`[+]` / `[-]`) & Hotkeys
 * Navigate with **[Up/Down]** arrows across modules, editable sub-options, and action items.
-* Toggle individual modules or boolean sub-options with **[Space]** (`[x]` / `[ ]`).
-* Expand or collapse sub-options for the highlighted module with **[Tab]**.
-* Fine-tune sub-options with **[Left/Right]** arrows (collapse/expand, toggle bools, step integer slider presets).
+* Toggle individual modules or boolean/per-drive sub-options with **[Space]** (`[x]` / `[ ]`).
+* Expand or collapse sub-options for the highlighted module with **[Tab]**. Expanding `SSD TRIM Optimization` or `Mechanical HDD Defragmentation` exposes interactive per-drive `[x]` / `[ ]` checkboxes that directly manage `excludedDrives` in `config.json`.
+* Fine-tune sub-options with **[Left/Right]** arrows (collapse/expand, toggle bools/drives, step integer slider presets).
 * Reorder module execution sequence with **[+]** / **[-]** (`Move Up` / `Move Down`), keeping selection anchored.
 * **[ Enter ]** -> **Run All Checked Tasks [x]** (executes all checked modules immediately; prompts for UAC only if required).
 * **[ C ] / [ A ]** -> **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
