@@ -117,12 +117,42 @@ if ($Remove) {
     }
 }
 
-$reservedNames = @('discord', 'teams', 'ms-teams', 'slack', 'steam', 'vscode', 'code', 'visual studio code')
+$cleanAppsInfo = if (Test-Path -LiteralPath $cleanAppsModule) { & $cleanAppsModule -Action Info } else { $null }
+$builtinKeys = [System.Collections.Generic.List[string]]::new()
+$reservedNames = [System.Collections.Generic.List[string]]::new()
+
+if ($cleanAppsInfo -and $cleanAppsInfo.DefaultSettings) {
+    $rawKeys = if ($cleanAppsInfo.DefaultSettings -is [System.Collections.IDictionary]) {
+        $cleanAppsInfo.DefaultSettings.Keys
+    } else {
+        $cleanAppsInfo.DefaultSettings.PSObject.Properties.Name
+    }
+    foreach ($k in $rawKeys) {
+        if ($k -notin @('minAgeDays', 'customApps')) {
+            $builtinKeys.Add($k)
+            $reservedNames.Add($k.ToLowerInvariant())
+            $appObj = if ($cleanAppsInfo.DefaultSettings -is [System.Collections.IDictionary]) {
+                $cleanAppsInfo.DefaultSettings[$k]
+            } else {
+                $cleanAppsInfo.DefaultSettings.$k
+            }
+            if ($appObj -and $appObj.process) {
+                foreach ($proc in $appObj.process) {
+                    $reservedNames.Add($proc.ToLowerInvariant())
+                }
+            }
+        }
+    }
+}
+if ($builtinKeys.Count -eq 0) {
+    $builtinKeys.AddRange(@('discord', 'teams', 'slack', 'steam', 'vscode'))
+    $reservedNames.AddRange(@('discord', 'teams', 'ms-teams', 'slack', 'steam', 'vscode', 'code', 'visual studio code'))
+}
 
 function Test-IsReservedName {
     param([string]$AppName)
     if ([string]::IsNullOrWhiteSpace($AppName)) { return $false }
-    $norm = $AppName.Trim().ToLower()
+    $norm = $AppName.Trim().ToLowerInvariant()
     return ($reservedNames -contains $norm)
 }
 
@@ -203,17 +233,15 @@ Write-Host "`nValidating '$Name' against FreeWinly safety rules..." -ForegroundC
 
 # 5. Invoke freewinly-clean-apps.ps1 -Action Check with candidate custom app to validate safety rules
 $testSettings = @{
-    discord    = $false
-    teams      = $false
-    slack      = $false
-    steam      = $false
-    vscode     = $false
     customApps = @{
         $Name = $candidateDef
     }
 }
+foreach ($k in $builtinKeys) {
+    $testSettings[$k] = $false
+}
 
-$outputLines = & $cleanAppsModule -Action Check -Settings $testSettings 2>&1
+$outputLines = & $cleanAppsModule -Action Check -Settings $testSettings *>&1
 $hasIgnored = $false
 $ignoredReason = ""
 
@@ -266,13 +294,11 @@ if (-not $cleanAppsEntry) {
     $newEntry = [ordered]@{
         enabled    = $true
         minAgeDays = 3
-        discord    = $true
-        teams      = $true
-        slack      = $true
-        steam      = $true
-        vscode     = $true
-        customApps = [ordered]@{}
     }
+    foreach ($k in $builtinKeys) {
+        $newEntry[$k] = $true
+    }
+    $newEntry['customApps'] = [ordered]@{}
     if ($modOrder -is [System.Collections.IDictionary]) {
         $modOrder['freewinly-clean-apps'] = $newEntry
     } else {

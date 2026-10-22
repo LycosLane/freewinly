@@ -157,10 +157,15 @@ function Save-ConfigState {
                 if ($null -ne $dm.Settings.minAgeDays) {
                     $block['minAgeDays'] = [int]$dm.Settings.minAgeDays
                 }
-                foreach ($bName in @('discord', 'teams', 'slack', 'steam', 'vscode')) {
-                    if ($null -ne $dm.Settings.$bName) {
-                        $v = $dm.Settings.$bName
-                        $block[$bName] = if ($v -is [bool]) { $v } elseif ($null -ne $v.enabled) { [bool]$v.enabled } else { $true }
+                $appKeys = if ($dm.Settings -is [System.Collections.IDictionary]) {
+                    $dm.Settings.Keys
+                } else {
+                    $dm.Settings.PSObject.Properties.Name
+                }
+                foreach ($k in $appKeys) {
+                    if ($k -notin @('minAgeDays', 'customApps')) {
+                        $v = $dm.Settings.$k
+                        $block[$k] = if ($v -is [bool]) { $v } elseif ($null -ne $v.enabled) { [bool]$v.enabled } else { $true }
                     }
                 }
                 $block['customApps'] = if ($dm.Settings.customApps) { $dm.Settings.customApps } else { [ordered]@{} }

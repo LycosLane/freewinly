@@ -146,7 +146,13 @@ foreach ($baseName in $orderedBaseNames) {
 
     if ($m.BaseName -eq 'freewinly-clean-apps') {
         $modBlock['minAgeDays'] = if ($null -ne $existingMod -and $null -ne $existingMod.minAgeDays) { [int]$existingMod.minAgeDays } else { 3 }
-        foreach ($bName in @('discord', 'teams', 'slack', 'steam', 'vscode')) {
+        $defKeys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) {
+            $m.DefaultSettings.Keys
+        } else {
+            $m.DefaultSettings.PSObject.Properties.Name
+        }
+        foreach ($bName in $defKeys) {
+            if ($bName -in @('minAgeDays', 'customApps')) { continue }
             $existingVal = if ($null -ne $existingMod) { $existingMod.$bName } else { $null }
             $bEnabled = if ($existingVal -is [bool]) {
                 $existingVal
