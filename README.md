@@ -108,7 +108,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.4.0 - Open Source Windows Engine      
+         FreeWinly v1.4.1 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -259,7 +259,7 @@ Execution order is controlled via `modulesExecutionOrder` in `config.json` (and 
 
 ```text
 FreeWinly/
-├── freewinly.ps1                        <-- Master runner (CLI + TUI + AST Gatekeeper + JIT elevation)
+├── freewinly.ps1                        <-- Master runner (CLI + high-level orchestrator + JIT elevation)
 ├── freewinly.cmd                        <-- Double-clickable launcher
 ├── config.json                          <-- Execution order & per-module scoped settings
 ├── config.previous.json                 <-- Rolling backup created on configuration modification
@@ -267,6 +267,8 @@ FreeWinly/
 ├── SKILL.md                             <-- AI Agent Playbook
 ├── core/
 │   ├── freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
+│   ├── freewinly-discovery.ps1          <-- AST contract gatekeeper, module discovery & sub-options builder
+│   ├── freewinly-tui.ps1                <-- Interactive ASCII tree-view menu, countdown & key dispatcher
 │   ├── freewinly-add-app.ps1            <-- Custom app cache manager (add/remove with safety checks)
 │   ├── freewinly-init-config.ps1        <-- First-run setup & exclusion wizard
 │   ├── freewinly-setup-schedule.ps1     <-- Windows Task Scheduler automation

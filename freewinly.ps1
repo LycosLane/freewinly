@@ -1,77 +1,56 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.4.0 - Open Source Windows Maintenance & Optimization Engine.
+    FreeWinly v1.4.1 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
 .DESCRIPTION
-    Native Windows maintenance suite utilizing Winget, PowerShell 5.1+, COM APIs, and TRIM.
-    Supports headless CLI automation, interactive TUI menu, dry-run check previews,
-    strict module contract validation, per-module scoped settings, and JIT elevation.
-.PARAMETER Run
-    Executes the enabled or specified modules immediately without opening the interactive menu.
-.PARAMETER Check
-    Performs a dry-run preview across enabled or specified modules without altering system state.
-.PARAMETER Audit
-    Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, updates, storage).
-.PARAMETER Modules
-    Optional array or comma-separated list of module BaseNames to run (e.g. -Modules freewinly-check-hardware,freewinly-update-software).
-.PARAMETER ConfigPath
-    Optional path to a custom configuration JSON file (defaults to .\config.json).
-.PARAMETER CountdownSeconds
-    Override the auto-start countdown duration (0 for instant execution, 3, 5, 10, 20, 30).
-.PARAMETER Interactive
-    Indicates an interactive user session (keeps the console window open until Enter is pressed after completion).
-.PARAMETER HelpMe
-    Displays CLI usage instructions and examples (aliases: -Help, -h).
-.EXAMPLE
-    .\freewinly.ps1
-.EXAMPLE
-    .\freewinly.ps1 -Check
-.EXAMPLE
-    .\freewinly.ps1 -Run
-.EXAMPLE
-    .\freewinly.ps1 -Modules freewinly-check-hardware,freewinly-update-software -Run
+    A modular, transparent, non-intrusive Windows 11 PC optimization toolchain.
+    Designed for casual users via an interactive ASCII tree-view console, and for
+    advanced users and AI agents via CLI, headless automation, and standard JSON configuration.
+.NOTES
+    Author  : LycosLane
+    License : MIT
+    GitHub  : https://github.com/LycosLane/freewinly
 #>
+
 [CmdletBinding()]
 param(
-    [switch]$Run,
-    [switch]$Check,
-    [switch]$Audit,
-    [string[]]$Modules = $null,
-    [string]$ConfigPath = $null,
-    [int]$CountdownSeconds = -1,
-    [switch]$Interactive,
-    [Alias('Help', 'h')]
-    [switch]$HelpMe
+    [Parameter()][switch]$Run,
+    [Parameter()][switch]$Check,
+    [Parameter()][int]$CountdownSeconds = -1,
+    [Parameter()][switch]$Audit,
+    [Parameter()][string]$ConfigPath = $null,
+    [Parameter()][string[]]$Modules = $null,
+    [Parameter()][hashtable]$Settings = $null,
+    [Parameter()][switch]$HelpMe = $false,
+    [Parameter()][switch]$Interactive = $false
 )
 
 $ErrorActionPreference = "Continue"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $projectRoot = $PSScriptRoot
 $coreDir     = Join-Path $projectRoot "core"
 $modulesDir  = Join-Path $projectRoot "modules"
 $logsDir     = Join-Path $projectRoot "logs"
-$logFile     = Join-Path $logsDir "latest-run.log"
-
-# Dot-source config I/O manager
-. (Join-Path $coreDir "freewinly-config-io.ps1")
-
-$configPath = if ($ConfigPath -and (Test-Path $ConfigPath)) {
-    (Resolve-Path $ConfigPath).Path
-} elseif ($ConfigPath) {
-    Write-Warning "Specified config file '$ConfigPath' not found. Falling back to default config.json."
-    Join-Path $projectRoot "config.json"
-} else {
-    Join-Path $projectRoot "config.json"
-}
 
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
+$dateStamp = (Get-Date).ToString("yyyyMMdd")
+$logFile   = Join-Path $logsDir "freewinly-$dateStamp.log"
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $projectRoot "config.json"
+}
+
+# Dot-source core services
+. (Join-Path $coreDir "freewinly-config-io.ps1")
+. (Join-Path $coreDir "freewinly-discovery.ps1")
+. (Join-Path $coreDir "freewinly-tui.ps1")
+
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.4.0 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "         FreeWinly v1.4.1 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -97,223 +76,6 @@ $defaultConfigTemplate = [PSCustomObject]@{
     modulesExecutionOrder = $null
 }
 
-function Get-IntPresets {
-    param([string]$Key)
-    if ($Key -in @('minAgeDays', 'lookbackDays')) {
-        return @(1, 3, 7, 14, 30, 60, 90)
-    }
-    return @(0, 1, 3, 7, 14, 30, 60, 90)
-}
-
-function Update-ModuleDynamicProps {
-    param([PSCustomObject]$Module)
-    if (-not $Module) { return }
-    # 1. Dynamic Admin requirement (e.g. freewinly-clean-network if clearNetBios, resetWinsock, or clearArpCache is enabled)
-    if ($Module.BaseName -eq 'freewinly-clean-network') {
-        $hasAdminOption = [bool]($Module.Settings.clearNetBios -or $Module.Settings.resetWinsock -or $Module.Settings.clearArpCache)
-        $Module.RequiresAdmin = $hasAdminOption
-    }
-    # 2. Dynamic title updates
-    if ($Module.BaseName -eq 'freewinly-clean-cache' -and $null -ne $Module.Settings.minAgeDays) {
-        $Module.Name = "Safe Cache & Temp Cleanup (>$($Module.Settings.minAgeDays) days)"
-    } elseif ($Module.BaseName -eq 'freewinly-check-eventlog') {
-        if ($Module.Settings.startDate) {
-            $endLabel = if ($Module.Settings.endDate) { $Module.Settings.endDate } else { "Today" }
-            $Module.Name = "System Stability & Event Logs ($($Module.Settings.startDate) to $endLabel)"
-        } elseif ($Module.Settings.lookbackDays) {
-            $Module.Name = "System Stability & Event Logs (Last $($Module.Settings.lookbackDays)d)"
-        }
-    }
-}
-
-function Toggle-DriveSubOption {
-    param($Item)
-    if (-not $Item -or -not $Item.Module -or -not $Item.DriveLetter) { return }
-    $mod = $Item.Module
-    $dl = ([string]$Item.DriveLetter).TrimEnd(':').ToUpper()
-    $curExcl = @()
-    if ($mod.Settings.excludedDrives) {
-        $curExcl = @($mod.Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
-    }
-    if ($curExcl -contains $dl) {
-        $newExcl = @($curExcl | Where-Object { $_ -ne $dl })
-    } else {
-        $newExcl = @($curExcl) + @($dl)
-    }
-    $mod.Settings.excludedDrives = [string[]]$newExcl
-    Update-ModuleDynamicProps -Module $mod
-}
-
-function Refresh-CleanAppsSubOptions {
-    param($Module)
-    if (-not $Module -or $Module.BaseName -ne 'freewinly-clean-apps') { return }
-    $entry = $validFileMap['freewinly-clean-apps']
-    if (-not $entry) { return }
-    $info = $entry.Info
-    $newSubs = [System.Collections.Generic.List[PSCustomObject]]::new()
-    if ($info.SettingsDescriptions) {
-        $descKeys = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
-            $info.SettingsDescriptions.Keys
-        } else {
-            $info.SettingsDescriptions.PSObject.Properties.Name
-        }
-        foreach ($sk in $descKeys) {
-            $valType = if ($sk -match 'Days') { 'int' } else { 'bool' }
-            $newSubs.Add([PSCustomObject]@{
-                Key       = $sk
-                Label     = [string]$info.SettingsDescriptions[$sk]
-                ValueType = $valType
-            })
-        }
-    }
-    if ($Module.Settings.customApps) {
-        $cKeys = if ($Module.Settings.customApps -is [System.Collections.IDictionary]) {
-            $Module.Settings.customApps.Keys
-        } else {
-            $Module.Settings.customApps.PSObject.Properties.Name
-        }
-        foreach ($ck in $cKeys) {
-            $newSubs.Add([PSCustomObject]@{
-                Key           = "customApp_$ck"
-                CustomAppName = $ck
-                Label         = "$ck cache (custom)"
-                ValueType     = 'customApp'
-            })
-        }
-    }
-    $newSubs.Add([PSCustomObject]@{
-        Key       = "add_new_app"
-        Label     = "[ + Add new app... ]"
-        ValueType = 'addApp'
-    })
-    $Module.SubOptions = $newSubs
-}
-
-function Test-UserPathRegistered {
-    $userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
-    if (-not $userPathRaw) { return $false }
-    $normRoot = $projectRoot.TrimEnd('\')
-    return (($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
-        $_.Trim().TrimEnd('\').Equals($normRoot, [System.StringComparison]::OrdinalIgnoreCase)
-    }).Count -gt 0)
-}
-
-function Test-ModuleContract {
-    param([string]$FilePath)
-    $tokens = $null
-    $parseErrors = $null
-    $ast = [System.Management.Automation.Language.Parser]::ParseFile($FilePath, [ref]$tokens, [ref]$parseErrors)
-
-    if ($parseErrors -and $parseErrors.Count -gt 0) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Syntax error at line $($parseErrors[0].Extent.StartLineNumber): $($parseErrors[0].Message)"
-            Info    = $null
-        }
-    }
-
-    if (-not $ast.ParamBlock -or -not $ast.ParamBlock.Parameters) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Missing param() block with required '-Action' parameter (Info, Check, Run)."
-            Info    = $null
-        }
-    }
-
-    $paramNames = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
-    foreach ($req in @('Action', 'Settings', 'LogFile')) {
-        if (-not ($paramNames -contains $req)) {
-            return [PSCustomObject]@{
-                IsValid = $false
-                Reason  = "Missing required '-$req' parameter in param() block."
-                Info    = $null
-            }
-        }
-    }
-
-    $info = $null
-    try {
-        $info = & $FilePath -Action Info -ErrorAction Stop
-    } catch {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Execution of '-Action Info' failed: $($_.Exception.Message)"
-            Info    = $null
-        }
-    }
-
-    if (-not $info) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "'-Action Info' returned null instead of a metadata object."
-            Info    = $null
-        }
-    }
-
-    if (-not ($info.Name -is [string]) -or [string]::IsNullOrWhiteSpace($info.Name)) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Metadata is missing a valid 'Name' string."
-            Info    = $null
-        }
-    }
-
-    $cleanName = $info.Name.Trim()
-    if ($cleanName.Length -lt 3 -or $cleanName.Length -gt 50) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Name '$($cleanName.Substring(0, [math]::Min(25, $cleanName.Length)))...' must be 3-50 characters (got $($cleanName.Length) chars)."
-            Info    = $null
-        }
-    }
-
-    if ($cleanName -match '[\r\n]') {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Name must be a single line without newline characters."
-            Info    = $null
-        }
-    }
-
-    if (-not ($info.Description -is [string]) -or [string]::IsNullOrWhiteSpace($info.Description)) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Metadata is missing a valid 'Description' string."
-            Info    = $null
-        }
-    }
-
-    if ($info.Description.Trim().Length -gt 120) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Description exceeds maximum length of 120 characters ($($info.Description.Trim().Length) chars)."
-            Info    = $null
-        }
-    }
-
-    if (-not ($info.Default -is [bool])) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Metadata 'Default' property must be a boolean (`$true or `$false)."
-            Info    = $null
-        }
-    }
-
-    if (-not ($info.RequiresAdmin -is [bool])) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Metadata 'RequiresAdmin' property must be a boolean (`$true or `$false)."
-            Info    = $null
-        }
-    }
-
-    return [PSCustomObject]@{
-        IsValid = $true
-        Reason  = $null
-        Info    = $info
-    }
-}
-
 if ($HelpMe) {
     Show-Banner
     Write-Host @"
@@ -332,6 +94,7 @@ Core Utilities:
   .\core\freewinly-setup-schedule.ps1  Configure Windows Task Scheduler automation
   .\core\freewinly-setup-launcher.ps1  Manage Start Menu shortcut (Install / Remove / Status)
   .\core\freewinly-setup-path.ps1      Manage User PATH registration (Install / Remove / Toggle / Status)
+  .\core\freewinly-add-app.ps1         Register or remove custom desktop app cache definitions
   .\core\freewinly-uninstall.ps1       Cleanly remove FreeWinly from this PC
 
 Standalone Module Invocations:
@@ -349,14 +112,14 @@ if ($Audit) {
 $isInteractiveSession = (-not $Run) -or $Interactive
 
 # 1. First-Run Configuration Initialization (if config.json does not exist yet)
-if (-not (Test-Path $configPath)) {
+if (-not (Test-Path $ConfigPath)) {
     $initScript = Join-Path $coreDir "freewinly-init-config.ps1"
     if (Test-Path $initScript) {
-        & $initScript -ConfigPath $configPath
+        & $initScript -ConfigPath $ConfigPath
     }
 }
 
-$configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
+$configLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
 $config = $configLoad.Config
 $configWasCorrupted = [bool]$configLoad.IsCorrupted
 
@@ -372,237 +135,13 @@ if ($Modules -and $Modules.Count -eq 1 -and $Modules[0] -match ',') {
     $Modules = $Modules[0].Split(',') | ForEach-Object { $_.Trim() }
 }
 
-# ==================================================================
-# 2. DISCOVER, VALIDATE & ORDER MODULES DYNAMICALLY
-# ==================================================================
-$moduleFiles = Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue
-$validFileMap = @{}
-$ignoredWarnings = [System.Collections.Generic.List[string]]::new()
-
-foreach ($mf in $moduleFiles) {
-    $validation = Test-ModuleContract -FilePath $mf.FullName
-    if (-not $validation.IsValid) {
-        $msg = "[Module Ignored] '$($mf.Name)' was not loaded: $($validation.Reason)"
-        $ignoredWarnings.Add($msg)
-        Write-Host $msg -ForegroundColor Yellow
-        continue
-    }
-    $validFileMap[$mf.BaseName] = [PSCustomObject]@{
-        File = $mf
-        Info = $validation.Info
-    }
-}
-
-# Reconcile execution order:
-# 1. First in the sequence defined in config.modulesExecutionOrder
-# 2. Followed by any newly added modules sorted by their Info.Order
-$orderedBaseNames = [System.Collections.Generic.List[string]]::new()
-$hasModOrderConfig = ($null -ne $config.modulesExecutionOrder)
-
-if ($hasModOrderConfig) {
-    $cfgKeys = if ($config.modulesExecutionOrder -is [System.Collections.IDictionary]) {
-        $config.modulesExecutionOrder.Keys
-    } else {
-        $config.modulesExecutionOrder.PSObject.Properties.Name
-    }
-    foreach ($k in $cfgKeys) {
-        if ($validFileMap.ContainsKey($k) -and -not $orderedBaseNames.Contains($k)) {
-            $orderedBaseNames.Add($k)
-        }
-    }
-}
-
-$newModules = @($validFileMap.Keys | Where-Object { -not $orderedBaseNames.Contains($_) } | ForEach-Object {
-    [PSCustomObject]@{
-        BaseName = $_
-        Order    = if ($null -ne $validFileMap[$_].Info.Order) { [int]$validFileMap[$_].Info.Order } else { 99 }
-    }
-} | Sort-Object Order, BaseName)
-
-foreach ($nm in $newModules) {
-    $orderedBaseNames.Add($nm.BaseName)
-}
-
-$submenuView = if ($config -and $config.submenuView) { [string]$config.submenuView } else { "Hidden" }
-$expandedCfg = if ($config -and $config.expandedModules) { @($config.expandedModules) } else { @() }
-$discoveredModules = [System.Collections.Generic.List[PSCustomObject]]::new()
-
-foreach ($baseName in $orderedBaseNames) {
-    $entry = $validFileMap[$baseName]
-    $mf    = $entry.File
-    $info  = $entry.Info
-
-    # Build merged settings object (DefaultSettings overlaid with user's config block)
-    $modSettings = [ordered]@{}
-    if ($info.DefaultSettings) {
-        $defKeys = if ($info.DefaultSettings -is [System.Collections.IDictionary]) {
-            $info.DefaultSettings.Keys
-        } else {
-            $info.DefaultSettings.PSObject.Properties.Name
-        }
-        foreach ($dk in $defKeys) {
-            $modSettings[$dk] = $info.DefaultSettings[$dk]
-        }
-    }
-
-    $cfgEntry = if ($hasModOrderConfig) { $config.modulesExecutionOrder.$baseName } else { $null }
-    $enabledInCfg = $null
-
-    if ($null -ne $cfgEntry) {
-        if ($cfgEntry -is [bool]) {
-            $enabledInCfg = $cfgEntry
-        } else {
-            if ($null -ne $cfgEntry.enabled) {
-                $enabledInCfg = [bool]$cfgEntry.enabled
-            }
-            $uKeys = if ($cfgEntry -is [System.Collections.IDictionary]) {
-                $cfgEntry.Keys
-            } else {
-                $cfgEntry.PSObject.Properties.Name
-            }
-            foreach ($uk in $uKeys) {
-                if ($uk -ne 'enabled') {
-                    $modSettings[$uk] = $cfgEntry.$uk
-                }
-            }
-        }
-    }
-
-    # Determine if enabled:
-    # - CLI -Modules override > config.modulesExecutionOrder > (if brand-new unconfigured module & config exists: false, else Info.Default)
-    $configEnabled = if ($null -ne $enabledInCfg) {
-        [bool]$enabledInCfg
-    } elseif ($hasModOrderConfig) {
-        # A brand-new module dropped into modules/ that was not in config.json yet defaults to disabled for safety
-        $false
-    } else {
-        [bool]$info.Default
-    }
-
-    $isEnabled = if ($Modules) {
-        $Modules -contains $baseName
-    } else {
-        $configEnabled
-    }
-
-    $settingsObj = [PSCustomObject]$modSettings
-
-    # Update dynamic title if minAgeDays or lookbackDays was customized in settings
-    $displayName = $info.Name
-    if ($baseName -eq 'freewinly-clean-cache' -and $null -ne $settingsObj.minAgeDays) {
-        $displayName = "Safe Cache & Temp Cleanup (>$($settingsObj.minAgeDays) days)"
-    } elseif ($baseName -eq 'freewinly-check-eventlog') {
-        if ($settingsObj.startDate) {
-            $endLabel = if ($settingsObj.endDate) { $settingsObj.endDate } else { "Today" }
-            $displayName = "System Stability & Event Logs ($($settingsObj.startDate) to $endLabel)"
-        } elseif ($settingsObj.lookbackDays) {
-            $displayName = "System Stability & Event Logs (Last $($settingsObj.lookbackDays)d)"
-        }
-    }
-
-    $isApplicable = if ($null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }
-
-    # Skip inapplicable hardware modules (e.g. HDD Defrag on SSD-only PC) from menu unless explicitly requested via -Modules
-    if (-not $isApplicable -and -not ($Modules -and $Modules -contains $baseName)) {
-        continue
-    }
-
-    $subOptions = [System.Collections.Generic.List[PSCustomObject]]::new()
-    if ($info.SettingsDescriptions) {
-        $descKeys = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
-            $info.SettingsDescriptions.Keys
-        } else {
-            $info.SettingsDescriptions.PSObject.Properties.Name
-        }
-        foreach ($sk in $descKeys) {
-            $curVal = if ($modSettings.Contains($sk)) {
-                $modSettings[$sk]
-            } elseif ($info.DefaultSettings -and $info.DefaultSettings.Contains($sk)) {
-                $info.DefaultSettings[$sk]
-            } else { $null }
-
-            $valType = if ($curVal -is [bool]) {
-                'bool'
-            } elseif ($curVal -is [int]) {
-                'int'
-            } else {
-                if ($sk -match 'Days') { 'int' } else { 'bool' }
-            }
-
-            $subOptions.Add([PSCustomObject]@{
-                Key       = $sk
-                Label     = [string]$info.SettingsDescriptions[$sk]
-                ValueType = $valType
-            })
-        }
-    }
-
-    # Dynamic DetectedDrives sub-options (e.g. per-drive TRIM/Defrag targets)
-    if ($info.DetectedDrives -and $info.DetectedDrives.Count -gt 0) {
-        foreach ($d in $info.DetectedDrives) {
-            $dl = ([string]$d.DriveLetter).TrimEnd(':').ToUpper()
-            $verb = if ($baseName -eq 'freewinly-defrag-hdd') { "Defragment Drive ${dl}:" } else { "Optimize Drive ${dl}:" }
-            $labelPart = if ($d.Label) { "$($d.Label) - " } else { "" }
-            $modelPart = if ($d.Model) { "$($d.Model)" } else { "Fixed Disk" }
-            $sizePart  = if ($d.SizeGB) { ", $($d.SizeGB) GB" } else { "" }
-            $driveLabel = "$verb ($labelPart$modelPart$sizePart)"
-
-            $subOptions.Add([PSCustomObject]@{
-                Key         = "drive_$dl"
-                DriveLetter = $dl
-                Label       = $driveLabel
-                ValueType   = 'drive'
-            })
-        }
-    }
-
-    # Dynamic Custom Apps & Add New App sub-options for freewinly-clean-apps
-    if ($baseName -eq 'freewinly-clean-apps') {
-        if ($modSettings.customApps) {
-            $cKeys = if ($modSettings.customApps -is [System.Collections.IDictionary]) {
-                $modSettings.customApps.Keys
-            } else {
-                $modSettings.customApps.PSObject.Properties.Name
-            }
-            foreach ($ck in $cKeys) {
-                $subOptions.Add([PSCustomObject]@{
-                    Key           = "customApp_$ck"
-                    CustomAppName = $ck
-                    Label         = "$ck cache (custom)"
-                    ValueType     = 'customApp'
-                })
-            }
-        }
-        $subOptions.Add([PSCustomObject]@{
-            Key       = "add_new_app"
-            Label     = "[ + Add new app... ]"
-            ValueType = 'addApp'
-        })
-    }
-
-    $hasSubs = ($subOptions.Count -gt 0)
-    $isExpanded = switch ($submenuView) {
-        "Expanded" { $hasSubs }
-        "Custom"   { $hasSubs -and ($expandedCfg -contains $baseName) }
-        default    { $false }
-    }
-
-    $modObj = [PSCustomObject]@{
-        BaseName      = $baseName
-        Name          = $displayName
-        Description   = $info.Description
-        Path          = $mf.FullName
-        Enabled       = [bool]$isEnabled
-        ConfigEnabled = [bool]$configEnabled
-        RequiresAdmin = [bool]$info.RequiresAdmin
-        Settings      = $settingsObj
-        SubOptions    = $subOptions
-        Expanded      = [bool]$isExpanded
-    }
-
-    Update-ModuleDynamicProps -Module $modObj
-    $discoveredModules.Add($modObj)
-}
+# 2. Discover, validate & order modules dynamically
+$discovery = Get-DiscoveredModules -ModulesDir $modulesDir -Config $config -ModulesFilter $Modules
+$discoveredModules = $discovery.DiscoveredModules
+$validFileMap      = $discovery.ValidFileMap
+$orderedBaseNames  = $discovery.OrderedBaseNames
+$ignoredWarnings   = $discovery.IgnoredWarnings
+$submenuView       = $discovery.SubmenuView
 
 function Save-ConfigState {
     if ($configWasCorrupted) {
@@ -655,7 +194,7 @@ function Save-ConfigState {
     if ($config.PSObject.Properties['excluded']) {
         $config.PSObject.Properties.Remove('excluded')
     }
-    Save-AtomicConfigFile -Path $configPath -Config $config -Depth 6
+    Save-AtomicConfigFile -Path $ConfigPath -Config $config -Depth 6
 }
 
 function Invoke-DryRunCheck {
@@ -678,499 +217,37 @@ function Invoke-DryRunCheck {
     Write-Host "`n=== Diagnostic Audit & Dry-Run Check Completed Successfully ===" -ForegroundColor Green
 }
 
-# ==================================================================
 # 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
-# ==================================================================
 if ($Check) {
     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
     Invoke-DryRunCheck -TargetModules $targetModules
     exit 0
 }
 
-# ==================================================================
 # 4. INTERACTIVE MODE (Only if neither -Run nor -Check was specified)
-# ==================================================================
 if (-not $Run) {
-    Clear-Host
-    Show-Banner
-    if ($ignoredWarnings.Count -gt 0) {
-        Write-Host ""
-        foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
-    }
-    Write-Host "`nScheduled Tasks to Run (in execution order):" -ForegroundColor Yellow
+    $menuResult = Invoke-InteractiveMenu `
+        -DiscoveredModules $discoveredModules `
+        -Config $config `
+        -ConfigPath $ConfigPath `
+        -CoreDir $coreDir `
+        -LogFile $logFile `
+        -Countdown $countdown `
+        -SubmenuView $submenuView `
+        -IgnoredWarnings $ignoredWarnings `
+        -ValidFileMap $validFileMap `
+        -OrderedBaseNames $orderedBaseNames `
+        -IsInteractiveSession $isInteractiveSession `
+        -ConfigWasCorrupted $configWasCorrupted `
+        -DefaultConfigTemplate $defaultConfigTemplate `
+        -SaveConfigCallback { Save-ConfigState } `
+        -DryRunCallback { param($TargetModules) Invoke-DryRunCheck -TargetModules $TargetModules }
 
-    foreach ($m in $discoveredModules) {
-        $mark  = if ($m.Enabled) { "[x]" } else { "[ ]" }
-        $admin = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
-        $col   = if ($m.Enabled) { "Green" } else { "DarkGray" }
-        Write-Host "  $mark $($m.Name)$admin" -ForegroundColor $col
-    }
-
-    $openMenu = $false
-
-    if ($countdown -gt 0) {
-        Write-Host "`nStarting in " -NoNewline -ForegroundColor Gray
-        try {
-            for ($sec = $countdown; $sec -gt 0; $sec--) {
-                Write-Host "$sec... " -NoNewline -ForegroundColor Cyan
-                for ($sub = 0; $sub -lt 10; $sub++) {
-                    Start-Sleep -Milliseconds 100
-                    if ([Console]::KeyAvailable) {
-                        [Console]::ReadKey($true) | Out-Null
-                        $openMenu = $true
-                        break
-                    }
-                }
-                if ($openMenu) { break }
-            }
-        } catch {
-            $openMenu = $false
-        }
-    }
-
-    if ($openMenu) {
-        $selectedIndex = 0
-        $timerPresets = @(0, 3, 5, 10, 20, 30)
-        $running = $true
-        $anchorModule = $null
-
-        while ($running) {
-            # Build flat list of visible items (Modules and currently expanded SubOptions)
-            $visibleItems = [System.Collections.Generic.List[hashtable]]::new()
-            for ($i = 0; $i -lt $discoveredModules.Count; $i++) {
-                $m = $discoveredModules[$i]
-                $visibleItems.Add(@{
-                    Type        = 'Module'
-                    Module      = $m
-                    ModuleIndex = $i
-                })
-                $hasSubs = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
-                if ($m.Expanded -and $hasSubs) {
-                    foreach ($sub in $m.SubOptions) {
-                        $visibleItems.Add(@{
-                            Type        = 'SubOption'
-                            Module      = $m
-                            ModuleIndex = $i
-                            SubKey      = $sub.Key
-                            DriveLetter = $sub.DriveLetter
-                            Label       = $sub.Label
-                            ValueType   = $sub.ValueType
-                        })
-                    }
-                }
-            }
-
-            if ($anchorModule) {
-                for ($v = 0; $v -lt $visibleItems.Count; $v++) {
-                    if ($visibleItems[$v].Type -eq 'Module' -and $visibleItems[$v].Module.BaseName -eq $anchorModule) {
-                        $selectedIndex = $v
-                        break
-                    }
-                }
-                $anchorModule = $null
-            }
-
-            $timerText = if ($countdown -eq 0) { "0s (Instant)" } else { "${countdown}s" }
-            $schedSummary = if ($config.scheduleType -and $config.scheduleType -ne "Disabled") {
-                if ($config.scheduleType -eq "Logon") { "Logon (+5m)" }
-                else { "$($config.scheduleType) on $($config.scheduleDay) at $($config.scheduleTime)" }
-            } else {
-                "Disabled"
-            }
-            $pathStatus = if (Test-UserPathRegistered) { "Enabled" } else { "Disabled" }
-            $submenuViewText = switch ($submenuView) {
-                'Expanded' { 'Expanded' }
-                'Custom'   { 'Custom' }
-                default    { 'Hidden' }
-            }
-
-            $actions = @(
-                @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
-                @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
-                @{ Label = "[   E   ]  Sub-Options View: [ $submenuViewText ] (Press E: Hidden, Custom, Expanded)"; Key = "E" },
-                @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
-                @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
-                @{ Label = "[   P   ]  User PATH CLI Auto-Complete: [ $pathStatus ] (Press P to toggle)"; Key = "P" },
-                @{ Label = "[   S   ]  Save Selection & Order as Default"; Key = "S" },
-                @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O" },
-                @{ Label = "[   I   ]  Install / Update Start Menu Launcher"; Key = "I" },
-                @{ Label = "[   U   ]  Uninstall FreeWinly Completely"; Key = "U" },
-                @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
-            )
-            $totalOptions = $visibleItems.Count + $actions.Count
-            if ($selectedIndex -ge $totalOptions) { $selectedIndex = $totalOptions - 1 }
-            if ($selectedIndex -lt 0) { $selectedIndex = 0 }
-
-            Clear-Host
-            Show-Banner
-            if ($ignoredWarnings.Count -gt 0) {
-                foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
-            }
-            Write-Host "Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:`n" -ForegroundColor Gray
-
-            for ($v = 0; $v -lt $visibleItems.Count; $v++) {
-                $item = $visibleItems[$v]
-                $isSelected = ($v -eq $selectedIndex)
-                $pointer = if ($isSelected) { "> " } else { "  " }
-
-                if ($item.Type -eq 'Module') {
-                    $m = $item.Module
-                    $hasSubs = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
-                    $expandMark = if ($hasSubs) {
-                        if ($m.Expanded) { "[-] " } else { "[+] " }
-                    } else {
-                        "    "
-                    }
-                    $checkMark = if ($m.Enabled) { "[x]" } else { "[ ]" }
-                    $admin = if ($m.RequiresAdmin) { " [Admin]" } else { "" }
-                    $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled) { "Green" } else { "DarkGray" }
-                    Write-Host "$pointer$checkMark $expandMark$($m.Name)$admin" -ForegroundColor $color
-                } else {
-                    $m = $item.Module
-                    if ($item.ValueType -eq 'bool') {
-                        $subVal = [bool]$m.Settings.$($item.SubKey)
-                        $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
-                        $line = "$pointer      $subCheck $($item.Label)"
-                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
-                        Write-Host $line -ForegroundColor $color
-                    } elseif ($item.ValueType -eq 'drive') {
-                        $excl = @()
-                        if ($m.Settings.excludedDrives) {
-                            $excl = @($m.Settings.excludedDrives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
-                        }
-                        $isDriveEnabled = ($excl -notcontains $item.DriveLetter)
-                        $subCheck = if ($isDriveEnabled) { "[x]" } else { "[ ]" }
-                        $line = "$pointer      $subCheck $($item.Label)"
-                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $isDriveEnabled) { "Green" } elseif ($m.Enabled) { "DarkGray" } else { "DarkGray" }
-                        Write-Host $line -ForegroundColor $color
-                    } elseif ($item.ValueType -eq 'customApp') {
-                        $custObj = if ($m.Settings.customApps -is [System.Collections.IDictionary]) {
-                            $m.Settings.customApps[$item.CustomAppName]
-                        } else {
-                            $m.Settings.customApps.$($item.CustomAppName)
-                        }
-                        $subVal = if ($custObj -is [bool]) { $custObj } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) { [bool]$custObj.enabled } else { $true }
-                        $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
-                        $line = "$pointer      $subCheck $($item.Label)  [Del to remove]"
-                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
-                        Write-Host $line -ForegroundColor $color
-                    } elseif ($item.ValueType -eq 'addApp') {
-                        $line = "$pointer      $($item.Label)"
-                        $color = if ($isSelected) { "Cyan" } else { "Yellow" }
-                        Write-Host $line -ForegroundColor $color
-                    } else {
-                        $intVal = [int]$m.Settings.$($item.SubKey)
-                        $line = "$pointer      < ${intVal}d > $($item.Label)"
-                        $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled) { "White" } else { "DarkGray" }
-                        Write-Host $line -ForegroundColor $color
-                    }
-                }
-            }
-
-            Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
-
-            for ($j = 0; $j -lt $actions.Count; $j++) {
-                $actionIdx = $visibleItems.Count + $j
-                $pointer = if ($actionIdx -eq $selectedIndex) { "> " } else { "  " }
-                $color   = if ($actionIdx -eq $selectedIndex) { "Yellow" } else { "White" }
-                Write-Host "$pointer$($actions[$j].Label)" -ForegroundColor $color
-            }
-
-            $key = [Console]::ReadKey($true)
-            $cmdKey = $key.Key.ToString()
-
-            # Reorder module up/down with [+] / [-]
-            if ($selectedIndex -lt $visibleItems.Count) {
-                $curItem = $visibleItems[$selectedIndex]
-                $targetMod = $curItem.Module
-                $modIdx = $discoveredModules.IndexOf($targetMod)
-
-                if ($key.KeyChar -eq '-' -or $key.Key -eq 'Subtract' -or $key.Key -eq 'OemMinus') {
-                    if ($modIdx -gt 0) {
-                        $temp = $discoveredModules[$modIdx - 1]
-                        $discoveredModules[$modIdx - 1] = $discoveredModules[$modIdx]
-                        $discoveredModules[$modIdx] = $temp
-                        $anchorModule = $targetMod.BaseName
-                    }
-                    continue
-                } elseif ($key.KeyChar -eq '+' -or $key.Key -eq 'Add' -or $key.KeyChar -eq '=' -or $key.Key -eq 'OemPlus') {
-                    if ($modIdx -lt ($discoveredModules.Count - 1)) {
-                        $temp = $discoveredModules[$modIdx + 1]
-                        $discoveredModules[$modIdx + 1] = $discoveredModules[$modIdx]
-                        $discoveredModules[$modIdx] = $temp
-                        $anchorModule = $targetMod.BaseName
-                    }
-                    continue
-                }
-            }
-
-            if ($cmdKey -eq "Enter") {
-                if ($selectedIndex -lt $visibleItems.Count) {
-                    $cmdKey = "Spacebar"
-                } else {
-                    $cmdKey = $actions[$selectedIndex - $visibleItems.Count].Key
-                }
-            }
-
-            switch ($cmdKey) {
-                "UpArrow" {
-                    $selectedIndex--
-                    if ($selectedIndex -lt 0) { $selectedIndex = $totalOptions - 1 }
-                }
-                "DownArrow" {
-                    $selectedIndex++
-                    if ($selectedIndex -ge $totalOptions) { $selectedIndex = 0 }
-                }
-                "Tab" {
-                    if ($selectedIndex -lt $visibleItems.Count) {
-                        $item = $visibleItems[$selectedIndex]
-                        $targetMod = $item.Module
-                        $hasSubs = ($targetMod.SubOptions -and $targetMod.SubOptions.Count -gt 0)
-                        if ($hasSubs) {
-                            $targetMod.Expanded = -not $targetMod.Expanded
-                            if ($submenuView -ne "Custom") { $submenuView = "Custom" }
-                            if (-not $targetMod.Expanded -and $item.Type -eq 'SubOption') {
-                                for ($k = $selectedIndex; $k -ge 0; $k--) {
-                                    if ($visibleItems[$k].Type -eq 'Module' -and $visibleItems[$k].Module.BaseName -eq $targetMod.BaseName) {
-                                        $selectedIndex = $k
-                                        break
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                "LeftArrow" {
-                    if ($selectedIndex -lt $visibleItems.Count) {
-                        $item = $visibleItems[$selectedIndex]
-                        if ($item.Type -eq 'Module') {
-                            if ($item.Module.Expanded) {
-                                $item.Module.Expanded = $false
-                                if ($submenuView -ne "Custom") { $submenuView = "Custom" }
-                            }
-                        } elseif ($item.Type -eq 'SubOption') {
-                            $mod = $item.Module
-                            if ($item.ValueType -eq 'drive') {
-                                Toggle-DriveSubOption -Item $item
-                            } elseif ($item.ValueType -eq 'customApp') {
-                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
-                                if ($custObj -is [bool]) {
-                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
-                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
-                                    $custObj.enabled = -not [bool]$custObj.enabled
-                                }
-                            } elseif ($item.ValueType -eq 'bool') {
-                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
-                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
-                                } else {
-                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
-                                }
-                                Update-ModuleDynamicProps -Module $mod
-                            } elseif ($item.ValueType -eq 'int') {
-                                $presets = Get-IntPresets -Key $item.SubKey
-                                $curVal = [int]$mod.Settings.$($item.SubKey)
-                                $idx = $presets.IndexOf($curVal)
-                                if ($idx -gt 0) {
-                                    $mod.Settings.$($item.SubKey) = $presets[$idx - 1]
-                                } elseif ($idx -lt 0) {
-                                    $mod.Settings.$($item.SubKey) = $presets[0]
-                                }
-                                Update-ModuleDynamicProps -Module $mod
-                            }
-                        }
-                    }
-                }
-                "RightArrow" {
-                    if ($selectedIndex -lt $visibleItems.Count) {
-                        $item = $visibleItems[$selectedIndex]
-                        if ($item.Type -eq 'Module') {
-                            $hasSubs = ($item.Module.SubOptions -and $item.Module.SubOptions.Count -gt 0)
-                            if ($hasSubs -and -not $item.Module.Expanded) {
-                                $item.Module.Expanded = $true
-                                if ($submenuView -ne "Custom") { $submenuView = "Custom" }
-                            }
-                        } elseif ($item.Type -eq 'SubOption') {
-                            $mod = $item.Module
-                            if ($item.ValueType -eq 'drive') {
-                                Toggle-DriveSubOption -Item $item
-                            } elseif ($item.ValueType -eq 'customApp') {
-                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
-                                if ($custObj -is [bool]) {
-                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
-                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
-                                    $custObj.enabled = -not [bool]$custObj.enabled
-                                }
-                            } elseif ($item.ValueType -eq 'bool') {
-                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
-                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
-                                } else {
-                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
-                                }
-                                Update-ModuleDynamicProps -Module $mod
-                            } elseif ($item.ValueType -eq 'int') {
-                                $presets = Get-IntPresets -Key $item.SubKey
-                                $curVal = [int]$mod.Settings.$($item.SubKey)
-                                $idx = $presets.IndexOf($curVal)
-                                if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) {
-                                    $mod.Settings.$($item.SubKey) = $presets[$idx + 1]
-                                } elseif ($idx -lt 0) {
-                                    $mod.Settings.$($item.SubKey) = $presets[-1]
-                                }
-                                Update-ModuleDynamicProps -Module $mod
-                            }
-                        }
-                    }
-                }
-                "Spacebar" {
-                    if ($selectedIndex -lt $visibleItems.Count) {
-                        $item = $visibleItems[$selectedIndex]
-                        if ($item.Type -eq 'Module') {
-                            $item.Module.Enabled = -not $item.Module.Enabled
-                            $item.Module.ConfigEnabled = $item.Module.Enabled
-                        } elseif ($item.Type -eq 'SubOption') {
-                            $mod = $item.Module
-                            if ($item.ValueType -eq 'addApp') {
-                                Clear-Host
-                                & (Join-Path $coreDir "freewinly-add-app.ps1") -ConfigPath $configPath
-                                $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
-                                $config = $configLoad.Config
-                                $configWasCorrupted = [bool]$configLoad.IsCorrupted
-                                if ($config.modulesExecutionOrder -and $config.modulesExecutionOrder.'freewinly-clean-apps') {
-                                    $mod.Settings.customApps = $config.modulesExecutionOrder.'freewinly-clean-apps'.customApps
-                                }
-                                Refresh-CleanAppsSubOptions -Module $mod
-                            } elseif ($item.ValueType -eq 'customApp') {
-                                $custObj = if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] } else { $mod.Settings.customApps.$($item.CustomAppName) }
-                                if ($custObj -is [bool]) {
-                                    if ($mod.Settings.customApps -is [System.Collections.IDictionary]) { $mod.Settings.customApps[$item.CustomAppName] = -not $custObj } else { $mod.Settings.customApps.$($item.CustomAppName) = -not $custObj }
-                                } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
-                                    $custObj.enabled = -not [bool]$custObj.enabled
-                                }
-                            } elseif ($item.ValueType -eq 'drive') {
-                                Toggle-DriveSubOption -Item $item
-                            } elseif ($item.ValueType -eq 'bool') {
-                                if ($mod.BaseName -eq 'freewinly-clean-apps' -and $null -ne $mod.Settings.$($item.SubKey) -and -not ($mod.Settings.$($item.SubKey) -is [bool])) {
-                                    $mod.Settings.$($item.SubKey).enabled = -not [bool]$mod.Settings.$($item.SubKey).enabled
-                                } else {
-                                    $mod.Settings.$($item.SubKey) = -not [bool]$mod.Settings.$($item.SubKey)
-                                }
-                                Update-ModuleDynamicProps -Module $mod
-                            } elseif ($item.ValueType -eq 'int') {
-                                $presets = Get-IntPresets -Key $item.SubKey
-                                $curVal = [int]$mod.Settings.$($item.SubKey)
-                                $idx = $presets.IndexOf($curVal)
-                                $nextIdx = if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) { $idx + 1 } else { 0 }
-                                $mod.Settings.$($item.SubKey) = $presets[$nextIdx]
-                                Update-ModuleDynamicProps -Module $mod
-                            }
-                        }
-                    }
-                }
-                { $_ -in @("Delete", "Back") } {
-                    if ($selectedIndex -lt $visibleItems.Count) {
-                        $delItem = $visibleItems[$selectedIndex]
-                        if ($delItem.Type -eq 'SubOption' -and $delItem.ValueType -eq 'customApp') {
-                            $appName = $delItem.CustomAppName
-                            Write-Host ""
-                            $delConfirm = Read-Host "Are you sure you want to remove custom app '$appName'? (y/N)"
-                            if ($delConfirm -match '^[Yy]$') {
-                                & (Join-Path $coreDir "freewinly-add-app.ps1") -Remove $appName -ConfigPath $configPath
-                                $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
-                                $config = $configLoad.Config
-                                $configWasCorrupted = [bool]$configLoad.IsCorrupted
-                                if ($config.modulesExecutionOrder -and $config.modulesExecutionOrder.'freewinly-clean-apps') {
-                                    $delItem.Module.Settings.customApps = $config.modulesExecutionOrder.'freewinly-clean-apps'.customApps
-                                }
-                                Refresh-CleanAppsSubOptions -Module $delItem.Module
-                                if ($selectedIndex -ge $visibleItems.Count) {
-                                    $selectedIndex = [math]::Max(0, $visibleItems.Count - 1)
-                                }
-                            }
-                        }
-                    }
-                }
-                "Run" {
-                    $running = $false
-                }
-                { $_ -in @("C", "A") } {
-                    Clear-Host
-                    $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-                    Invoke-DryRunCheck -TargetModules $targetModules
-                    Read-Host "`nPress Enter to return to menu"
-                }
-                "E" {
-                    $submenuView = switch ($submenuView) {
-                        "Hidden"   { "Custom" }
-                        "Custom"   { "Expanded" }
-                        "Expanded" { "Hidden" }
-                        default    { "Hidden" }
-                    }
-                    switch ($submenuView) {
-                        "Hidden" {
-                            foreach ($m in $discoveredModules) { $m.Expanded = $false }
-                        }
-                        "Expanded" {
-                            foreach ($m in $discoveredModules) {
-                                $m.Expanded = ($m.SubOptions -and $m.SubOptions.Count -gt 0)
-                            }
-                        }
-                        "Custom" {
-                            $savedExpanded = if ($config.expandedModules) { @($config.expandedModules) } else { @() }
-                            foreach ($m in $discoveredModules) {
-                                $m.Expanded = ($m.SubOptions -and $m.SubOptions.Count -gt 0) -and ($savedExpanded -contains $m.BaseName)
-                            }
-                        }
-                    }
-                }
-                "T" {
-                    $curIdx = $timerPresets.IndexOf($countdown)
-                    $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
-                    $countdown = $timerPresets[$nextIdx]
-                    Save-ConfigState
-                }
-                "W" {
-                    Clear-Host
-                    & (Join-Path $coreDir "freewinly-setup-schedule.ps1")
-                    $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
-                    $config = $configLoad.Config
-                    $configWasCorrupted = [bool]$configLoad.IsCorrupted
-                }
-                "P" {
-                    & (Join-Path $coreDir "freewinly-setup-path.ps1") -Action Toggle
-                    Start-Sleep -Milliseconds 900
-                }
-                "S" {
-                    Save-ConfigState
-                    Write-Host "`n  -> Module selection, order, sub-options, and view saved to config.json!" -ForegroundColor Green
-                    Start-Sleep -Milliseconds 800
-                }
-                "O" {
-                    & (Join-Path $coreDir "freewinly-init-config.ps1") -ConfigPath $configPath
-                    $configLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $isInteractiveSession -DefaultConfig $defaultConfigTemplate
-                    $config = $configLoad.Config
-                    $configWasCorrupted = [bool]$configLoad.IsCorrupted
-                }
-                "I" {
-                    & (Join-Path $coreDir "freewinly-setup-launcher.ps1")
-                    Read-Host "`nPress Enter to return to menu"
-                }
-                "U" {
-                    Clear-Host
-                    & (Join-Path $coreDir "freewinly-uninstall.ps1")
-                    Read-Host "`nPress Enter to return to menu"
-                }
-                { $_ -in @("Q", "Escape") } {
-                    Write-Host "`nExiting FreeWinly." -ForegroundColor Yellow
-                    exit 0
-                }
-            }
-        }
-    }
+    $countdown = $menuResult.Countdown
+    $submenuView = $menuResult.SubmenuView
 }
 
-# ==================================================================
 # 5. JUST-IN-TIME (JIT) ELEVATION CHECK
-# ==================================================================
 $activeModules = @($discoveredModules | Where-Object { $_.Enabled })
 if ($activeModules.Count -eq 0) {
     Write-Host "No modules selected to run. Exiting." -ForegroundColor Yellow
@@ -1193,22 +270,20 @@ if ($needsAdmin -and -not $isAdmin) {
     $interactiveArg = if ($isInteractiveSession) { " -Interactive" } else { "" }
     $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
     if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-    Start-Process -FilePath $psHost -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run$interactiveArg -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
+    Start-Process -FilePath $psHost -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run$interactiveArg -Modules `"$selectedNames`" -ConfigPath `"$ConfigPath`""
     exit 0
 }
 
-# ==================================================================
 # 6. EXECUTION PIPELINE
-# ==================================================================
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.4.0 Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.4.1 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
 $settingsSnapshotBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
 
-# 6.0 PRE-COMMANDS HOOK
+# 6.0 PRE-COMMANDS HOOK (Enables automated staging of admin tasks by AI assistants / configs)
 if ($config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
     Write-Log "`n--- Running Pre-Commands ($($config.preCommands.Count)) ---" "Cyan"
     foreach ($cmd in $config.preCommands) {
@@ -1226,7 +301,7 @@ if ($config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
     $configModified = $true
 }
 
-# 6.1 UNINSTALL HOOK
+# 6.1 UNINSTALL HOOK (Facilitates transitioning unmanaged installations to clean WinGet packages)
 if ($config -and $config.uninstall -and $config.uninstall.Count -gt 0) {
     Write-Log "`n--- Running Uninstalls ($($config.uninstall.Count)) ---" "Cyan"
     foreach ($id in $config.uninstall) {
@@ -1240,7 +315,7 @@ if ($config -and $config.uninstall -and $config.uninstall.Count -gt 0) {
     $configModified = $true
 }
 
-# 6.2 INSTALL HOOK
+# 6.2 INSTALL HOOK (Facilitates clean WinGet application onboarding)
 if ($config -and $config.install -and $config.install.Count -gt 0) {
     Write-Log "`n--- Running Fresh Installs ($($config.install.Count)) ---" "Cyan"
     foreach ($id in $config.install) {
@@ -1289,7 +364,7 @@ if ($settingsSnapshotBefore -ne $settingsSnapshotAfter) {
     $configModified = $true
 }
 
-if ($configModified -and (Test-Path (Split-Path -Parent $configPath))) {
+if ($configModified -and (Test-Path (Split-Path -Parent $ConfigPath))) {
     Save-ConfigState
     Write-Log "Configuration updated." "Green"
 }
@@ -1299,7 +374,7 @@ Write-Host "`nLog saved to: $logFile" -ForegroundColor Gray
 
 # Update verified last-good state preservation after run completes without unhandled error
 if (-not $configWasCorrupted) {
-    Update-LastGoodConfigFile -Path $configPath
+    Update-LastGoodConfigFile -Path $ConfigPath
 }
 
 if ($isInteractiveSession) {

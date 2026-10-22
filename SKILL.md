@@ -1,6 +1,6 @@
 ---
 name: freewinly
-description: FreeWinly v1.4.0 - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
+description: FreeWinly v1.4.1 - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
 ---
 
 # FreeWinly - Open Source Windows Maintenance & AI Agent Playbook
@@ -15,7 +15,7 @@ FreeWinly is a native Windows maintenance engine built without third-party depen
 
 ```text
 FreeWinly/
-├── freewinly.ps1                        <-- Master runner (CLI + TUI + AST Gatekeeper + JIT elevation)
+├── freewinly.ps1                        <-- Master runner (CLI + high-level orchestrator + JIT elevation)
 ├── freewinly.cmd                        <-- Double-clickable batch launcher (%* arguments)
 ├── config.json                          <-- Execution order, per-module settings, generic hooks
 ├── config.previous.json                 <-- Rolling backup created on configuration modification
@@ -23,6 +23,8 @@ FreeWinly/
 ├── SKILL.md                             <-- AI Agent Playbook
 ├── core/
 │   ├── freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
+│   ├── freewinly-discovery.ps1          <-- AST contract gatekeeper, module discovery & sub-options builder
+│   ├── freewinly-tui.ps1                <-- Interactive ASCII tree-view menu, countdown & key dispatcher
 │   ├── freewinly-add-app.ps1            <-- Custom app cache manager (add/remove with safety checks)
 │   ├── freewinly-init-config.ps1        <-- First-run setup & exclusion wizard
 │   ├── freewinly-setup-schedule.ps1     <-- Native Windows Task Scheduler installer (Weekly/Monthly/Logon/Remove)
