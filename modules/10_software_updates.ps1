@@ -1,24 +1,24 @@
 <#
 .SYNOPSIS
-    FreeWinly Software Updates Module (Winget).
+    Queries and installs application updates using Microsoft WinGet.
 .DESCRIPTION
-    Checks and installs pending Winget application updates, respecting postponed and permanent exclusions.
+    Checks installed software packages against the configured WinGet repositories.
+    Supports excluding specific package identifiers, including temporary postponements
+    with expiration dates configured in config.json.
 .PARAMETER Action
-    'Info'  - Returns module metadata object (Name, Description, Default, RequiresAdmin).
-    'Check' - Previews pending updates and exclusions without installing.
-    'Run'   - Executes the Winget update pipeline.
+    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Check' - Lists available software updates without installing them.
+    'Run'   - Downloads and installs eligible updates sequentially.
 .PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+    Optional PSCustomObject loaded from config.json (reads excluded packages).
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append update results.
 .PARAMETER Options
-    Optional hashtable of module-specific options.
+    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\10_software_updates.ps1 -Action Info
+    .\10_software_updates.ps1 -Action Check
 .EXAMPLE
-    .\modules\10_software_updates.ps1 -Action Check
-.EXAMPLE
-    .\modules\10_software_updates.ps1 -Action Run
+    .\10_software_updates.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(

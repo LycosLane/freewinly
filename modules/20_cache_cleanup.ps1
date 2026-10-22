@@ -1,24 +1,24 @@
 <#
 .SYNOPSIS
-    FreeWinly Safe Cache & Temp Cleanup Module.
+    Cleans temporary files and caches older than a configured threshold.
 .DESCRIPTION
-    Safely purges temporary user & system files, installer caches, crash dumps, and shader caches older than 7 days.
+    Scans and purges user temp files, Windows temp directories, WinGet download caches,
+    DirectX shader caches, and local crash dump archives. Files newer than the minimum
+    age threshold (default: 7 days) are preserved to avoid disrupting running processes.
 .PARAMETER Action
-    'Info'  - Returns module metadata object (Name, Description, Default, RequiresAdmin, Options).
-    'Check' - Calculates files and bytes eligible for cleanup without deleting anything.
-    'Run'   - Deletes files older than the configured age threshold.
+    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Check' - Calculates files and reclaimable bytes without deleting anything.
+    'Run'   - Deletes files meeting the age criteria.
 .PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+    Optional PSCustomObject loaded from config.json (reads cleanupTempMinAgeDays).
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append cleanup statistics.
 .PARAMETER Options
-    Optional hashtable of module-specific options.
+    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\20_cache_cleanup.ps1 -Action Info
+    .\20_cache_cleanup.ps1 -Action Check
 .EXAMPLE
-    .\modules\20_cache_cleanup.ps1 -Action Check
-.EXAMPLE
-    .\modules\20_cache_cleanup.ps1 -Action Run
+    .\20_cache_cleanup.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(

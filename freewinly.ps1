@@ -15,7 +15,7 @@
     Performs a dry-run preview across enabled or specified modules without altering system state.
 
 .PARAMETER Audit
-    Alias for -Check. Runs the 100% read-only diagnostic system inspection (hardware, logs, memory, updates, storage).
+    Alias for -Check. Runs the read-only diagnostic system inspection (hardware, logs, memory, updates, storage).
 
 .PARAMETER Modules
     Optional array or comma-separated list of module BaseNames to run (e.g. -Modules 05_hardware_health,10_software_updates).
@@ -104,7 +104,7 @@ CLI Usage:
   .\freewinly.ps1 -Check               Dry-run preview / diagnostic audit (no changes made)
   .\freewinly.ps1 -Run                 Execute enabled modules immediately
   .\freewinly.ps1 -CountdownSeconds 0  Run without countdown delay (instant start)
-  .\freewinly.ps1 -Audit               Alias for -Check (100% read-only health & stability audit)
+  .\freewinly.ps1 -Audit               Alias for -Check (read-only health & stability audit)
   .\freewinly.ps1 -ConfigPath <file>   Use custom config JSON file
   .\freewinly.ps1 -Modules <list>      Specify modules to run or check (e.g. -Modules 05_hardware_health,10_software_updates)
   .\freewinly.ps1 -HelpMe              Show this help message
@@ -264,7 +264,7 @@ if ($Check) {
     Show-Banner
     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
     Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($targetModules.Count) module(s) ===" -ForegroundColor Yellow
-    Write-Host "100% Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
+    Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
     foreach ($m in $targetModules) {
         try {

@@ -1,26 +1,24 @@
 <#
 .SYNOPSIS
-    FreeWinly Hardware & Driver Diagnostics Module.
+    Queries Windows Device Manager for hardware faults and missing drivers.
 .DESCRIPTION
-    100% self-contained read-only hardware scanner.
-    Queries Windows PnP and Device Manager for devices reporting errors, missing drivers,
-    or hardware faults, providing human-actionable troubleshooting advice.
+    Inspects PnP devices using WMI/CIM and Device Manager status codes.
+    Maps numeric problem codes (e.g. Code 28, Code 43) to actionable troubleshooting guidance.
+    This module is read-only and does not modify drivers or hardware configuration.
 .PARAMETER Action
-    'Info'  - Returns module metadata object.
-    'Check' - Scans hardware devices and displays status and remediation advice.
-    'Run'   - Scans and logs hardware status to the session log.
+    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Check' - Scans hardware devices and displays detected warnings to console.
+    'Run'   - Scans hardware devices and records findings to the specified log file.
 .PARAMETER Config
     Optional PSCustomObject loaded from config.json.
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append diagnostic results.
 .PARAMETER Options
-    Optional hashtable of module-specific options.
+    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\05_hardware_health.ps1 -Action Info
+    .\05_hardware_health.ps1 -Action Check
 .EXAMPLE
-    .\modules\05_hardware_health.ps1 -Action Check
-.EXAMPLE
-    .\modules\05_hardware_health.ps1 -Action Run
+    .\05_hardware_health.ps1 -Action Run -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(

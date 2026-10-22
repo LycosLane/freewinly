@@ -1,34 +1,29 @@
 <#
 .SYNOPSIS
-    FreeWinly Application Launch Repair Module (IFEO / Sleep Tools).
+    Inspects and repairs application launch interceptors in Image File Execution Options (IFEO).
 .DESCRIPTION
-    100% self-contained diagnostic and repair module.
-    Inspects Windows Image File Execution Options (IFEO) for application launch interceptors.
+    Scans the registry for programs configured with external launch debuggers.
     
     Distinguishes between:
-    1. Broken launch pointers: The configured debugger/reactivator binary no longer exists on disk
-       (commonly left behind after uninstalling utilities like CCleaner, Avast Cleanup, or AVG TuneUp).
-       These cause Windows to display "Windows cannot find 'app.exe'" and are safely repaired.
-    2. Active launch interceptors: The configured tool exists on disk and is currently functional
-       (e.g., active sleep tools, developer debuggers, or Process Explorer).
-       These are reported as informational notes for awareness and AI auditing, but will be ignored
-       and left completely untouched.
+    - Broken launch pointers: The configured helper or debugger binary no longer exists on disk
+      (frequently left behind by uninstalled optimizer or sleep utilities). These prevent programs
+      from starting and are safely removed.
+    - Active launch interceptors: The configured tool exists on disk. These are reported for
+      situational awareness, but are ignored and left untouched.
 .PARAMETER Action
-    'Info'  - Returns module metadata object.
-    'Check' - Inspects registry for broken launch pointers and reports active interceptors.
-    'Run'   - Safely removes broken launch pointers to restore normal application launching.
+    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Check' - Inspects registry for broken launch pointers without making changes.
+    'Run'   - Removes broken launch pointers from the registry. Requires Administrator rights.
 .PARAMETER Config
     Optional PSCustomObject loaded from config.json.
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append diagnostic and repair results.
 .PARAMETER Options
-    Optional hashtable of module-specific options.
+    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\07_app_launch_repair.ps1 -Action Info
+    .\07_app_launch_repair.ps1 -Action Check
 .EXAMPLE
-    .\modules\07_app_launch_repair.ps1 -Action Check
-.EXAMPLE
-    .\modules\07_app_launch_repair.ps1 -Action Run
+    .\07_app_launch_repair.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(

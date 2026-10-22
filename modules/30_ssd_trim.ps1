@@ -1,28 +1,26 @@
 <#
 .SYNOPSIS
-    FreeWinly SSD TRIM Optimization Module.
+    Sends native TRIM commands to internal solid-state drives (SSDs).
 .DESCRIPTION
-    100% self-contained script. Sends native NVMe/SATA TRIM hints to SSD volumes.
-    Automatically detects all fixed solid-state drives installed on the system,
-    filtering out removable USB flash drives, optical discs, and rotational HDDs.
+    Detects fixed NVMe and SATA SSDs using Windows storage cmdlets, excluding external
+    USB drives and mechanical hard drives. Executes Optimize-Volume with the -ReTrim
+    parameter to maintain flash memory performance and endurance.
 .PARAMETER Action
-    'Info'  - Returns module metadata object including detected SSD drives.
-    'Check' - Inspects TRIM status and lists target drives without trimming.
-    'Run'   - Executes native volume retrim on target SSD drives.
+    'Info'  - Outputs module metadata and detected SSD drive letters.
+    'Check' - Displays detected SSD partitions and TRIM support status without trimming.
+    'Run'   - Issues TRIM commands to eligible SSD volumes. Requires Administrator rights.
 .PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+    Optional PSCustomObject loaded from config.json (reads trimDrives).
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append TRIM results.
 .PARAMETER Options
-    Optional hashtable of module-specific options (e.g. @{ Drives = @('C', 'D') }).
+    Optional hashtable of module-specific parameters (e.g. @{ Drives = @('C', 'D') }).
 .EXAMPLE
-    .\modules\30_ssd_trim.ps1 -Action Info
+    .\30_ssd_trim.ps1 -Action Check
 .EXAMPLE
-    .\modules\30_ssd_trim.ps1 -Action Check
+    .\30_ssd_trim.ps1 -Action Run
 .EXAMPLE
-    .\modules\30_ssd_trim.ps1 -Action Run
-.EXAMPLE
-    .\modules\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
+    .\30_ssd_trim.ps1 -Action Run -Options @{ Drives = @('C') }
 #>
 [CmdletBinding()]
 param(

@@ -1,26 +1,24 @@
 <#
 .SYNOPSIS
-    FreeWinly Mechanical HDD Defragmentation Module.
+    Analyzes and defragments mechanical hard disk drives (HDDs).
 .DESCRIPTION
-    100% self-contained script. Analyzes and defragments rotational magnetic hard drives (HDDs) only.
-    Automatically skips SSDs and removable USB flash pens. Only executes if the configured minimum days
-    (default: 30) have passed since the last run and Windows recommends defragmentation.
+    Identifies rotational magnetic drives (HDDs) while strictly ignoring solid-state
+    drives (SSDs) and removable USB drives. Checks if the configured interval (default: 30 days)
+    has elapsed and runs defragmentation only when recommended by Windows.
 .PARAMETER Action
-    'Info'  - Returns module metadata object including detected HDD drives.
-    'Check' - Inspects days elapsed and fragmentation recommendation without writing changes.
-    'Run'   - Defragments eligible HDDs if due and recommended by Windows.
+    'Info'  - Outputs module metadata and detected HDD drive letters.
+    'Check' - Displays fragmentation analysis and elapsed time without modifying disks.
+    'Run'   - Defragments eligible HDD volumes if due. Requires Administrator rights.
 .PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+    Optional PSCustomObject loaded from config.json (reads hddDefragMinDays and hddDefragLastRun).
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append defragmentation results.
 .PARAMETER Options
-    Optional hashtable of module-specific options (e.g. @{ Drives = @('D') }).
+    Optional hashtable of module-specific parameters (e.g. @{ Drives = @('D') }).
 .EXAMPLE
-    .\modules\35_hdd_defrag.ps1 -Action Info
+    .\35_hdd_defrag.ps1 -Action Check
 .EXAMPLE
-    .\modules\35_hdd_defrag.ps1 -Action Check
-.EXAMPLE
-    .\modules\35_hdd_defrag.ps1 -Action Run
+    .\35_hdd_defrag.ps1 -Action Run
 #>
 [CmdletBinding()]
 param(
@@ -76,7 +74,7 @@ Write-Host "`n--- [Module 35] Mechanical HDD Defragmentation [$Action] ---" -For
 
 if ($detectedLetters.Count -eq 0) {
     Write-Host "No mechanical rotational hard drives (HDDs) detected on this PC." -ForegroundColor Green
-    Write-Host "This system is 100% solid-state (SSD/NVMe). HDD defragmentation is not needed." -ForegroundColor Gray
+    Write-Host "This system is solid-state only (SSD/NVMe). HDD defragmentation is not needed." -ForegroundColor Gray
     return
 }
 

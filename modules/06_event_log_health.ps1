@@ -1,27 +1,25 @@
 <#
 .SYNOPSIS
-    FreeWinly Windows Event Log Stability Module.
+    Analyzes Windows Application and System event logs for recurring errors.
 .DESCRIPTION
-    100% self-contained read-only stability inspector.
-    Analyzes Application and System event logs for crashes, dirty shutdowns, and hardware warnings
-    over the lookback period (default: 7 days), filtering out benign DCOM noise and presenting
-    actionable troubleshooting steps.
+    Scans the Windows Event Log over a configurable lookback window (default: 7 days)
+    for repeated application crashes, unexpected shutdowns (Kernel-Power), and storage warnings.
+    Filters out background DCOM noise and provides guidance for identified error sources.
+    This module is read-only and does not clear or alter event logs.
 .PARAMETER Action
-    'Info'  - Returns module metadata object.
-    'Check' - Inspects recent crashes and logs, displaying findings and actionable advice.
-    'Run'   - Logs stability summary to the session log file.
+    'Info'  - Outputs module metadata (name, description, admin requirements).
+    'Check' - Inspects recent event logs and displays recurring patterns.
+    'Run'   - Scans recent event logs and records findings to the log file.
 .PARAMETER Config
-    Optional PSCustomObject loaded from config.json.
+    Optional PSCustomObject loaded from config.json (reads eventLogLookbackDays).
 .PARAMETER LogFile
-    Optional path to the execution log file.
+    Optional file path to append diagnostic results.
 .PARAMETER Options
-    Optional hashtable of module-specific options.
+    Optional hashtable of module-specific parameters.
 .EXAMPLE
-    .\modules\06_event_log_health.ps1 -Action Info
+    .\06_event_log_health.ps1 -Action Check
 .EXAMPLE
-    .\modules\06_event_log_health.ps1 -Action Check
-.EXAMPLE
-    .\modules\06_event_log_health.ps1 -Action Run
+    .\06_event_log_health.ps1 -Action Run -Config $cfg -LogFile "run.log"
 #>
 [CmdletBinding()]
 param(

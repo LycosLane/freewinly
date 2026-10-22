@@ -5,7 +5,7 @@ description: FreeWinly - Open source, bloatware-free Windows PC maintenance & di
 
 # FreeWinly - Open Source Windows Maintenance & AI Agent Playbook
 
-FreeWinly is a 100% native Windows maintenance engine built without third-party dependencies. It operates in two modes:
+FreeWinly is a native Windows maintenance engine built without third-party dependencies. It operates in two modes:
 1. **Human Mode:** Pure standalone PowerShell/TUI with zero AI dependencies (ideal for family PCs, offline environments, and purists).
 2. **AI Harness Mode:** Pairs with AI assistants (Antigravity, Claude Code, Cursor) as a token-efficient diagnostic and configuration toolbelt.
 
@@ -104,7 +104,7 @@ The AI agent should:
 * **[ Q ]** -> **Quit Without Running**.
 
 ### 3. Modular Extensibility (`Info / Check / Run`)
-Every module is 100% self-contained and implements the standard contract:
+Every module is self-contained and implements the standard contract:
 ```powershell
 [CmdletBinding()]
 param(

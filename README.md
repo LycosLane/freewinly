@@ -1,7 +1,7 @@
 # FreeWinly
 
 > Keep Windows fast, clean, and up to date without bloatware, background services, or subscriptions.  
-> *A transparent, modular, 100% native Windows maintenance engine.*
+> *A transparent, modular, native Windows maintenance engine.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows 10 / 11](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6.svg)]()
@@ -43,34 +43,20 @@ It will check your system health, update your programs, clean old temp files, an
 
 | Feature | Traditional Tools (e.g. CCleaner) | FreeWinly |
 | :--- | :--- | :--- |
-| **Price** | Free version displays upgrade prompts; Pro is \$30-\$50/year | **100% Free and Open Source forever** (no subscriptions) |
+| **Price** | Free version displays upgrade prompts; Pro is \$30-\$50/year | **Free and Open Source forever** (no subscriptions) |
 | **Software Updates** | Locked behind paid/Pro paywall | **Included free** (updates apps via official Microsoft Winget) |
 | **Notifications and Ads** | Sits in your system tray; shows popups | **No background processes, no tray icons, no ads** |
 | **Unattended Execution** | Multi-step wizards and confirmation screens | **10-second countdown**: runs safe defaults automatically |
 | **System Safety** | Cleans the registry (which Microsoft advises against) | **Does not touch the registry**; only deletes old temp files (>7 days) |
 | **Storage Optimization** | May defragment modern SSDs, causing wear | **Hardware-aware**: sends TRIM to SSDs, defragments only HDDs |
 | **Setup** | Requires installer and setup wizards | **No installation needed**: unzip and run |
-| **Privacy** | Collects telemetry and analytics | **100% offline and local**: sends no data anywhere |
-
----
-
-### App Launch Interceptions: The "Sleep Mode" Trap
-
-Windows includes a feature called *Image File Execution Options (IFEO)*. Originally intended for developers to attach debuggers, some PC optimization tools (such as CCleaner, Avast Cleanup, or AVG TuneUp) use it for "Sleep Mode / Performance Optimizer" to intercept an application when you click it and wake up background services before launching.
-
-**What happens if the tool is uninstalled?**
-If a cleanup utility is uninstalled while applications are in sleep mode, the registry pointer remains behind pointing to a helper file that no longer exists on disk.
-When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Windows looks for the missing helper and displays the misleading error:
-`Windows cannot find 'C:\...\app.exe'. Make sure you've typed the name correctly, then try again.`
-
-**How FreeWinly safely handles this:**
-* **Active tools are ignored:** If an interceptor file exists on your drive (e.g. you still actively use CCleaner or Process Explorer), FreeWinly reports it as an informational note and leaves it completely untouched. You can run FreeWinly alongside any tools you choose.
-* **Broken pointers are repaired:** FreeWinly only acts when the target helper file no longer exists on disk. It safely deletes the dead pointer, immediately restoring direct launching without touching your files or shortcuts.
-* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `07_app_launch_repair` fixes it in one click.
+| **Privacy** | Collects telemetry and analytics | **Fully offline and local**: sends no data anywhere |
 
 ---
 
 ## Features
+
+Each feature is a self-contained script in `modules/` that can be run directly from PowerShell or automated through the FreeWinly runner.
 
 - **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
 - **Auto-Start Countdown:** Counts down 10 seconds before running default tasks automatically. Press any key to open the interactive menu.
@@ -78,7 +64,7 @@ When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Wi
 - **Hardware-Aware Storage Maintenance:** Executes native TRIM (`Optimize-Volume -ReTrim`) on NVMe/SATA SSDs. Defragments mechanical HDDs only.
 - **Safe Cache and Temp Cleanup:** Clears user and system temp folders, WinGet download caches, and DirectX shader caches. Only removes files older than 7 days to prevent application errors.
 - **Hardware and Stability Diagnostics:** Scans Device Manager and Windows Event Logs for driver issues, recurring crashes, and unclean shutdowns, providing practical guidance for fixes.
-- **App Launch Repair (Sleep Hooks & Debuggers):** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities.
+- **App Launch Repair:** Detects and restores applications that fail to launch (with "Windows cannot find 'app.exe'") due to dead pointers left behind by uninstalled utilities. [Learn more](#deep-dive-app-launch-interceptions--sleep-tools)
 - **Modular Design:** Add custom maintenance tasks by placing numbered `.ps1` files into the `modules/` folder.
 - **AI-Ready:** Includes a `SKILL.md` playbook allowing AI assistants (such as Antigravity, Claude Code, or Cursor) to run health audits in a single step with minimal token usage.
 
@@ -298,6 +284,22 @@ FreeWinly automatically discovers new modules, queries their metadata, adds them
 
 ---
 
+## Deep Dive: App Launch Interceptions & Sleep Tools
+
+Windows includes a feature called *Image File Execution Options (IFEO)*. Originally intended for developers to attach debuggers, some PC optimization tools (such as CCleaner, Avast Cleanup, or AVG TuneUp) use it for "Sleep Mode / Performance Optimizer" to intercept an application when you click it and wake up background services before launching.
+
+**What happens if the tool is uninstalled?**  
+If a cleanup utility is uninstalled while applications are in sleep mode, the registry pointer remains behind pointing to a helper file that no longer exists on disk.
+When you try to start Steam, Epic Games, Zoom, OneDrive, or any affected app, Windows looks for the missing helper and displays the misleading error:
+> `Windows cannot find 'C:\...\app.exe'. Make sure you've typed the name correctly, then try again.`
+
+**How FreeWinly safely handles this:**
+* **Active tools are ignored:** If an interceptor file exists on your drive (e.g. you still actively use CCleaner or Process Explorer), FreeWinly reports it as an informational note and leaves it completely untouched. You can run FreeWinly alongside any tools you choose.
+* **Broken pointers are repaired:** FreeWinly only acts when the target helper file no longer exists on disk. It safely deletes the dead pointer, immediately restoring direct launching without touching your files or shortcuts.
+* **Migration tip:** If you plan to uninstall CCleaner or similar tools, open their Performance Optimizer first and wake up all sleeping apps before uninstalling. If you already uninstalled it, FreeWinly's Module `07_app_launch_repair` fixes it in one click.
+
+---
+
 ## Configuration and Exclusions
 
 FreeWinly stores settings in `config.json`:
@@ -334,7 +336,7 @@ FreeWinly stores settings in `config.json`:
 
 * **No telemetry:** FreeWinly sends no network requests, collects no analytics, and makes no external calls.
 * **Local logs only:** Run logs and diagnostic records are saved strictly to your local `logs/` folder for your own inspection, never sent anywhere, and completely removed if you uninstall.
-* **Transparent:** 100% open-source PowerShell scripts that you can read, audit, and modify.
+* **Transparent:** Open-source PowerShell scripts that you can read, audit, and modify.
 
 ---
 
