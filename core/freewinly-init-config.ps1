@@ -77,7 +77,7 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
                         $isDevRuntime = ($pkgId -match '^(OpenJS\.NodeJS|Python\.Python|GoLang\.Go|Docker\.DockerDesktop|Git\.Git|Rustlang\.Rustup)')
                         $hasVersionQuirk = ($verText -and $verText -notmatch '\d')
 
-                        if (($hasVersionQuirk -or $isDevRuntime) -and $pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
+                        if (($hasVersionQuirk -or $isDevRuntime) -and ($pkgId -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$')) {
                             if (-not ($detectedExcludes -contains $pkgId)) {
                                 $reason = if ($isDevRuntime) { "developer runtime / toolchain" } else { "independent auto-updater" }
                                 Write-Host "Detected $reason: $appName (ID: $pkgId)" -ForegroundColor Yellow

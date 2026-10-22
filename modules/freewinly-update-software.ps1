@@ -101,7 +101,8 @@ if ($sepIdx -ge 1) {
             if ($line.Length -gt $verStart) {
                 $name = $line.Substring(0, $idStart).Trim()
                 $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
-                if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$') {
+                # Matches standard Publisher.Product IDs as well as 12-character Microsoft Store product IDs
+                if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$') {
                     $packages.Add([PSCustomObject]@{ Id = $id; Name = $name })
                 }
             }
