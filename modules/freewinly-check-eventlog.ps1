@@ -4,8 +4,7 @@
     Analyzes Windows Application and System event logs for recurring errors.
 .DESCRIPTION
     Scans the Windows Event Log over a configurable lookback window (default: 7 days)
-    or custom date range (Since / StartDate to Until / EndDate) for repeated application crashes,
-    unexpected shutdowns (Kernel-Power), and storage warnings.
+    or custom date range (StartDate to EndDate, where EndDate defaults to today).
     Filters out background DCOM noise and provides guidance for identified error sources.
     This module is read-only and does not clear or alter event logs.
 .PARAMETER Action
@@ -13,23 +12,23 @@
     'Check' - Inspects recent event logs and displays recurring patterns.
     'Run'   - Scans recent event logs and records findings to the log file.
 .PARAMETER Settings
-    Optional module settings object or hashtable (supports lookbackDays, startDate, since, endDate, until).
+    Optional module settings object or hashtable (supports lookbackDays, startDate, endDate).
 .PARAMETER LogFile
     Optional file path to append diagnostic results.
 .PARAMETER LookbackDays
-    Number of days back to inspect (aliases: -Days, -Lookback).
+    Number of days back to inspect (alias: -Days).
 .PARAMETER StartDate
-    Starting timestamp or date string e.g. '2026-10-18' (aliases: -Since, -From).
+    Starting timestamp or date string e.g. '2026-10-18'. If specified without -EndDate, EndDate defaults to today.
 .PARAMETER EndDate
-    Ending timestamp or date string e.g. '2026-10-20' (aliases: -Until, -To).
+    Ending timestamp or date string e.g. '2026-10-20'. Defaults to today (current time) if omitted.
 .EXAMPLE
     .\modules\freewinly-check-eventlog.ps1 -Action Check
 .EXAMPLE
     .\modules\freewinly-check-eventlog.ps1 -Days 14
 .EXAMPLE
-    .\modules\freewinly-check-eventlog.ps1 -Since "2026-10-18"
+    .\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-18"
 .EXAMPLE
-    .\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-18" -EndDate "2026-10-20"
+    .\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-17" -EndDate "2026-10-19"
 .EXAMPLE
     .\modules\freewinly-check-eventlog.ps1 -Action Run -Settings @{ lookbackDays = 14 }
 #>
@@ -46,7 +45,7 @@ param(
     [string]$LogFile = $null,
 
     [Parameter()]
-    [Alias('Days', 'Lookback')]
+    [Alias('Days')]
     [int]$LookbackDays = 0,
 
     [Parameter()]
@@ -90,20 +89,24 @@ function ConvertTo-DateTimeOrNull {
     }
 }
 
-# 1. Resolve Start Date / Since
+# 1. Resolve Start Date
 $rawStart = if ($StartDate) {
     $StartDate
-} elseif ($Settings) {
-    if ($Settings.startDate) { $Settings.startDate } elseif ($Settings.since) { $Settings.since } else { $null }
+} elseif ($Settings -and $Settings.startDate) {
+    $Settings.startDate
+} elseif ($Settings -and $Settings.since) {
+    $Settings.since
 } else { $null }
 
 $start = ConvertTo-DateTimeOrNull $rawStart
 
-# 2. Resolve End Date / Until
+# 2. Resolve End Date (defaults to today/now if omitted)
 $rawEnd = if ($EndDate) {
     $EndDate
-} elseif ($Settings) {
-    if ($Settings.endDate) { $Settings.endDate } elseif ($Settings.until) { $Settings.until } else { $null }
+} elseif ($Settings -and $Settings.endDate) {
+    $Settings.endDate
+} elseif ($Settings -and $Settings.until) {
+    $Settings.until
 } else { $null }
 
 $end = ConvertTo-DateTimeOrNull $rawEnd
@@ -119,14 +122,20 @@ if (-not $start) {
         7
     }
     $start = (Get-Date).AddDays(-$days)
+    if (-not $end) {
+        $end = (Get-Date)
+    }
+} else {
+    # If StartDate is specified without EndDate, default EndDate to today (current time)
+    if (-not $end) {
+        $end = (Get-Date)
+    }
 }
 
-$windowDesc = if ($end) {
-    "$($start.ToString('yyyy-MM-dd HH:mm')) to $($end.ToString('yyyy-MM-dd HH:mm'))"
-} elseif ($days -gt 0) {
-    "Last $days day(s) (Since $($start.ToString('yyyy-MM-dd HH:mm')))"
+$windowDesc = if ($days -gt 0) {
+    "Last $days day(s) ($($start.ToString('yyyy-MM-dd HH:mm')) to $($end.ToString('yyyy-MM-dd HH:mm')))"
 } else {
-    "Since $($start.ToString('yyyy-MM-dd HH:mm'))"
+    "$($start.ToString('yyyy-MM-dd HH:mm')) to $($end.ToString('yyyy-MM-dd HH:mm'))"
 }
 
 Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
@@ -139,9 +148,7 @@ try {
         LogName   = 'System', 'Application'
         Level     = 1, 2 # Critical, Error
         StartTime = $start
-    }
-    if ($end) {
-        $filter.EndTime = $end
+        EndTime   = $end
     }
 
     $rawEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue |

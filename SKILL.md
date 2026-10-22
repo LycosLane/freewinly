@@ -72,8 +72,8 @@ Step 4: AI informs user to execute elevated maintenance
 ### Targeted Crash & Stability Debugging
 When the user reports instability or asks what happened at a specific time (e.g., "my PC crashed last weekend" or "check errors over the last two weeks"):
 * **Inspect specific day counts:** `.\modules\freewinly-check-eventlog.ps1 -Days 14`
-* **Inspect since a specific date:** `.\modules\freewinly-check-eventlog.ps1 -Since "2026-10-18"`
-* **Inspect an exact date range:** `.\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-17" -EndDate "2026-10-19"`
+* **Inspect from a start date until today:** `.\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-18"`
+* **Inspect an exact historical window:** `.\modules\freewinly-check-eventlog.ps1 -StartDate "2026-10-17" -EndDate "2026-10-19"`
 This gives instant, grouped crash forensics with root-cause advice without running full maintenance.
 ```
 
