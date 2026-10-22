@@ -119,7 +119,6 @@ if ($Remove) {
 
 $cleanAppsInfo = if (Test-Path -LiteralPath $cleanAppsModule) { & $cleanAppsModule -Action Info } else { $null }
 $builtinKeys = [System.Collections.Generic.List[string]]::new()
-$reservedNames = [System.Collections.Generic.List[string]]::new()
 
 if ($cleanAppsInfo -and $cleanAppsInfo.DefaultSettings) {
     $rawKeys = if ($cleanAppsInfo.DefaultSettings -is [System.Collections.IDictionary]) {
@@ -130,30 +129,11 @@ if ($cleanAppsInfo -and $cleanAppsInfo.DefaultSettings) {
     foreach ($k in $rawKeys) {
         if ($k -notin @('minAgeDays', 'customApps')) {
             $builtinKeys.Add($k)
-            $reservedNames.Add($k.ToLowerInvariant())
-            $appObj = if ($cleanAppsInfo.DefaultSettings -is [System.Collections.IDictionary]) {
-                $cleanAppsInfo.DefaultSettings[$k]
-            } else {
-                $cleanAppsInfo.DefaultSettings.$k
-            }
-            if ($appObj -and $appObj.process) {
-                foreach ($proc in $appObj.process) {
-                    $reservedNames.Add($proc.ToLowerInvariant())
-                }
-            }
         }
     }
 }
 if ($builtinKeys.Count -eq 0) {
     $builtinKeys.AddRange(@('discord', 'teams', 'slack', 'steam', 'vscode'))
-    $reservedNames.AddRange(@('discord', 'teams', 'ms-teams', 'slack', 'steam', 'vscode', 'code', 'visual studio code'))
-}
-
-function Test-IsReservedName {
-    param([string]$AppName)
-    if ([string]::IsNullOrWhiteSpace($AppName)) { return $false }
-    $norm = $AppName.Trim().ToLowerInvariant()
-    return ($reservedNames -contains $norm)
 }
 
 # 2. Interactive prompt workflow (when no parameters supplied)
@@ -209,9 +189,8 @@ if ([string]::IsNullOrWhiteSpace($Name)) {
     exit 1
 }
 
-if (Test-IsReservedName -AppName $Name) {
-    Write-Host "Error: '$Name' clashes with a built-in application name. Please specify a different name." -ForegroundColor Red
-    exit 1
+if ($builtinKeys -contains $Name.ToLowerInvariant()) {
+    Write-Host "[Note] '$Name' matches a built-in profile; your custom paths will be cleaned alongside it." -ForegroundColor Cyan
 }
 
 if (-not $Path -or $Path.Count -eq 0) {
