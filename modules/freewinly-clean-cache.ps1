@@ -28,7 +28,7 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays = if ($Settings -and $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
+$minAgeDays = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{

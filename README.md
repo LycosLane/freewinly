@@ -91,10 +91,10 @@ A console window opens with a countdown:
 If you use an AI coding assistant on Windows, paste this prompt into your assistant's chat:
 
 ```text
-Clone https://github.com/LycosLane/freewinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
+Download and extract https://github.com/LycosLane/freewinly/releases/latest/download/FreeWinly4LLM.zip into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
 ```
 
-Your assistant will clone the repository, read the diagnostic output, configure exclusions in `config.json`, and set up the Start Menu shortcut.
+Your assistant will download and extract the tested release package, read the diagnostic output, configure exclusions in `config.json`, and set up the Start Menu shortcut.
 
 ---
 

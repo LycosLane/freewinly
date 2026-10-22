@@ -50,6 +50,6 @@ jobs:
             ### Using with AI Assistants (Antigravity, Claude Code, Cursor)
             Paste this prompt into your assistant's chat:
             ```text
-            Clone https://github.com/LycosLane/freewinly into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
+            Download and extract https://github.com/LycosLane/freewinly/releases/latest/download/FreeWinly4LLM.zip into a subfolder, read its SKILL.md, and learn the skill. Whenever I ask you to check, maintain, update, or optimize my PC, use FreeWinly.
             ```
             Or extract **`FreeWinly4LLM.zip`** directly into your assistant's `skills/` or `tools/` folder.

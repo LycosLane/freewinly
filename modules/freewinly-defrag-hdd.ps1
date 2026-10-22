@@ -30,25 +30,63 @@ param(
 
 function Get-InstalledFixedHDDs {
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $busTypeMap = @{
+        0 = 'Unknown'; 1 = 'SCSI'; 2 = 'ATAPI'; 3 = 'ATA'; 4 = '1394'; 5 = 'SSA'
+        6 = 'Fibre Channel'; 7 = 'USB'; 8 = 'RAID'; 9 = 'iSCSI'; 10 = 'SAS'
+        11 = 'SATA'; 12 = 'SD'; 13 = 'MMC'; 14 = 'MAX'; 15 = 'Virtual'
+        16 = 'Storage Spaces'; 17 = 'NVMe'; 18 = 'Microsoft Reserved'
+    }
+
     try {
-        $disks = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'HDD' }
-        foreach ($disk in $disks) {
-            $volumes = $disk | Get-Disk -ErrorAction SilentlyContinue |
-                               Get-Partition -ErrorAction SilentlyContinue |
-                               Get-Volume -ErrorAction SilentlyContinue |
-                               Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
-            foreach ($v in $volumes) {
-                $found.Add([PSCustomObject]@{
-                    DriveLetter = [string]$v.DriveLetter
-                    Label       = $v.FileSystemLabel
-                    Model       = $disk.FriendlyName
-                    BusType     = $disk.BusType
-                    SizeGB      = [math]::Round($v.Size / 1GB, 1)
-                    FreeGB      = [math]::Round($v.SizeRemaining / 1GB, 1)
-                })
+        $pDisks = @(Get-CimInstance -Namespace 'root\Microsoft\Windows\Storage' -ClassName MSFT_PhysicalDisk -ErrorAction Stop)
+        $partitions = @(Get-CimInstance -Namespace 'root\Microsoft\Windows\Storage' -ClassName MSFT_Partition -ErrorAction Stop | Where-Object { $_.DriveLetter })
+        $logicalDisks = @(Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop)
+
+        $logMap = @{}
+        foreach ($ld in $logicalDisks) {
+            if ($ld.DeviceID) {
+                $logMap[$ld.DeviceID.TrimEnd(':').ToUpper()] = $ld
+            }
+        }
+
+        $diskToLetters = @{}
+        foreach ($p in $partitions) {
+            $dNum = [int]$p.DiskNumber
+            $dLet = ([string]$p.DriveLetter).TrimEnd(':').ToUpper()
+            if (-not $diskToLetters.ContainsKey($dNum)) {
+                $diskToLetters[$dNum] = [System.Collections.Generic.List[string]]::new()
+            }
+            $diskToLetters[$dNum].Add($dLet)
+        }
+
+        foreach ($pd in $pDisks) {
+            $mType = $pd.MediaType
+            $bType = $pd.BusType
+            $bStr = if ($bType -is [string]) { $bType } elseif ($busTypeMap.ContainsKey([int]$bType)) { $busTypeMap[[int]$bType] } else { [string]$bType }
+
+            $isHDD = ($mType -eq 3 -or $mType -eq 'HDD') -and ($bType -ne 7 -and $bType -ne 'USB')
+
+            if (-not $isHDD) { continue }
+
+            $dNum = [int]$pd.DeviceId
+            if ($diskToLetters.ContainsKey($dNum)) {
+                foreach ($let in $diskToLetters[$dNum]) {
+                    if ($logMap.ContainsKey($let)) {
+                        $ld = $logMap[$let]
+                        $found.Add([PSCustomObject]@{
+                            DriveLetter = $let
+                            Label       = $ld.VolumeName
+                            Model       = $pd.FriendlyName
+                            BusType     = $bStr
+                            SizeGB      = [math]::Round([double]$ld.Size / 1GB, 1)
+                            FreeGB      = [math]::Round([double]$ld.FreeSpace / 1GB, 1)
+                        })
+                    }
+                }
             }
         }
     } catch { }
+
     return @($found)
 }
 

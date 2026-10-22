@@ -141,7 +141,9 @@ function Register-FreeWinlyTask {
     if (-not $isAdmin) {
         Write-Host "`nRegistering scheduled maintenance requires Administrator privileges." -ForegroundColor Yellow
         Write-Host "Requesting elevation..." -ForegroundColor Cyan
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action $ScheduleType -At `"$TimeStr`" -DayOfWeek `"$Day`""
+        $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
+        if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
+        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action $ScheduleType -At `"$TimeStr`" -DayOfWeek `"$Day`""
         return
     }
 
@@ -167,7 +169,8 @@ function Register-FreeWinlyTask {
         -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`" -Run" `
         -WorkingDirectory $projectRoot
 
-    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Highest
     $settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 
     try {
@@ -190,7 +193,9 @@ function Remove-FreeWinlyTask {
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
         Write-Host "`nRemoving scheduled task requires Administrator privileges." -ForegroundColor Yellow
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action Remove"
+        $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
+        if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
+        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action Remove"
         return
     }
 

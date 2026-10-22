@@ -232,8 +232,10 @@ $targets = @(
         Name      = "Spotify"
         Processes = @('Spotify')
         Paths     = @(
-            "$env:LOCALAPPDATA\Spotify\Storage",
-            "$env:LOCALAPPDATA\Spotify\Data"
+            "$env:LOCALAPPDATA\Spotify\Data",
+            "$env:LOCALAPPDATA\Spotify\Browser\Cache",
+            "$env:LOCALAPPDATA\Spotify\Browser\GPUCache",
+            "$env:LOCALAPPDATA\Spotify\Browser\Code Cache"
         )
     },
     # Steam

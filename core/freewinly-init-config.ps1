@@ -107,18 +107,77 @@ foreach ($mf in (Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction Sile
 }
 
 $sortedModules = $rawModules | Sort-Object Order, BaseName
+
+$orderedBaseNames = [System.Collections.Generic.List[string]]::new()
+if ($existingConfig -and $existingConfig.modulesExecutionOrder) {
+    $existingKeys = if ($existingConfig.modulesExecutionOrder -is [System.Collections.IDictionary]) {
+        $existingConfig.modulesExecutionOrder.Keys
+    } else {
+        $existingConfig.modulesExecutionOrder.PSObject.Properties.Name
+    }
+    foreach ($ek in $existingKeys) {
+        if (($rawModules | Where-Object { $_.BaseName -eq $ek }) -and -not $orderedBaseNames.Contains($ek)) {
+            $orderedBaseNames.Add($ek)
+        }
+    }
+}
+foreach ($m in $sortedModules) {
+    if (-not $orderedBaseNames.Contains($m.BaseName)) {
+        $orderedBaseNames.Add($m.BaseName)
+    }
+}
+
+$moduleMap = @{}
+foreach ($m in $rawModules) {
+    $moduleMap[$m.BaseName] = $m
+}
+
 $modulesExecutionOrder = [ordered]@{}
 
-foreach ($m in $sortedModules) {
-    $modBlock = [ordered]@{
-        enabled = $m.Default
+foreach ($baseName in $orderedBaseNames) {
+    $m = $moduleMap[$baseName]
+    $existingMod = if ($existingConfig -and $existingConfig.modulesExecutionOrder) {
+        $existingConfig.modulesExecutionOrder.$baseName
+    } else { $null }
+
+    $isEnabled = if ($null -ne $existingMod) {
+        if ($existingMod -is [bool]) {
+            [bool]$existingMod
+        } elseif ($null -ne $existingMod.enabled) {
+            [bool]$existingMod.enabled
+        } else {
+            $m.Default
+        }
+    } else {
+        $m.Default
     }
+
+    $modBlock = [ordered]@{
+        enabled = $isEnabled
+    }
+
+    # Overlay default settings first
     if ($m.DefaultSettings) {
         $keys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) { $m.DefaultSettings.Keys } else { $m.DefaultSettings.PSObject.Properties.Name }
         foreach ($k in $keys) {
             $modBlock[$k] = $m.DefaultSettings[$k]
         }
     }
+
+    # Overlay existing customized settings
+    if ($null -ne $existingMod -and -not ($existingMod -is [bool])) {
+        $existingKeys = if ($existingMod -is [System.Collections.IDictionary]) {
+            $existingMod.Keys
+        } else {
+            $existingMod.PSObject.Properties.Name
+        }
+        foreach ($ek in $existingKeys) {
+            if ($ek -ne 'enabled') {
+                $modBlock[$ek] = $existingMod.$ek
+            }
+        }
+    }
+
     if ($m.BaseName -eq 'freewinly-update-software') {
         $modBlock['excluded'] = @($detectedExcludes)
     }

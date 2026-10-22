@@ -115,13 +115,13 @@ function Get-IntPresets {
 function Update-ModuleDynamicProps {
     param([PSCustomObject]$Module)
     if (-not $Module) { return }
-    # 1. Dynamic Admin requirement (e.g. freewinly-clean-network if clearNetBios or resetWinsock is enabled)
+    # 1. Dynamic Admin requirement (e.g. freewinly-clean-network if clearNetBios, resetWinsock, or clearArpCache is enabled)
     if ($Module.BaseName -eq 'freewinly-clean-network') {
-        $hasAdminOption = [bool]($Module.Settings.clearNetBios -or $Module.Settings.resetWinsock)
+        $hasAdminOption = [bool]($Module.Settings.clearNetBios -or $Module.Settings.resetWinsock -or $Module.Settings.clearArpCache)
         $Module.RequiresAdmin = $hasAdminOption
     }
     # 2. Dynamic title updates
-    if ($Module.BaseName -eq 'freewinly-clean-cache' -and $Module.Settings.minAgeDays) {
+    if ($Module.BaseName -eq 'freewinly-clean-cache' -and $null -ne $Module.Settings.minAgeDays) {
         $Module.Name = "Safe Cache & Temp Cleanup (>$($Module.Settings.minAgeDays) days)"
     } elseif ($Module.BaseName -eq 'freewinly-check-eventlog') {
         if ($Module.Settings.startDate) {
@@ -182,12 +182,14 @@ function Test-ModuleContract {
         }
     }
 
-    $hasActionParam = ($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -ieq 'Action' }).Count -gt 0
-    if (-not $hasActionParam) {
-        return [PSCustomObject]@{
-            IsValid = $false
-            Reason  = "Missing required '-Action' parameter (Info, Check, Run)."
-            Info    = $null
+    $paramNames = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+    foreach ($req in @('Action', 'Settings', 'LogFile')) {
+        if (-not ($paramNames -contains $req)) {
+            return [PSCustomObject]@{
+                IsValid = $false
+                Reason  = "Missing required '-$req' parameter in param() block."
+                Info    = $null
+            }
         }
     }
 
@@ -428,22 +430,26 @@ foreach ($baseName in $orderedBaseNames) {
 
     # Determine if enabled:
     # - CLI -Modules override > config.modulesExecutionOrder > (if brand-new unconfigured module & config exists: false, else Info.Default)
-    $isEnabled = if ($Modules) {
-        $Modules -contains $baseName
-    } elseif ($null -ne $enabledInCfg) {
-        $enabledInCfg
+    $configEnabled = if ($null -ne $enabledInCfg) {
+        [bool]$enabledInCfg
     } elseif ($hasModOrderConfig) {
         # A brand-new module dropped into modules/ that was not in config.json yet defaults to disabled for safety
         $false
     } else {
-        $info.Default
+        [bool]$info.Default
+    }
+
+    $isEnabled = if ($Modules) {
+        $Modules -contains $baseName
+    } else {
+        $configEnabled
     }
 
     $settingsObj = [PSCustomObject]$modSettings
 
     # Update dynamic title if minAgeDays or lookbackDays was customized in settings
     $displayName = $info.Name
-    if ($baseName -eq 'freewinly-clean-cache' -and $settingsObj.minAgeDays) {
+    if ($baseName -eq 'freewinly-clean-cache' -and $null -ne $settingsObj.minAgeDays) {
         $displayName = "Safe Cache & Temp Cleanup (>$($settingsObj.minAgeDays) days)"
     } elseif ($baseName -eq 'freewinly-check-eventlog') {
         if ($settingsObj.startDate) {
@@ -523,6 +529,7 @@ foreach ($baseName in $orderedBaseNames) {
         Description   = $info.Description
         Path          = $mf.FullName
         Enabled       = [bool]$isEnabled
+        ConfigEnabled = [bool]$configEnabled
         RequiresAdmin = [bool]$info.RequiresAdmin
         Settings      = $settingsObj
         SubOptions    = $subOptions
@@ -537,7 +544,7 @@ function Save-ConfigState {
     $modOrder = [ordered]@{}
     foreach ($dm in $discoveredModules) {
         $block = [ordered]@{
-            enabled = [bool]$dm.Enabled
+            enabled = if ($Modules) { [bool]$dm.ConfigEnabled } else { [bool]$dm.Enabled }
         }
         if ($dm.Settings) {
             foreach ($prop in $dm.Settings.PSObject.Properties) {
@@ -900,6 +907,7 @@ if (-not $Run) {
                         $item = $visibleItems[$selectedIndex]
                         if ($item.Type -eq 'Module') {
                             $item.Module.Enabled = -not $item.Module.Enabled
+                            $item.Module.ConfigEnabled = $item.Module.Enabled
                         } elseif ($item.Type -eq 'SubOption') {
                             $mod = $item.Module
                             if ($item.ValueType -eq 'drive') {
@@ -1016,7 +1024,9 @@ if ($needsAdmin -and -not $isAdmin) {
     Write-Host "Elevating FreeWinly runner..." -ForegroundColor Cyan
     $selectedNames = ($activeModules | Select-Object -ExpandProperty BaseName) -join ','
     $interactiveArg = if ($isInteractiveSession) { " -Interactive" } else { "" }
-    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run$interactiveArg -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
+    $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
+    if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
+    Start-Process -FilePath $psHost -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Run$interactiveArg -Modules `"$selectedNames`" -ConfigPath `"$configPath`""
     exit 0
 }
 

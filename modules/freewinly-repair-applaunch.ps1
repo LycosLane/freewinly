@@ -50,6 +50,37 @@ function Get-LikelyAssociatedTool {
     }
 }
 
+function Test-DebuggerTargetExists {
+    param([string]$RawDebugger)
+    if ([string]::IsNullOrWhiteSpace($RawDebugger)) {
+        return [PSCustomObject]@{ Exists = $false; TargetPath = $RawDebugger }
+    }
+    $expandedDbg = [Environment]::ExpandEnvironmentVariables($RawDebugger.Trim())
+    $exeCandidate = if ($expandedDbg -match '^"([^"]+)"') {
+        $matches[1]
+    } elseif ($expandedDbg -match '^([A-Za-z]:\\.+?\.exe)\b') {
+        $matches[1]
+    } else {
+        ($expandedDbg -split '\s+')[0]
+    }
+
+    $exists = $false
+    try {
+        if (Test-Path -LiteralPath $exeCandidate -PathType Leaf -ErrorAction SilentlyContinue) {
+            $exists = $true
+        } elseif ([bool](Get-Command -Name $exeCandidate -ErrorAction SilentlyContinue)) {
+            $exists = $true
+        }
+    } catch {
+        $exists = $false
+    }
+
+    return [PSCustomObject]@{
+        Exists     = $exists
+        TargetPath = $exeCandidate
+    }
+}
+
 function Get-LaunchInterceptors {
     $ifeoRoots = @(
         "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options",
@@ -65,10 +96,7 @@ function Get-LaunchInterceptors {
                 # 1. Check direct Debugger value on the image key
                 $directProp = Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue
                 if ($directProp -and $directProp.Debugger) {
-                    $dbg = $directProp.Debugger -replace '^"|"$', ''
-                    $dbgPath = $dbg
-                    if ($dbg -match '^([A-Za-z]:\\[^"]+?\.exe)') { $dbgPath = $matches[1] }
-                    $exists = Test-Path $dbgPath
+                    $targetCheck = Test-DebuggerTargetExists -RawDebugger $directProp.Debugger
 
                     $results.Add([PSCustomObject]@{
                         AppName      = $k.PSChildName
@@ -76,9 +104,9 @@ function Get-LaunchInterceptors {
                         RegistryPath = $k.PSPath
                         ParentPath   = $k.PSPath
                         Debugger     = $directProp.Debugger
-                        DebuggerPath = $dbgPath
-                        FileExists   = $exists
-                        IsBroken     = (-not $exists)
+                        DebuggerPath = $targetCheck.TargetPath
+                        FileExists   = $targetCheck.Exists
+                        IsBroken     = (-not $targetCheck.Exists)
                         LikelySource = (Get-LikelyAssociatedTool -DebuggerPath $directProp.Debugger)
                         TargetPath   = $null
                     })
@@ -89,10 +117,7 @@ function Get-LaunchInterceptors {
                 foreach ($sk in $subKeys) {
                     $p = Get-ItemProperty -Path $sk.PSPath -ErrorAction SilentlyContinue
                     if ($p -and $p.Debugger) {
-                        $dbg = $p.Debugger -replace '^"|"$', ''
-                        $dbgPath = $dbg
-                        if ($dbg -match '^([A-Za-z]:\\[^"]+?\.exe)') { $dbgPath = $matches[1] }
-                        $exists = Test-Path $dbgPath
+                        $targetCheck = Test-DebuggerTargetExists -RawDebugger $p.Debugger
 
                         $results.Add([PSCustomObject]@{
                             AppName      = $k.PSChildName
@@ -100,9 +125,9 @@ function Get-LaunchInterceptors {
                             RegistryPath = $sk.PSPath
                             ParentPath   = $k.PSPath
                             Debugger     = $p.Debugger
-                            DebuggerPath = $dbgPath
-                            FileExists   = $exists
-                            IsBroken     = (-not $exists)
+                            DebuggerPath = $targetCheck.TargetPath
+                            FileExists   = $targetCheck.Exists
+                            IsBroken     = (-not $targetCheck.Exists)
                             LikelySource = (Get-LikelyAssociatedTool -DebuggerPath $p.Debugger)
                             TargetPath   = $p.FilterFullPath
                         })

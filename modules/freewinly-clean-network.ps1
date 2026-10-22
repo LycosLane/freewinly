@@ -37,7 +37,7 @@ param(
 )
 
 $flushDns          = if ($null -ne $Settings -and $null -ne $Settings.flushDns) { [bool]$Settings.flushDns } else { $true }
-$clearArpCache     = if ($null -ne $Settings -and $null -ne $Settings.clearArpCache) { [bool]$Settings.clearArpCache } else { $true }
+$clearArpCache     = if ($null -ne $Settings -and $null -ne $Settings.clearArpCache) { [bool]$Settings.clearArpCache } else { $false }
 $checkConnectivity = if ($null -ne $Settings -and $null -ne $Settings.checkConnectivity) { [bool]$Settings.checkConnectivity } else { $true }
 $clearNetBios      = if ($null -ne $Settings -and $null -ne $Settings.clearNetBios) { [bool]$Settings.clearNetBios } else { $false }
 $resetWinsock      = if ($null -ne $Settings -and $null -ne $Settings.resetWinsock) { [bool]$Settings.resetWinsock } else { $false }
@@ -51,14 +51,14 @@ if ($Action -eq 'Info') {
         RequiresAdmin        = $false
         DefaultSettings      = [ordered]@{
             flushDns          = $true
-            clearArpCache     = $true
+            clearArpCache     = $false
             checkConnectivity = $true
             clearNetBios      = $false
             resetWinsock      = $false
         }
         SettingsDescriptions = [ordered]@{
             flushDns          = "Flush DNS Resolver Cache (Clear-DnsClientCache / ipconfig /flushdns)"
-            clearArpCache     = "Clear stale local LAN routing entries (ARP neighbor cache)"
+            clearArpCache     = "Clear stale local LAN routing entries (ARP neighbor cache) [Admin]"
             checkConnectivity = "Test default gateway reachability, DNS resolution speed & active adapters"
             clearNetBios      = "Purge and reload NetBIOS name cache (nbtstat -R) [Admin]"
             resetWinsock      = "Reset Windows Socket catalog (netsh winsock reset - requires restart) [Admin]"

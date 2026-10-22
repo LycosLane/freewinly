@@ -78,10 +78,10 @@ if ($Action -eq 'Check') {
     Write-Host "Checking Windows Component Store health via DISM..." -ForegroundColor Gray
     try {
         $checkHealthOut = & dism.exe /Online /Cleanup-Image /CheckHealth 2>&1 | Out-String
-        if ($checkHealthOut -match 'No component store corruption detected') {
-            Write-Host "  [+] Component Store Health: Healthy (No corruption detected)." -ForegroundColor Green
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [+] Component Store Health: Healthy (no corruption detected; exit code 0)." -ForegroundColor Green
         } else {
-            Write-Host "  [-] Component Store Health Status:" -ForegroundColor Yellow
+            Write-Host "  [-] Component Store Health Status (exit code $LASTEXITCODE):" -ForegroundColor Yellow
             $checkHealthOut.Trim().Split("`n") | ForEach-Object {
                 $line = $_.Trim()
                 if ($line) { Write-Host "      $line" -ForegroundColor Gray }
