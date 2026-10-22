@@ -153,7 +153,7 @@ foreach ($pkg in $toUpdate) {
     $idx++
     $id = $pkg.Id
     Write-Host "[$idx/$($toUpdate.Count)] Updating $($pkg.Name) ($id) ..." -ForegroundColor Cyan
-    $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements 2>&1
+    $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
     $exitCode = $LASTEXITCODE
     $out | Out-Host
     if ($LogFile) {

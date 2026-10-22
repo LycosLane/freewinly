@@ -214,6 +214,19 @@ if (-not $isAdmin) {
 
 Write-Host "Restoring $($brokenApps.Count) application(s) with broken launch pointers..." -ForegroundColor Cyan
 
+# Export safety rollback backup before modifying any registry keys
+$backupDir = if ($LogFile) { Split-Path -Parent $LogFile } else { Join-Path (Split-Path -Parent $PSScriptRoot) "logs" }
+if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir -Force | Out-Null }
+$ts = (Get-Date).ToString("yyyyMMdd-HHmmss")
+$regBackupFile = Join-Path $backupDir "ifeo-rollback-$ts.reg"
+try {
+    & reg.exe export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $regBackupFile /y 2>&1 | Out-Null
+    if (Test-Path $regBackupFile) {
+        Write-Host "Created registry safety rollback backup: $regBackupFile" -ForegroundColor Gray
+        if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Created registry rollback backup: $regBackupFile" -Encoding UTF8 }
+    }
+} catch { }
+
 $repairedCount = 0
 $parentsToClean = [System.Collections.Generic.HashSet[string]]::new()
 

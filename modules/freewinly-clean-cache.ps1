@@ -28,7 +28,8 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
+$minAgeDays       = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
+$cleanShaderCache = if ($null -ne $Settings -and $null -ne $Settings.cleanShaderCache) { [bool]$Settings.cleanShaderCache } else { $false }
 
 if ($Action -eq 'Info') {
     return [PSCustomObject]@{
@@ -38,12 +39,14 @@ if ($Action -eq 'Info') {
         Default              = $true
         RequiresAdmin        = $false
         DefaultSettings      = [ordered]@{
-            minAgeDays      = 7
-            cleanRecycleBin = $false
+            minAgeDays       = 7
+            cleanRecycleBin  = $false
+            cleanShaderCache = $false
         }
         SettingsDescriptions = [ordered]@{
-            minAgeDays      = "Minimum file age in days before deleting temp files"
-            cleanRecycleBin = "Empty Windows Recycle Bin during cleanup"
+            minAgeDays       = "Minimum file age in days before deleting temp files"
+            cleanRecycleBin  = "Empty Windows Recycle Bin during cleanup"
+            cleanShaderCache = "DirectX Shader Cache (recompiling can cause temporary in-game stutter)"
         }
     }
 }
@@ -61,9 +64,12 @@ $targets = [ordered]@{
     'WindowsTemp'            = "$env:SystemRoot\Temp"
     'WinGetCache'            = $wingetCachePath
     'WindowsUpdateCache'     = "$env:SystemRoot\SoftwareDistribution\Download"
-    'DirectXShaderCache'     = "$env:LOCALAPPDATA\D3DSCache"
     'LocalCrashDumps'        = "$env:LOCALAPPDATA\CrashDumps"
     'WindowsErrorReporting'  = "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"
+}
+
+if ($cleanShaderCache) {
+    $targets['DirectXShaderCache'] = "$env:LOCALAPPDATA\D3DSCache"
 }
 
 $totalBytes = 0
@@ -72,8 +78,14 @@ $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 foreach ($k in $targets.Keys) {
     $p = $targets[$k]
     if (Test-Path $p) {
+        $targetItem = Get-Item -LiteralPath $p -ErrorAction SilentlyContinue
+        if ($targetItem -and ($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            Write-Host "  [-] Skipped junction / reparse point target: $p" -ForegroundColor Gray
+            continue
+        }
         $targetCutoff = if ($k -eq 'WindowsUpdateCache') { $wuCutoff } else { $cutoff }
-        $files = Get-ChildItem $p -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
+        $files = Get-ChildItem -LiteralPath $p -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
+            (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
             $_.LastWriteTime -lt $targetCutoff -and (
                 $k -ne 'UserTemp' -or -not $_.FullName.StartsWith($wingetCachePath, [System.StringComparison]::OrdinalIgnoreCase)
             )

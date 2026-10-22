@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.4.1 Module Discovery & AST Contract Gatekeeper.
+    FreeWinly v1.5.0 Module Discovery & AST Contract Gatekeeper.
 .DESCRIPTION
     Scans the modules directory, validates each maintenance module against
     the FreeWinly AST contract, reconciles execution order with config.json,
@@ -248,7 +248,9 @@ function Get-DiscoveredModules {
         [Parameter(Mandatory = $true)]
         [PSCustomObject]$Config,
         [Parameter()]
-        [array]$ModulesFilter = $null
+        [array]$ModulesFilter = $null,
+        [Parameter()]
+        [hashtable]$CliSettings = $null
     )
 
     $moduleFiles = Get-ChildItem (Join-Path $ModulesDir "*.ps1") -ErrorAction SilentlyContinue
@@ -341,6 +343,13 @@ function Get-DiscoveredModules {
                         $modSettings[$uk] = $cfgEntry.$uk
                     }
                 }
+            }
+        }
+
+        # Overlay CLI -Settings if passed on the command line
+        if ($CliSettings -and $ModulesFilter -and ($ModulesFilter -contains $baseName)) {
+            foreach ($ck in $CliSettings.Keys) {
+                $modSettings[$ck] = $CliSettings[$ck]
             }
         }
 

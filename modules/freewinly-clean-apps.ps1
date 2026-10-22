@@ -75,7 +75,7 @@ $builtinAppDefinitions = [ordered]@{
     'steam' = [ordered]@{
         name    = "Steam"
         enabled = $true
-        process = @('steam')
+        process = @('steam', 'steamwebhelper')
         paths   = @(
             '%LOCALAPPDATA%\Steam\htmlcache\Cache\Cache_Data',
             '%LOCALAPPDATA%\Steam\htmlcache\Code Cache',

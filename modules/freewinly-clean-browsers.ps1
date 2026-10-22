@@ -199,17 +199,19 @@ foreach ($target in $targets) {
 
     # Check if application is currently open
     if (Test-AppRunning -ProcessNames $target.Processes) {
-        Write-Host "  [-] Skipped $appName (Application is currently open)." -ForegroundColor Yellow
+        Write-Host "  [-] Skipped $appName (Application is open or running in background)." -ForegroundColor Yellow
         continue
     }
 
     $dirs = Get-TargetDirectories -PathPatterns $target.Paths
     if ($dirs.Count -eq 0) { continue }
 
-    # Find files older than threshold
+    # Find files older than threshold (skipping symlinks / reparse points)
     $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
     foreach ($d in $dirs) {
+        if ($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
         $found = Get-ChildItem -LiteralPath $d.FullName -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
+            (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
             $_.LastWriteTime -lt $cutoff
         }
         if ($found) {
