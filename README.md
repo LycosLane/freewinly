@@ -505,4 +505,4 @@ Contributions, bug reports, and new modules are welcome. Feel free to open an is
 
 ## License
 
-Distributed under the [MIT License](LICENSE).
+MIT License © 2026 LycosLane
