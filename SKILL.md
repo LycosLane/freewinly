@@ -20,7 +20,10 @@ FreeWinly/
 ├── config.json                          <-- Execution order, per-module settings, generic hooks
 ├── config.previous.json                 <-- Rolling backup created on configuration modification
 ├── config.last-good.json                <-- Verified configuration preserved after successful runs
+├── BRANDING.md                          <-- Brand guidelines & Fluke Fedora specifications
 ├── SKILL.md                             <-- AI Agent Playbook
+├── assets/
+│   └── icons/                           <-- Vector SVG masters, PNG app icons & multi-res .ico files
 ├── core/
 │   ├── freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
 │   ├── freewinly-discovery.ps1          <-- AST contract gatekeeper, module discovery & sub-options builder

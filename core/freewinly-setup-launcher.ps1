@@ -64,7 +64,8 @@ function Create-ShortcutFile {
     $sc.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
     $sc.WorkingDirectory = $projectRoot
     $sc.Description      = "FreeWinly - Open Source Windows Maintenance & Optimization"
-    $sc.IconLocation     = "$env:SystemRoot\System32\shell32.dll,238"
+    $customIcon = Join-Path $projectRoot "assets\icons\freewinly.ico"
+    $sc.IconLocation     = if (Test-Path -LiteralPath $customIcon) { $customIcon } else { "$env:SystemRoot\System32\shell32.dll,238" }
     $sc.Save()
 }
 

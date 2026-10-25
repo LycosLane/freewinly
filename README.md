@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icons/app_icon.png" width="128" alt="FreeWinly Fluke Fedora Icon" />
+</p>
+
 # FreeWinly
 
 > Keep Windows fast, clean, and up to date without bloatware, background services, or subscriptions.  
@@ -7,15 +11,6 @@
 [![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D6.svg)]()
 [![Shell: PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE.svg)]()
 [![Zero Bloatware](https://img.shields.io/badge/Bloatware-0%25-brightgreen.svg)]()
-
-```text
-       .
-      ":"
-    ___:____     |"\/"|
-  ,'        `.    \  /
-  |  O        \___/  |    FreeWinly
-~^~^~^~^~^~^~^~^~^~^~^~^~ Pure, bloatware-free Windows maintenance.
-```
 
 ---
 
@@ -266,7 +261,10 @@ FreeWinly/
 ├── config.json                          <-- Execution order & per-module scoped settings
 ├── config.previous.json                 <-- Rolling backup created on configuration modification
 ├── config.last-good.json                <-- Verified configuration preserved after successful runs
+├── BRANDING.md                          <-- Brand guidelines & Fluke Fedora specifications
 ├── SKILL.md                             <-- AI Agent Playbook
+├── assets/
+│   └── icons/                           <-- Vector SVG masters, PNG app icons & multi-res .ico files
 ├── core/
 │   ├── freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
 │   ├── freewinly-discovery.ps1          <-- AST contract gatekeeper, module discovery & sub-options builder

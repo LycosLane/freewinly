@@ -26,6 +26,7 @@ $coreItems = @(
     "freewinly.ps1",
     "config.example.json",
     "README.md",
+    "BRANDING.md",
     "LICENSE"
 )
 
@@ -36,6 +37,7 @@ foreach ($item in $coreItems) {
     }
 }
 
+Copy-Item -Path (Join-Path $projectRoot "assets") -Destination $stageDir -Recurse -Force
 Copy-Item -Path (Join-Path $projectRoot "core") -Destination $stageDir -Recurse -Force
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
