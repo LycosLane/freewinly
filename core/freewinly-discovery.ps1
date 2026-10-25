@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.0 Module Discovery & AST Contract Gatekeeper.
+    FreeWinly v1.5.1 Module Discovery & AST Contract Gatekeeper.
 .DESCRIPTION
     Scans the modules directory, validates each maintenance module against
     the FreeWinly AST contract, reconciles execution order with config.json,

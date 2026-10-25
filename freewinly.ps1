@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.0 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
+    FreeWinly v1.5.1 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
 .DESCRIPTION
     A modular, transparent, non-intrusive Windows 11 PC optimization toolchain.
     Designed for casual users via an interactive ASCII tree-view console, and for
@@ -51,7 +51,7 @@ if (-not $ConfigPath) {
 
 function Show-Banner {
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.5.0 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "         FreeWinly v1.5.1 - Open Source Windows Engine      " -ForegroundColor White
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "============================================================" -ForegroundColor Cyan
 }
@@ -209,7 +209,7 @@ function Invoke-DryRunCheck {
     if ($AsJson) {
         $jsonResult = [ordered]@{
             tool      = "FreeWinly"
-            version   = "1.5.0"
+            version   = "1.5.1"
             timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             modules   = @()
         }
@@ -371,7 +371,7 @@ if ($needsAdmin -and -not $isAdmin) {
 # 6. EXECUTION PIPELINE
 Clear-Host
 "==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.5.0 Maintenance Pipeline Started" "Cyan"
+Write-Log "FreeWinly v1.5.1 Maintenance Pipeline Started" "Cyan"
 "==================================================================" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
