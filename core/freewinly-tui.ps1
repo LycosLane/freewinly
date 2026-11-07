@@ -10,6 +10,18 @@
     Part of the FreeWinly Core Toolchain (Windows 11 Native).
 #>
 
+function Initialize-ConsoleTheme {
+    try {
+        # Normalize Windows Administrator console forced DarkBlue background,
+        # but preserve custom terminal profiles, Windows Terminal, and light themes.
+        if ($Host.UI.RawUI.BackgroundColor -eq [ConsoleColor]::DarkBlue) {
+            $Host.UI.RawUI.BackgroundColor = [ConsoleColor]::Black
+            $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White
+            Clear-Host
+        }
+    } catch { }
+}
+
 function Step-SubOptionValue {
     [CmdletBinding()]
     param(
@@ -107,6 +119,7 @@ function Invoke-InteractiveMenu {
         [scriptblock]$DryRunCallback
     )
 
+    Initialize-ConsoleTheme
     Clear-Host
     Show-Banner
     if ($IgnoredWarnings -and $IgnoredWarnings.Count -gt 0) {
@@ -122,6 +135,7 @@ function Invoke-InteractiveMenu {
         Write-Host "  $mark $($m.Name)$admin" -ForegroundColor $col
     }
 
+    $OutputMode = if ($Config -and $Config.outputMode -eq 'Advanced') { 'Advanced' } else { 'Standard' }
     $openMenu = $false
 
     if ($Countdown -gt 0) {
@@ -145,7 +159,7 @@ function Invoke-InteractiveMenu {
     }
 
     if (-not $openMenu -and $Countdown -gt 0) {
-        return @{ Action = 'Run'; Countdown = $Countdown; SubmenuView = $SubmenuView }
+        return @{ Action = 'Run'; Countdown = $Countdown; SubmenuView = $SubmenuView; OutputMode = $OutputMode }
     }
 
     $selectedIndex = 0
@@ -207,6 +221,7 @@ function Invoke-InteractiveMenu {
         $actions = @(
             @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
             @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
+            @{ Label = "[   V   ]  Output Mode: [ $OutputMode ] (Press V: Standard, Advanced)"; Key = "V" },
             @{ Label = "[   E   ]  Sub-Options View: [ $submenuViewText ] (Press E: Hidden, Custom, Expanded)"; Key = "E" },
             @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
             @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
@@ -465,6 +480,15 @@ function Invoke-InteractiveMenu {
                     }
                 }
             }
+            "V" {
+                $OutputMode = if ($OutputMode -eq "Standard") { "Advanced" } else { "Standard" }
+                if ($Config -is [System.Collections.IDictionary]) {
+                    $Config['outputMode'] = $OutputMode
+                } else {
+                    $Config | Add-Member -NotePropertyName outputMode -NotePropertyValue $OutputMode -Force
+                }
+                & $SaveConfigCallback
+            }
             "T" {
                 $curIdx = $timerPresets.IndexOf($Countdown)
                 $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
@@ -511,5 +535,6 @@ function Invoke-InteractiveMenu {
         Action      = 'Run'
         Countdown   = $Countdown
         SubmenuView = $SubmenuView
+        OutputMode  = $OutputMode
     }
 }

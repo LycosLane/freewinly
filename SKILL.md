@@ -124,6 +124,7 @@ The AI agent should:
 * **[ Delete ] / [ Backspace ]** -> Remove the highlighted custom application cache (with confirmation prompt; built-in apps can only be toggled).
 * **[ Enter ]** -> **Run All Checked Tasks [x]** (or activate selected action/sub-option).
 * **[ C ] / [ A ]** -> **Dry-Run Check / Diagnostic Audit** (inspects pending updates, hardware errors, and cache savings without modifying system state).
+* **[ V ]** -> **Toggle Output Mode** (`Standard` clean single-line status vs `Advanced` verbose stream).
 * **[ E ]** -> **Cycle Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`).
 * **[ T ]** -> **Cycle Auto-Start Countdown** (`0s`, `3s`, `5s`, `10s`, `20s`, `30s`).
 * **[ W ]** -> **Schedule Maintenance in Windows Task Scheduler** (interactive panel with `D` weekday cycler and `+`/`-` hour adjustments).

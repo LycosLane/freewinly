@@ -1,6 +1,7 @@
 {
   "countdownSeconds": 10,
   "submenuView": "Hidden",
+  "outputMode": "Standard",
   "expandedModules": [],
   "scheduleType": "Weekly",
   "scheduleDay": "Sunday",

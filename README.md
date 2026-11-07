@@ -140,6 +140,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
+  [   V   ]  Output Mode: [ Standard ] (Press V: Standard, Advanced)
   [   E   ]  Sub-Options View: [ Custom ] (Press E: Hidden, Custom, Expanded)
   [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle)
   [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
@@ -161,6 +162,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 | **`Delete` / `Back`** | Remove highlighted custom application cache entry (prompts for confirmation; built-ins can only be toggled) |
 | **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, caches without modifying system) |
+| **`V`** | Toggle **Output Mode** (`Standard` clean single-line status vs `Advanced` verbose stream) |
 | **`E`** | Cycle **Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`) |
 | **`T`** | Cycle **Auto-Start Countdown** duration (`0s Instant`, `3s`, `5s`, `10s Default`, `20s`, `30s`) |
 | **`W`** | Open **Windows Task Scheduler** panel (press `D` to cycle weekdays, `+`/`-` to adjust hours, `Enter` to save) |

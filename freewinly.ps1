@@ -23,7 +23,8 @@ param(
     [Parameter()][hashtable]$Settings = $null,
     [Parameter()][switch]$Json = $false,
     [Parameter()][switch]$HelpMe = $false,
-    [Parameter()][switch]$Interactive = $false
+    [Parameter()][switch]$Interactive = $false,
+    [Parameter()][ValidateSet('Standard', 'Advanced')][string]$OutputMode = $null
 )
 
 $ErrorActionPreference = "Continue"
@@ -49,11 +50,14 @@ if (-not $ConfigPath) {
 . (Join-Path $coreDir "freewinly-discovery.ps1")
 . (Join-Path $coreDir "freewinly-tui.ps1")
 
+# Cleanly normalize legacy Windows Administrator console DarkBlue if detected
+Initialize-ConsoleTheme
+
 function Show-Banner {
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "         FreeWinly v1.5.1 - Open Source Windows Engine      " -ForegroundColor White
+    Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
+    Write-Host "         FreeWinly v1.5.1 - Open Source Windows Engine      " -ForegroundColor Cyan
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
-    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 }
 
 function Write-Log {
@@ -66,6 +70,7 @@ function Write-Log {
 $defaultConfigTemplate = [PSCustomObject]@{
     countdownSeconds      = 10
     submenuView           = "Hidden"
+    outputMode            = "Standard"
     expandedModules       = @()
     scheduleType          = "Weekly"
     scheduleDay           = "Sunday"
@@ -140,6 +145,7 @@ $validFileMap      = $discovery.ValidFileMap
 $orderedBaseNames  = $discovery.OrderedBaseNames
 $ignoredWarnings   = $discovery.IgnoredWarnings
 $submenuView       = $discovery.SubmenuView
+$outputMode        = if ($OutputMode) { $OutputMode } elseif ($config -and $config.outputMode -eq 'Advanced') { 'Advanced' } else { 'Standard' }
 
 function Save-ConfigState {
     if ($configWasCorrupted) {
@@ -188,6 +194,7 @@ function Save-ConfigState {
     }
     $config | Add-Member -NotePropertyName countdownSeconds -NotePropertyValue $countdown -Force
     $config | Add-Member -NotePropertyName submenuView -NotePropertyValue $submenuView -Force
+    $config | Add-Member -NotePropertyName outputMode -NotePropertyValue $outputMode -Force
     $expandedList = @($discoveredModules | Where-Object { $_.Expanded } | Select-Object -ExpandProperty BaseName)
     $config | Add-Member -NotePropertyName expandedModules -NotePropertyValue $expandedList -Force
     $config | Add-Member -NotePropertyName modulesExecutionOrder -NotePropertyValue ([PSCustomObject]$modOrder) -Force
@@ -203,7 +210,8 @@ function Save-ConfigState {
 function Invoke-DryRunCheck {
     param(
         [array]$TargetModules,
-        [switch]$AsJson = $false
+        [switch]$AsJson = $false,
+        [string]$CurrentOutputMode = "Standard"
     )
 
     if ($AsJson) {
@@ -244,17 +252,41 @@ function Invoke-DryRunCheck {
         Write-Host ""
         foreach ($w in $ignoredWarnings) { Write-Host "  $w" -ForegroundColor Yellow }
     }
-    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($TargetModules.Count) module(s) ===" -ForegroundColor Yellow
+    Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($TargetModules.Count) module(s) [$CurrentOutputMode Mode] ===" -ForegroundColor Cyan
     Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
-    foreach ($m in $TargetModules) {
-        try {
-            & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile
-        } catch {
-            Write-Host "Error during check for $($m.Name): $($_.Exception.Message)" -ForegroundColor Red
+    if ($CurrentOutputMode -eq 'Standard') {
+        $step = 0
+        foreach ($m in $TargetModules) {
+            $step++
+            $stepPrefix = "[ $step/$($TargetModules.Count) ]"
+            $paddedName = "$($m.Name)".PadRight(35, '.')
+            Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+            try {
+                $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
+                $outText = ($outLines | Out-String)
+                $outLines | Add-Content -Path $logFile -Encoding UTF8
+                if ($outText -match 'Exception|Failed|Error' -and $outText -notmatch 'Zero broken') {
+                    Write-Host "[ Notice ]" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[ OK ]" -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "[ Error ]" -ForegroundColor Red
+                Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
+            }
+        }
+    } else {
+        foreach ($m in $TargetModules) {
+            try {
+                & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile
+            } catch {
+                Write-Host "Error during check for $($m.Name): $($_.Exception.Message)" -ForegroundColor Red
+            }
         }
     }
     Write-Host "`n=== Diagnostic Audit & Dry-Run Check Completed Successfully ===" -ForegroundColor Green
+    Write-Host "Detailed report and raw output saved to: $logFile" -ForegroundColor Gray
 }
 
 # Security Gate: Prompt injection protection for custom elevated commands
@@ -308,7 +340,7 @@ function Invoke-SecuredCommandsHook {
 # 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
 if ($Check) {
     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
-    Invoke-DryRunCheck -TargetModules $targetModules -AsJson:$Json
+    Invoke-DryRunCheck -TargetModules $targetModules -AsJson:$Json -CurrentOutputMode $outputMode
     exit 0
 }
 
@@ -329,10 +361,11 @@ if (-not $Run) {
         -ConfigWasCorrupted $configWasCorrupted `
         -DefaultConfigTemplate $defaultConfigTemplate `
         -SaveConfigCallback { Save-ConfigState } `
-        -DryRunCallback { param($TargetModules) Invoke-DryRunCheck -TargetModules $TargetModules }
+        -DryRunCallback { param($TargetModules) Invoke-DryRunCheck -TargetModules $TargetModules -CurrentOutputMode $outputMode }
 
-    $countdown = $menuResult.Countdown
+    $countdown   = $menuResult.Countdown
     $submenuView = $menuResult.SubmenuView
+    if ($menuResult.OutputMode) { $outputMode = $menuResult.OutputMode }
 }
 
 # 5. JUST-IN-TIME (JIT) ELEVATION CHECK
@@ -363,6 +396,7 @@ if ($needsAdmin -and -not $isAdmin) {
     if ($isInteractiveSession) { $elevationArgs += '-Interactive' }
     if ($selectedNames) { $elevationArgs += @('-Modules', $selectedNames) }
     if ($ConfigPath) { $elevationArgs += @('-ConfigPath', $ConfigPath) }
+    if ($outputMode) { $elevationArgs += @('-OutputMode', $outputMode) }
 
     Start-Process -FilePath $psHost -Verb RunAs -ArgumentList $elevationArgs
     exit 0
@@ -370,9 +404,9 @@ if ($needsAdmin -and -not $isAdmin) {
 
 # 6. EXECUTION PIPELINE
 Clear-Host
-"==================================================================" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.5.1 Maintenance Pipeline Started" "Cyan"
-"==================================================================" | Add-Content -Path $logFile -Encoding UTF8
+"------------------------------------------------------------------" | Out-File -FilePath $logFile -Encoding UTF8
+Write-Log "FreeWinly v1.5.1 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
+"------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
 $moduleErrors = 0
@@ -416,14 +450,42 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
 }
 
 # 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
-Write-Log "`nExecuting $($activeModules.Count) active maintenance module(s)..." "Cyan"
+if ($outputMode -eq 'Standard') {
+    Write-Host "`nExecuting $($activeModules.Count) active maintenance module(s) [Standard Mode]..." -ForegroundColor Cyan
+    $step = 0
+    foreach ($m in $activeModules) {
+        $step++
+        $stepPrefix = "[ $step/$($activeModules.Count) ]"
+        $paddedName = "$($m.Name)".PadRight(35, '.')
+        Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
 
-foreach ($m in $activeModules) {
-    try {
-        & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile
-    } catch {
-        $moduleErrors++
-        Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        try {
+            $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
+            $sw.Stop()
+            $modOutput | Add-Content -Path $logFile -Encoding UTF8
+            $modStr = ($modOutput | Out-String)
+            if ($modStr -match 'Exception|Failed|Error' -and $modStr -notmatch 'Zero broken') {
+                Write-Host "[ Notice ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Yellow
+            } else {
+                Write-Host "[ OK ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+            }
+        } catch {
+            $sw.Stop()
+            $moduleErrors++
+            Write-Host "[ Error ]" -ForegroundColor Red
+            Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+        }
+    }
+} else {
+    Write-Log "`nExecuting $($activeModules.Count) active maintenance module(s)..." "Cyan"
+    foreach ($m in $activeModules) {
+        try {
+            & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile
+        } catch {
+            $moduleErrors++
+            Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+        }
     }
 }
 

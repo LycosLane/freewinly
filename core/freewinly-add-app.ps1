@@ -67,6 +67,7 @@ $targetConfig = if ($ConfigPath -and (Test-Path -LiteralPath $ConfigPath)) {
 $defaultConfigTemplate = [PSCustomObject]@{
     countdownSeconds      = 10
     submenuView           = "Hidden"
+    outputMode            = "Standard"
     expandedModules       = @()
     scheduleType          = "Weekly"
     scheduleDay           = "Sunday"

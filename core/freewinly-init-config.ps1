@@ -198,6 +198,7 @@ foreach ($baseName in $orderedBaseNames) {
 $newConfig = [ordered]@{
     countdownSeconds      = if ($existingConfig -and $null -ne $existingConfig.countdownSeconds) { [int]$existingConfig.countdownSeconds } else { 10 }
     submenuView           = if ($existingConfig -and $existingConfig.submenuView) { [string]$existingConfig.submenuView } else { "Hidden" }
+    outputMode            = if ($existingConfig -and $existingConfig.outputMode -eq 'Advanced') { "Advanced" } else { "Standard" }
     expandedModules       = if ($existingConfig -and $existingConfig.expandedModules) { @($existingConfig.expandedModules) } else { @() }
     scheduleType          = if ($existingConfig -and $existingConfig.scheduleType) { $existingConfig.scheduleType } else { "Weekly" }
     scheduleDay           = if ($existingConfig -and $existingConfig.scheduleDay) { $existingConfig.scheduleDay } else { "Sunday" }
