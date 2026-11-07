@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="assets/icons/app_icon.png" width="128" alt="FreeWinly Fluke Fedora Icon" />
 </p>
 
@@ -252,45 +252,51 @@ FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom s
 Every maintenance routine lives in [`modules/`](modules/) as an independent script conforming to a standardized `<prefix>-<verb>-<noun>.ps1` naming convention and parameter contract (`Info`, `Check`, `Run`).
 
 Execution order is controlled via `modulesExecutionOrder` in `config.json` (and can be reordered live in the TUI with `[+]` / `[-]`), following a logical cause-and-effect sequence by default:
-1. **Diagnostics & System Integrity (`Order 10â€“19`):** Checks baseline hardware health, scans recent crash event logs, and repairs broken application launch hooks before attempting updates.
-2. **Software & OS Updates (`Order 20â€“29`):** Updates user applications via Winget and applies pending Windows OS/Defender definitions.
-3. **Storage & Disk Maintenance (`Order 30â€“39`):** Purges expired caches and temp files, immediately followed by physical SSD TRIM and HDD defragmentation on the newly freed disk sectors.
+1. **Diagnostics & System Integrity (`Order 10-19`):** Checks baseline hardware health, scans recent crash event logs, and repairs broken application launch hooks before attempting updates.
+2. **Software & OS Updates (`Order 20-29`):** Updates user applications via Winget and applies pending Windows OS/Defender definitions.
+3. **Storage & Disk Maintenance (`Order 30-39`):** Purges expired caches and temp files, immediately followed by physical SSD TRIM and HDD defragmentation on the newly freed disk sectors.
 
-```text
-FreeWinly/
-â”œâ”€â”€ freewinly.ps1                        <-- Master runner (CLI + high-level orchestrator + JIT elevation)
-â”œâ”€â”€ freewinly.cmd                        <-- Double-clickable launcher
-â”œâ”€â”€ config.json                          <-- Execution order & per-module scoped settings
-â”œâ”€â”€ config.previous.json                 <-- Rolling backup created on configuration modification
-â”œâ”€â”€ config.last-good.json                <-- Verified configuration preserved after successful runs
-â”œâ”€â”€ BRANDING.md                          <-- Brand guidelines & Fluke Fedora specifications
-â”œâ”€â”€ SKILL.md                             <-- AI Agent Playbook
-â”œâ”€â”€ assets/
-â”‚   â””â”€â”€ icons/                           <-- Vector SVG masters, PNG app icons & multi-res .ico files
-â”œâ”€â”€ core/
-â”‚   â”œâ”€â”€ freewinly-config-io.ps1          <-- Atomic config writer, rolling backup manager & recovery
-â”‚   â”œâ”€â”€ freewinly-discovery.ps1          <-- AST contract gatekeeper, module discovery & sub-options builder
-â”‚   â”œâ”€â”€ freewinly-tui.ps1                <-- Interactive ASCII tree-view menu, countdown & key dispatcher
-â”‚   â”œâ”€â”€ freewinly-add-app.ps1            <-- Custom app cache manager (add/remove with safety checks)
-â”‚   â”œâ”€â”€ freewinly-init-config.ps1        <-- First-run setup & exclusion wizard
-â”‚   â”œâ”€â”€ freewinly-setup-schedule.ps1     <-- Windows Task Scheduler automation
-â”‚   â”œâ”€â”€ freewinly-setup-launcher.ps1     <-- Start Menu launcher manager
-â”‚   â”œâ”€â”€ freewinly-setup-path.ps1         <-- User PATH CLI auto-complete manager
-â”‚   â””â”€â”€ freewinly-uninstall.ps1          <-- Uninstaller with preview & confirmation
-â””â”€â”€ modules/
-    â”œâ”€â”€ freewinly-check-hardware.ps1     <-- Device Manager & driver faults with actionable advice (Order 10)
-    â”œâ”€â”€ freewinly-check-eventlog.ps1     <-- Recurring crashes & BSODs with plain-language fixes (Order 11)
-    â”œâ”€â”€ freewinly-repair-applaunch.ps1   <-- Restores apps broken by dead sleep hooks & debuggers (Order 12)
-    â”œâ”€â”€ freewinly-update-software.ps1    <-- Winget updates with per-app exclusions & postponements (Order 20)
-    â”œâ”€â”€ freewinly-update-windows.ps1     <-- Windows Update COM API (Order 21)
-    â”œâ”€â”€ freewinly-clean-cache.ps1        <-- Safe temp/cache cleaning (> 7 days) (Order 30)
-    â”œâ”€â”€ freewinly-clean-browsers.ps1     <-- Disposable browser cache cleanup (Edge, Chrome, Firefox, Brave) (Order 31)
-    â”œâ”€â”€ freewinly-clean-apps.ps1         <-- Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, Obsidian, Telegram, custom) (Order 32)
-    â”œâ”€â”€ freewinly-clean-network.ps1      <-- Network cache flush & latency diagnostics (Order 33)
-    â”œâ”€â”€ freewinly-clean-winsxs.ps1       <-- Windows Component Store DISM cleanup & SFC verification (Order 34)
-    â”œâ”€â”€ freewinly-trim-ssd.ps1           <-- Multi-SSD TRIM optimization (Order 35)
-    â””â”€â”€ freewinly-defrag-hdd.ps1         <-- Mechanical HDD Defragmentation (auto-skips on SSD-only PCs) (Order 36)
-```
+### Core Runners & State Files
+| File / Directory | Description |
+| :--- | :--- |
+| `freewinly.ps1` | Master runner (CLI + high-level orchestrator + JIT elevation) |
+| `freewinly.cmd` | Double-clickable batch launcher (%* arguments) |
+| `VERSION` | Single Source of Truth canonical version file |
+| `config.json` | Execution order, per-module settings, generic hooks |
+| `config.previous.json` | Rolling backup created on configuration modification |
+| `config.last-good.json` | Verified configuration preserved after successful runs |
+| `BRANDING.md` | Brand guidelines and Fluke Fedora specifications |
+| `SKILL.md` | AI Agent Playbook |
+
+### Core Toolchain (`core/`)
+| Script | Role |
+| :--- | :--- |
+| `core/freewinly-version.ps1` | Central version provider and runtime loader |
+| `core/freewinly-config-io.ps1` | Atomic config writer, rolling backup manager, and recovery |
+| `core/freewinly-discovery.ps1` | AST contract gatekeeper, module discovery, and sub-options builder |
+| `core/freewinly-tui.ps1` | Interactive ASCII tree-view menu, countdown, and key dispatcher |
+| `core/freewinly-add-app.ps1` | Custom app cache manager (add/remove with safety checks) |
+| `core/freewinly-init-config.ps1` | First-run setup and exclusion wizard |
+| `core/freewinly-setup-schedule.ps1` | Native Windows Task Scheduler installer |
+| `core/freewinly-setup-launcher.ps1` | Start Menu launcher manager (Install/Remove/Status) |
+| `core/freewinly-setup-path.ps1` | User PATH CLI auto-complete manager |
+| `core/freewinly-uninstall.ps1` | Complete uninstaller with preview and confirmation |
+
+### Maintenance Modules (`modules/`)
+| Module | Order | Purpose |
+| :--- | :--- | :--- |
+| `freewinly-check-hardware.ps1` | 10 | Device Manager and driver faults with actionable advice |
+| `freewinly-check-eventlog.ps1` | 11 | Recurring crashes and BSODs with plain-language fixes |
+| `freewinly-repair-applaunch.ps1` | 12 | Restores apps broken by dead sleep hooks and debuggers |
+| `freewinly-update-software.ps1` | 20 | Winget updates (respects per-module exclusions) |
+| `freewinly-update-windows.ps1` | 21 | Native Windows OS and Defender Updates |
+| `freewinly-clean-cache.ps1` | 30 | Safe temp and cache cleaning (>7 days) |
+| `freewinly-clean-browsers.ps1` | 31 | Disposable browser cache cleanup (Edge, Chrome, Firefox, Brave) |
+| `freewinly-clean-apps.ps1` | 32 | Desktop app cache cleanup (Discord, Teams, Slack, Steam, VS Code, etc.) |
+| `freewinly-clean-network.ps1` | 33 | Network cache flush and latency diagnostics |
+| `freewinly-clean-winsxs.ps1` | 34 | Windows Component Store DISM cleanup and SFC verification |
+| `freewinly-trim-ssd.ps1` | 35 | SSD NVMe TRIM ReTrim optimization |
+| `freewinly-defrag-hdd.ps1` | 36 | Mechanical HDD Defrag (auto-skips on SSD-only PCs) |
 
 ### Module Contract (`Info / Check / Run`) & AST Gatekeeper
 
@@ -310,7 +316,7 @@ Each module works both as a standalone CLI tool (using its own built-in `Default
 
 Before loading any `.ps1` file in `modules/`, FreeWinly runs a static **AST & Metadata Gatekeeper (`Test-ModuleContract`)**:
 - Verifies zero PowerShell syntax errors via `[System.Management.Automation.Language.Parser]::ParseFile` before executing a single line.
-- Verifies `-Action Info` returns a valid `Name` (3â€“50 characters, single-line so TUI borders never break), `Description` ($\le 120$ chars), and boolean `Default` / `RequiresAdmin`.
+- Verifies `-Action Info` returns a valid `Name` (3-50 characters, single-line so TUI borders never break), `Description` ($\le 120$ chars), and boolean `Default` / `RequiresAdmin`.
 - If a script fails validation, FreeWinly safely skips it and displays `[Module Ignored] '<file>' was not loaded: <Reason>`.
 - Brand-new valid modules dropped into `modules/` when `config.json` already exists are automatically appended and default to **disabled (`[ ]`)** until explicitly enabled by the user.
 
@@ -505,5 +511,5 @@ Contributions, bug reports, and new modules are welcome. Feel free to open an is
 
 ## License
 
-MIT License Â© 2026 LycosLane
+MIT License © 2026 LycosLane
 
