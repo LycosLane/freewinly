@@ -60,6 +60,24 @@ function Show-Banner {
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 }
 
+function Get-ActiveWingetExclusions {
+    param($ExcludedSource)
+    $today = (Get-Date).Date
+    $res = [System.Collections.Generic.List[string]]::new()
+    if (-not $ExcludedSource) { return @() }
+    foreach ($item in $ExcludedSource) {
+        if ($item -is [string]) {
+            $res.Add($item)
+        } elseif ($item -and $item.id) {
+            $untilDate = if ($item.until) { try { [datetime]$item.until } catch { $null } } else { $null }
+            if (-not $untilDate -or $today -le $untilDate) {
+                $res.Add([string]$item.id)
+            }
+        }
+    }
+    return @($res)
+}
+
 function Write-Log {
     param([string]$Message, [string]$Color = "White")
     $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
@@ -267,7 +285,7 @@ function Invoke-DryRunCheck {
                 try {
                     $avail = & $m.Path -Action Scan
                     $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
-                    $activeExcludes = if ($cleanSettings.excluded) { @($cleanSettings.excluded) } else { @() }
+                    $activeExcludes = Get-ActiveWingetExclusions -ExcludedSource $cleanSettings.excluded
                     $toUpdate = @($avail | Where-Object {
                         $id = $_.Id
                         $name = $_.Name
@@ -547,7 +565,7 @@ if ($outputMode -eq 'Standard') {
             try {
                 $avail = & $m.Path -Action Scan
                 $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
-                $activeExcludes = if ($cleanSettings.excluded) { @($cleanSettings.excluded) } else { @() }
+                $activeExcludes = Get-ActiveWingetExclusions -ExcludedSource $cleanSettings.excluded
                 $toUpdate = @($avail | Where-Object {
                     $id = $_.Id
                     $name = $_.Name
