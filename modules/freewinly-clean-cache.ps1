@@ -77,6 +77,12 @@ $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 foreach ($k in $targets.Keys) {
     $p = $targets[$k]
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+    $root = [System.IO.Path]::GetPathRoot($p)
+    if ($root -and ($root.TrimEnd('\').ToUpperInvariant() -eq $p.TrimEnd('\').ToUpperInvariant())) {
+        Write-Warning "Safety violation: target path '$p' is a root volume directory. Skipping."
+        continue
+    }
     if (Test-Path $p) {
         $targetItem = Get-Item -LiteralPath $p -ErrorAction SilentlyContinue
         if ($targetItem -and ($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {

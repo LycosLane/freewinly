@@ -150,7 +150,7 @@ if ($isInteractive) {
             Write-Host "Application name cannot be empty." -ForegroundColor Yellow
             continue
         }
-        if (Test-IsReservedName -AppName $Name) {
+        if ($builtinKeys -contains $Name.ToLowerInvariant()) {
             Write-Host "Error: '$Name' is reserved by a built-in application. Please choose a different name." -ForegroundColor Red
             continue
         }

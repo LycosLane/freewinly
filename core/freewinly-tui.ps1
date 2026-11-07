@@ -161,7 +161,7 @@ function Invoke-InteractiveMenu {
         }
     }
 
-    if (-not $openMenu -and $Countdown -gt 0) {
+    if (-not $openMenu -and $Countdown -ge 0) {
         return @{ Action = 'Run'; Countdown = $Countdown; SubmenuView = $SubmenuView; OutputMode = $OutputMode }
     }
 

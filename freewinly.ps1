@@ -296,7 +296,7 @@ function Invoke-DryRunCheck {
                     $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
                     $outText = ($outLines | Out-String)
                     $outLines | Add-Content -Path $logFile -Encoding UTF8
-                    if ($outText -match 'Exception|Failed|Error' -and $outText -notmatch 'Zero broken') {
+                    if ($outText -match '(?<!0\s+)(Exception|Failed|Error)' -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
                         Write-Host "[ Notice ]" -ForegroundColor Yellow
                     } else {
                         Write-Host "[ OK ]" -ForegroundColor Green
@@ -368,6 +368,61 @@ function Invoke-SecuredCommandsHook {
     return @()
 }
 
+# Security Gate: Package identifier validation & prompt injection protection for software onboarding
+function Invoke-SecuredPackagesHook {
+    param(
+        [string]$HookName,
+        [array]$PackageIds,
+        [bool]$IsInteractive,
+        [string]$OutputMode,
+        [string]$TargetLogFile
+    )
+    if (-not $PackageIds -or $PackageIds.Count -eq 0) { return @() }
+
+    # Headless protection: Refuse package install/uninstall hooks without interactive human consent
+    if (-not $IsInteractive) {
+        Write-Log "`n[SECURITY BLOCKED] Execution of $($PackageIds.Count) $HookName package(s) was blocked in headless mode for safety." "Red"
+        Write-Log "Package operations in config.json require interactive human confirmation." "Yellow"
+        return $PackageIds
+    }
+
+    $packageIdRegex = '^[A-Za-z0-9\._-]+(\.[A-Za-z0-9\._-]+)*$|^[A-Za-z0-9]{12}$'
+
+    Write-Host "`n============================================================" -ForegroundColor Cyan
+    Write-Host "     [SECURITY GATE] Software $HookName Authorization       " -ForegroundColor White
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "The following $HookName package ID(s) are configured in config.json:" -ForegroundColor Gray
+    foreach ($id in $PackageIds) {
+        Write-Host "  > $id" -ForegroundColor White
+    }
+
+    $auth = Read-Host "`nAuthorize $HookName of these package(s)? (y/N)"
+    if ($auth -notmatch '^[Yy]$') {
+        Write-Log "Execution of $HookName rejected by user." "Yellow"
+        return $PackageIds
+    }
+
+    Write-Log "`n--- Running Authorized $HookName ($($PackageIds.Count)) ---" "Cyan"
+    $actionVerb = if ($HookName -eq 'Uninstall') { 'uninstall' } else { 'install' }
+    foreach ($id in $PackageIds) {
+        if ($id -notmatch $packageIdRegex) {
+            Write-Log "WARNING: Invalid package identifier '$id'. Skipping for security." "Red"
+            continue
+        }
+        Write-Log "$($HookName)ing: $id ..." "Cyan"
+        $wingetArgs = if ($actionVerb -eq 'uninstall') {
+            @('uninstall', '--id', $id, '--silent', '--accept-source-agreements', '--disable-interactivity')
+        } else {
+            @('install', '--id', $id, '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+        }
+        $procOut = & winget @wingetArgs 2>&1
+        if ($OutputMode -eq 'Advanced') { $procOut | Out-Host }
+        $procOut | Add-Content -Path $TargetLogFile -Encoding UTF8
+        Write-Log "RESULT: $id => Completed" "Green"
+    }
+    return @()
+}
+
 # 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
 if ($Check) {
     $targetModules = @($discoveredModules | Where-Object { $_.Enabled })
@@ -429,8 +484,14 @@ if ($needsAdmin -and -not $isAdmin) {
     if ($ConfigPath) { $elevationArgs += @('-ConfigPath', $ConfigPath) }
     if ($outputMode) { $elevationArgs += @('-OutputMode', $outputMode) }
 
-    Start-Process -FilePath $psHost -Verb RunAs -ArgumentList $elevationArgs
-    exit 0
+    try {
+        Start-Process -FilePath $psHost -Verb RunAs -ArgumentList $elevationArgs -ErrorAction Stop
+        exit 0
+    } catch {
+        Write-Host "`nAdministrator elevation was cancelled or rejected by user." -ForegroundColor Yellow
+        Write-Host "Elevated maintenance cannot continue without authorization." -ForegroundColor Gray
+        exit 1
+    }
 }
 
 # 6. EXECUTION PIPELINE
@@ -455,30 +516,20 @@ if ($config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
 
 # 6.1 UNINSTALL HOOK (Facilitates transitioning unmanaged installations to clean WinGet packages)
 if ($config -and $config.uninstall -and $config.uninstall.Count -gt 0) {
-    Write-Log "`n--- Running Uninstalls ($($config.uninstall.Count)) ---" "Cyan"
-    foreach ($id in $config.uninstall) {
-        Write-Log "Uninstalling: $id ..." "Cyan"
-        $uninstOut = & winget uninstall --id $id --silent --accept-source-agreements --disable-interactivity 2>&1
-        if ($outputMode -eq 'Advanced') { $uninstOut | Out-Host }
-        $uninstOut | Add-Content -Path $logFile -Encoding UTF8
-        Write-Log "RESULT: $id => Uninstalled" "Green"
+    $remainingUninst = Invoke-SecuredPackagesHook -HookName "Uninstall" -PackageIds $config.uninstall -IsInteractive $isInteractiveSession -OutputMode $outputMode -TargetLogFile $logFile
+    if ($remainingUninst.Count -ne $config.uninstall.Count) {
+        $config.uninstall = $remainingUninst
+        $configModified = $true
     }
-    $config.uninstall = @()
-    $configModified = $true
 }
 
 # 6.2 INSTALL HOOK (Facilitates clean WinGet application onboarding)
 if ($config -and $config.install -and $config.install.Count -gt 0) {
-    Write-Log "`n--- Running Fresh Installs ($($config.install.Count)) ---" "Cyan"
-    foreach ($id in $config.install) {
-        Write-Log "Installing: $id ..." "Cyan"
-        $instOut = & winget install --id $id --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
-        if ($outputMode -eq 'Advanced') { $instOut | Out-Host }
-        $instOut | Add-Content -Path $logFile -Encoding UTF8
-        Write-Log "RESULT: $id => Installed" "Green"
+    $remainingInst = Invoke-SecuredPackagesHook -HookName "Install" -PackageIds $config.install -IsInteractive $isInteractiveSession -OutputMode $outputMode -TargetLogFile $logFile
+    if ($remainingInst.Count -ne $config.install.Count) {
+        $config.install = $remainingInst
+        $configModified = $true
     }
-    $config.install = @()
-    $configModified = $true
 }
 
 # 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
@@ -564,7 +615,7 @@ if ($outputMode -eq 'Standard') {
                 $sw.Stop()
                 $modOutput | Add-Content -Path $logFile -Encoding UTF8
                 $modStr = ($modOutput | Out-String)
-                if ($modStr -match 'Exception|Failed|Error' -and $modStr -notmatch 'Zero broken') {
+                if ($modStr -match '(?<!0\s+)(Exception|Failed|Error)' -and $modStr -notmatch 'Zero broken|0 errors|0 failed') {
                     Write-Host "[ Notice ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Yellow
                 } else {
                     Write-Host "[ OK ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green

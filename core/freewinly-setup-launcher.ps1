@@ -58,15 +58,19 @@ function Create-ShortcutFile {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
-    $WshShell = New-Object -ComObject WScript.Shell
-    $sc = $WshShell.CreateShortcut($Path)
-    $sc.TargetPath       = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $sc.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
-    $sc.WorkingDirectory = $projectRoot
-    $sc.Description      = "FreeWinly - Open Source Windows Maintenance & Optimization"
-    $customIcon = Join-Path $projectRoot "assets\icons\freewinly.ico"
-    $sc.IconLocation     = if (Test-Path -LiteralPath $customIcon) { $customIcon } else { "$env:SystemRoot\System32\shell32.dll,238" }
-    $sc.Save()
+    try {
+        $WshShell = New-Object -ComObject WScript.Shell
+        $sc = $WshShell.CreateShortcut($Path)
+        $sc.TargetPath       = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        $sc.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
+        $sc.WorkingDirectory = $projectRoot
+        $sc.Description      = "FreeWinly - Open Source Windows Maintenance & Optimization"
+        $customIcon = Join-Path $projectRoot "assets\icons\freewinly.ico"
+        $sc.IconLocation     = if (Test-Path -LiteralPath $customIcon) { $customIcon } else { "$env:SystemRoot\System32\shell32.dll,238" }
+        $sc.Save()
+    } catch {
+        Write-Warning "Could not create shortcut at '$Path': $($_.Exception.Message)"
+    }
 }
 
 function Remove-ShortcutFile {
