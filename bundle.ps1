@@ -27,7 +27,8 @@ $coreItems = @(
     "config.example.json",
     "README.md",
     "BRANDING.md",
-    "LICENSE"
+    "LICENSE",
+    "VERSION"
 )
 
 foreach ($item in $coreItems) {

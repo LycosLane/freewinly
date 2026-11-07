@@ -28,12 +28,13 @@ if (-not $ConfigPath) {
     $ConfigPath = Join-Path $projectRoot "config.json"
 }
 
-# Dot-source config I/O manager
+# Dot-source core services
+. (Join-Path $PSScriptRoot "freewinly-version.ps1")
 . (Join-Path $PSScriptRoot "freewinly-config-io.ps1")
 
 Clear-Host
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "     FreeWinly v1.5.3 - Configuration & Exclusion Wizard    " -ForegroundColor White
+Write-Host "     FreeWinly v$FreeWinlyVersion - Configuration & Exclusion Wizard    " -ForegroundColor White
 Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
 Write-Host "============================================================`n" -ForegroundColor Cyan
 

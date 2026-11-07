@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly Shortcut & Launcher Manager (v1.5.3).
+    FreeWinly Shortcut & Launcher Manager.
 .DESCRIPTION
     Installs, inspects, or removes FreeWinly shortcuts across the Start Menu,
     the user's Desktop, and the Windows Startup folder (shell:startup).
@@ -29,6 +29,9 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runnerScript = Join-Path $projectRoot "freewinly.ps1"
+
+# Dot-source version provider
+. (Join-Path $PSScriptRoot "freewinly-version.ps1")
 
 $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 $desktopDir   = [Environment]::GetFolderPath('Desktop')
@@ -119,7 +122,7 @@ if ($Action -in @('Install', 'Remove')) {
 while ($true) {
     Clear-Host
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "       FreeWinly v1.5.3 - Shortcut & Launcher Manager       " -ForegroundColor White
+    Write-Host "       FreeWinly v$FreeWinlyVersion - Shortcut & Launcher Manager       " -ForegroundColor White
     Write-Host "============================================================`n" -ForegroundColor Cyan
 
     $keys = @($shortcutMap.Keys)

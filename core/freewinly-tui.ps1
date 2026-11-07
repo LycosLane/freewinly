@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.3 Interactive TUI & Keyboard Event Dispatcher.
+    FreeWinly Interactive TUI & Keyboard Event Dispatcher.
 .DESCRIPTION
     Provides the pure 7-bit ASCII interactive terminal user interface for
     FreeWinly. Features expandable tree-view sub-options, per-drive and

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.3 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
+    FreeWinly - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
 .DESCRIPTION
     A modular, transparent, non-intrusive Windows 11 PC optimization toolchain.
     Designed for casual users via an interactive ASCII tree-view console, and for
@@ -46,6 +46,7 @@ if (-not $ConfigPath) {
 }
 
 # Dot-source core services
+. (Join-Path $coreDir "freewinly-version.ps1")
 . (Join-Path $coreDir "freewinly-config-io.ps1")
 . (Join-Path $coreDir "freewinly-discovery.ps1")
 . (Join-Path $coreDir "freewinly-tui.ps1")
@@ -55,7 +56,7 @@ Initialize-ConsoleTheme
 
 function Show-Banner {
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "         FreeWinly v1.5.3 - Open Source Windows Engine      " -ForegroundColor Cyan
+    Write-Host "         FreeWinly v$FreeWinlyVersion - Open Source Windows Engine      " -ForegroundColor Cyan
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 }
@@ -235,7 +236,7 @@ function Invoke-DryRunCheck {
     if ($AsJson) {
         $jsonResult = [ordered]@{
             tool      = "FreeWinly"
-            version   = "1.5.3"
+            version   = $FreeWinlyVersion
             timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             modules   = @()
         }
@@ -524,7 +525,7 @@ if ($needsAdmin -and -not $isAdmin) {
 Initialize-ConsoleTheme
 Clear-Host
 "------------------------------------------------------------------" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.5.3 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
+Write-Log "FreeWinly v$FreeWinlyVersion Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
 "------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
