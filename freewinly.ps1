@@ -292,7 +292,8 @@ function Invoke-DryRunCheck {
                         -not ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) })
                     })
                     if ($toUpdate.Count -eq 0) {
-                        Write-Host "[ OK ] (All packages up to date)" -ForegroundColor Green
+                        Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                        Write-Host "(All packages up to date)" -ForegroundColor Gray
                     } else {
                         Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Yellow
                         foreach ($pkg in $toUpdate) {
@@ -301,9 +302,12 @@ function Invoke-DryRunCheck {
                             $padApp = "           - $appName".PadRight(35)
                             $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
                             $newVer = "$($pkg.AvailableVersion)".PadRight(12)
-                            Write-Host "$padApp $oldVer -> $newVer [ Update Available ]" -ForegroundColor White
+                            Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
+                            Write-Host "[ Update Available ]" -ForegroundColor Yellow
                         }
-                        Write-Host "  $stepPrefix $paddedName [ OK ] ($($toUpdate.Count) pending)" -ForegroundColor Green
+                        Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+                        Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                        Write-Host "($($toUpdate.Count) pending)" -ForegroundColor Gray
                     }
                 } catch {
                     Write-Host "[ Error ]" -ForegroundColor Red
@@ -603,13 +607,16 @@ if ($outputMode -eq 'Standard') {
                         $outStr = ($out | Out-String)
                         if ($exitCode -eq 0) {
                             $updatedCount++
-                            Write-Host "[ OK ] (${elapsed}s)" -ForegroundColor Green
+                            Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                            Write-Host "(${elapsed}s)" -ForegroundColor Gray
                         } elseif ($outStr -match 'different from the current version installed|different install technology') {
                             $noticeCount++
-                            Write-Host "[ Notice ] (Manual install needed) (${elapsed}s)" -ForegroundColor Yellow
+                            Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+                            Write-Host "(Manual install needed) (${elapsed}s)" -ForegroundColor Gray
                         } else {
                             $noticeCount++
-                            Write-Host "[ Notice ] (ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Yellow
+                            Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+                            Write-Host "(ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Gray
                         }
                     }
                     $sw.Stop()
@@ -618,7 +625,9 @@ if ($outputMode -eq 'Standard') {
                     if ($noticeCount -gt 0) { $summaryDetails += ", $noticeCount notice$(if ($noticeCount -gt 1) { 's' })" }
                     $statusColor = if ($noticeCount -gt 0) { "Yellow" } else { "Green" }
                     $statusTag   = if ($noticeCount -gt 0) { "[ Notice ]" } else { "[ OK ]" }
-                    Write-Host "  $stepPrefix $paddedName $statusTag ($summaryDetails) (${totalElapsed}s)" -ForegroundColor $statusColor
+                    Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+                    Write-Host "$statusTag " -NoNewline -ForegroundColor $statusColor
+                    Write-Host "($summaryDetails) (${totalElapsed}s)" -ForegroundColor Gray
                 }
             } catch {
                 $sw.Stop()
@@ -634,9 +643,11 @@ if ($outputMode -eq 'Standard') {
                 $modOutput | Add-Content -Path $logFile -Encoding UTF8
                 $modStr = ($modOutput | Out-String)
                 if ($modStr -match '(?<!0\s+)(Exception|Failed|Error)' -and $modStr -notmatch 'Zero broken|0 errors|0 failed') {
-                    Write-Host "[ Notice ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Yellow
+                    Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+                    Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
                 } else {
-                    Write-Host "[ OK ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+                    Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                    Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
                 }
             } catch {
                 $sw.Stop()

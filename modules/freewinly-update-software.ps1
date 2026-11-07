@@ -199,10 +199,13 @@ foreach ($pkg in $toUpdate) {
 
     $outStr = ($out | Out-String)
     if ($exitCode -eq 0) {
-        Write-Host "[ OK ] (${elapsed}s)" -ForegroundColor Green
+        Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+        Write-Host "(${elapsed}s)" -ForegroundColor Gray
     } elseif ($outStr -match 'different from the current version installed|different install technology') {
-        Write-Host "[ Notice ] (Manual install needed) (${elapsed}s)" -ForegroundColor Yellow
+        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+        Write-Host "(Manual install needed) (${elapsed}s)" -ForegroundColor Gray
     } else {
-        Write-Host "[ Notice ] (ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Yellow
+        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+        Write-Host "(ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Gray
     }
 }
