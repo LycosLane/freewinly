@@ -81,7 +81,19 @@ A console window opens with a countdown:
 
 ---
 
-### Option 2: AI Assistant Prompt
+### Option 2: Install via Scoop (One Command)
+
+If you use [Scoop](https://scoop.sh), install FreeWinly with a single command:
+
+```powershell
+scoop install https://raw.githubusercontent.com/LycosLane/freewinly/main/tools/scoop/freewinly.json
+```
+
+This adds `freewinly` to your PATH and creates a Start Menu shortcut with the official icon. To run FreeWinly anytime, simply type `freewinly` in any terminal.
+
+---
+
+### Option 3: AI Assistant Prompt
 
 If you use an AI coding assistant on Windows, paste this prompt into your assistant's chat:
 
@@ -93,7 +105,7 @@ Your assistant will download and extract the tested release package, read the di
 
 ---
 
-### Option 3: AI Skill Bundle (`FreeWinly4LLM.zip`)
+### Option 4: AI Skill Bundle (`FreeWinly4LLM.zip`)
 
 Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/freewinly/releases) and extract it into your assistant's `skills/` or `tools/` folder. It includes both the PowerShell engine and the complete `SKILL.md` playbook.
 

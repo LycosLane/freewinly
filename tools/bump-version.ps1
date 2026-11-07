@@ -45,9 +45,18 @@ if (Test-Path -LiteralPath $skillFile) {
         Set-Content -LiteralPath $skillFile -Encoding UTF8
 }
 
+# 5. Update tools/scoop/freewinly.json manifest
+$scoopFile = Join-Path $PSScriptRoot "scoop\freewinly.json"
+if (Test-Path -LiteralPath $scoopFile) {
+    $content = Get-Content -LiteralPath $scoopFile -Raw
+    $content = $content -replace '"version":\s*"[0-9]+\.[0-9]+\.[0-9]+"', "`"version`": `"$NewVersion`""
+    $content = $content -replace '/v[0-9]+\.[0-9]+\.[0-9]+/FreeWinly\.zip', "/v$NewVersion/FreeWinly.zip"
+    $content | Set-Content -LiteralPath $scoopFile -Encoding UTF8
+}
+
 Write-Host "`nFreeWinly canonical version successfully bumped to v$NewVersion!" -ForegroundColor Green
 
-# 5. Automatically refresh release bundles
+# 6. Automatically refresh release bundles
 $bundleScript = Join-Path $PSScriptRoot "bundle.ps1"
 if (Test-Path -LiteralPath $bundleScript) {
     & $bundleScript
