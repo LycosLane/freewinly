@@ -8,7 +8,7 @@
 .PARAMETER NewVersion
     The new semantic version string (e.g. 1.5.4 or 1.6.0).
 .EXAMPLE
-    .\bump.ps1 1.5.4
+    .\bump-version.ps1 1.5.4
 #>
 [CmdletBinding()]
 param(
