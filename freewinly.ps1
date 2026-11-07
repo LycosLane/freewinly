@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.2 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
+    FreeWinly v1.5.3 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
 .DESCRIPTION
     A modular, transparent, non-intrusive Windows 11 PC optimization toolchain.
     Designed for casual users via an interactive ASCII tree-view console, and for
@@ -55,7 +55,7 @@ Initialize-ConsoleTheme
 
 function Show-Banner {
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "         FreeWinly v1.5.2 - Open Source Windows Engine      " -ForegroundColor Cyan
+    Write-Host "         FreeWinly v1.5.3 - Open Source Windows Engine      " -ForegroundColor Cyan
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 }
@@ -235,7 +235,7 @@ function Invoke-DryRunCheck {
     if ($AsJson) {
         $jsonResult = [ordered]@{
             tool      = "FreeWinly"
-            version   = "1.5.2"
+            version   = "1.5.3"
             timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             modules   = @()
         }
@@ -274,10 +274,13 @@ function Invoke-DryRunCheck {
     Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
 
     if ($CurrentOutputMode -eq 'Standard') {
+        $totalCount = $TargetModules.Count
+        $totalDigits = "$totalCount".Length
         $step = 0
         foreach ($m in $TargetModules) {
             $step++
-            $stepPrefix = "[ $step/$($TargetModules.Count) ]"
+            $stepStr = "$step".PadLeft($totalDigits)
+            $stepPrefix = "[ $stepStr/$totalCount ]"
             $paddedName = "$($m.Name)".PadRight(35, '.')
             Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
 
@@ -296,10 +299,11 @@ function Invoke-DryRunCheck {
                         Write-Host "(All packages up to date)" -ForegroundColor Gray
                     } else {
                         Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Yellow
+                        $subIndent = "  " + "".PadRight($stepPrefix.Length + 1)
                         foreach ($pkg in $toUpdate) {
                             $appName = $pkg.Name
                             if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
-                            $padApp = "           - $appName".PadRight(35)
+                            $padApp = "$subIndent- $appName".PadRight(35 + $subIndent.Length)
                             $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
                             $newVer = "$($pkg.AvailableVersion)".PadRight(12)
                             Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
@@ -520,7 +524,7 @@ if ($needsAdmin -and -not $isAdmin) {
 Initialize-ConsoleTheme
 Clear-Host
 "------------------------------------------------------------------" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.5.2 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
+Write-Log "FreeWinly v1.5.3 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
 "------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
@@ -556,11 +560,14 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
 
 # 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
 if ($outputMode -eq 'Standard') {
-    Write-Host "`nExecuting $($activeModules.Count) active maintenance module(s) [Standard Mode]..." -ForegroundColor Cyan
+    Write-Host "`nExecuting $($activeModules.Count) active maintenance module(s) [Standard Mode]:`n" -ForegroundColor Cyan
+    $totalCount = $activeModules.Count
+    $totalDigits = "$totalCount".Length
     $step = 0
     foreach ($m in $activeModules) {
         $step++
-        $stepPrefix = "[ $step/$($activeModules.Count) ]"
+        $stepStr = "$step".PadLeft($totalDigits)
+        $stepPrefix = "[ $stepStr/$totalCount ]"
         $paddedName = "$($m.Name)".PadRight(35, '.')
         Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
 
@@ -580,15 +587,17 @@ if ($outputMode -eq 'Standard') {
                     $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
                     $sw.Stop()
                     if ($modOutput) { $modOutput | Add-Content -Path $logFile -Encoding UTF8 }
-                    Write-Host "[ OK ] (All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+                    Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                    Write-Host "(All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
                 } else {
                     Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Cyan
                     $updatedCount = 0
                     $noticeCount  = 0
+                    $subIndent = "  " + "".PadRight($stepPrefix.Length + 1)
                     foreach ($pkg in $toUpdate) {
                         $appName = $pkg.Name
                         if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
-                        $padApp = "           - $appName".PadRight(35)
+                        $padApp = "$subIndent- $appName".PadRight(35 + $subIndent.Length)
                         $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
                         $newVer = "$($pkg.AvailableVersion)".PadRight(12)
                         Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White

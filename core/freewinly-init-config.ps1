@@ -33,7 +33,7 @@ if (-not $ConfigPath) {
 
 Clear-Host
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "     FreeWinly v1.5.2 - Configuration & Exclusion Wizard    " -ForegroundColor White
+Write-Host "     FreeWinly v1.5.3 - Configuration & Exclusion Wizard    " -ForegroundColor White
 Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
 Write-Host "============================================================`n" -ForegroundColor Cyan
 
