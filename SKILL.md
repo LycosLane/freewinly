@@ -1,4 +1,4 @@
-﻿---
+---
 name: freewinly
 description: FreeWinly v1.5.3 - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
 ---
@@ -177,4 +177,72 @@ The AI agent should:
   - `freewinly-clean-winsxs`: `{ "enabled": false, "verifySystemFiles": false, "resetBase": false }`
   - `freewinly-trim-ssd`: `{ "enabled": true, "excludedDrives": [], "minIntervalDays": 0, "lastRun": null }`
   - `freewinly-defrag-hdd`: `{ "enabled": true, "excludedDrives": [], "minIntervalDays": 30, "lastRun": null }`
+
+---
+
+## Logs & Diagnostic File Locations
+
+All runtime activities, errors, and verbose diagnostics are logged to deterministic file paths:
+
+* **Daily Log Files (`logs/freewinly-YYYYMMDD.log`):**
+  Contains timestamped logs of every module execution, exact winget download URLs, package hashes, license notices, DISM servicing reports, and PowerShell stack traces. In Standard output mode, all third-party verbose progress is redirected here to keep the console calm.
+* **Active Configuration (`config.json`):**
+  Defines user preferences, module order, enable/disable states, and per-module exclusion lists.
+* **Rolling Backup (`config.previous.json`):**
+  Automatically saved whenever settings are modified via CLI, TUI, or AI agent.
+* **Verified Baseline (`config.last-good.json`):**
+  Preserved only after a maintenance run finishes with zero unhandled module errors. Can be used to restore known-working states.
+
+---
+
+## Troubleshooting & Reporting GitHub Issues
+
+When assisting a user who encounters a recurring failure, unexpected crash, or wants to report a bug on GitHub:
+
+1. **GitHub Issues URL:**
+   `https://github.com/LycosLane/freewinly/issues`
+
+2. **Required Diagnostic Information Checklist:**
+   Before filing an issue, collect the following environment facts:
+   * **FreeWinly Version:** `Get-Content VERSION` (or from the console banner).
+   * **Windows OS Version & Build:** Run `(Get-CimInstance Win32_OperatingSystem).Caption` and `(Get-CimInstance Win32_OperatingSystem).Version`.
+   * **PowerShell Version:** `$PSVersionTable.PSVersion.ToString()`.
+   * **Execution Context:** Was it executed via `freewinly.cmd` (Interactive TUI), elevated CLI (`.\freewinly.ps1 -Run`), read-only audit (`.\freewinly.ps1 -Check`), or Task Scheduler?
+   * **Failing Module Name:** The module indicator where the issue occurred (e.g. `freewinly-update-software`).
+   * **Relevant Log Excerpt:** The relevant error block from `logs/freewinly-YYYYMMDD.log`.
+
+3. **Privacy & Anonymization Guidance:**
+   Always advise the user to sanitize personal or sensitive details before posting publicly:
+   * Replace actual username paths (`C:\Users\JohnDoe` -> `C:\Users\<username>`).
+   * Remove internal corporate domain names, computer hostnames, or private IP addresses.
+   * Remove custom application names if they reveal proprietary internal software.
+
+4. **Standard Issue Report Template (Ready to Copy):**
+
+```markdown
+### Environment
+- FreeWinly Version: 1.5.3
+- Windows Version: Windows 11 Pro (Build 22631.xxxx)
+- PowerShell Version: 5.1.22621.xxxx (or 7.x)
+- Execution Mode: Interactive TUI / Headless CLI (-Run) / Audit (-Check)
+
+### Problem Description
+A clear and concise description of the issue encountered.
+
+### Affected Module(s)
+- [e.g. freewinly-update-software / freewinly-trim-ssd]
+
+### Relevant Log Excerpt (`logs/freewinly-YYYYMMDD.log`)
+```text
+[2026-11-07 23:10:45] Module Error (freewinly-update-software): ...
+```
+
+### Steps to Reproduce
+1. Run `.\freewinly.ps1 -Run`
+2. Observe error at step [ 4/10 ]
+
+### Expected Behavior
+What should have happened instead.
+```
+
 
