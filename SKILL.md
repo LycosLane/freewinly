@@ -22,7 +22,6 @@ FreeWinly is a native Windows maintenance engine built without third-party depen
 | `config.json` | Execution order, per-module settings, generic hooks |
 | `config.previous.json` | Rolling backup created on configuration modification |
 | `config.last-good.json` | Verified configuration preserved after successful runs |
-| `BRANDING.md` | Brand guidelines and Fluke Fedora specifications |
 | `SKILL.md` | AI Agent Playbook |
 | `tools/` | Developer and maintainer toolchain (packaging, version management) |
 

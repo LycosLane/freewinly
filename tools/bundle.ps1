@@ -26,7 +26,6 @@ $coreItems = @(
     "freewinly.ps1",
     "config.example.json",
     "README.md",
-    "BRANDING.md",
     "LICENSE",
     "VERSION"
 )

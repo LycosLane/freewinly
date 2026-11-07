@@ -265,7 +265,6 @@ Execution order is controlled via `modulesExecutionOrder` in `config.json` (and 
 | `config.json` | Execution order, per-module settings, generic hooks |
 | `config.previous.json` | Rolling backup created on configuration modification |
 | `config.last-good.json` | Verified configuration preserved after successful runs |
-| `BRANDING.md` | Brand guidelines and Fluke Fedora specifications |
 | `SKILL.md` | AI Agent Playbook |
 | `tools/` | Developer and maintainer toolchain (packaging, version management) |
 
