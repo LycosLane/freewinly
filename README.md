@@ -267,6 +267,7 @@ Execution order is controlled via `modulesExecutionOrder` in `config.json` (and 
 | `config.last-good.json` | Verified configuration preserved after successful runs |
 | `BRANDING.md` | Brand guidelines and Fluke Fedora specifications |
 | `SKILL.md` | AI Agent Playbook |
+| `tools/` | Developer and maintainer toolchain (packaging, version management) |
 
 ### Core Toolchain (`core/`)
 | Script | Role |
@@ -511,5 +512,6 @@ Contributions, bug reports, and new modules are welcome. Feel free to open an is
 
 ## License
 
-MIT License © 2026 LycosLane
+MIT License Â© 2026 LycosLane
+
 

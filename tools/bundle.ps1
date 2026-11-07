@@ -9,7 +9,7 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $distDir     = Join-Path $projectRoot "dist"
 $stageDir    = Join-Path $distDir "stage"
 $coreZip     = Join-Path $distDir "FreeWinly.zip"

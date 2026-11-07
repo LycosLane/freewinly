@@ -24,6 +24,7 @@ FreeWinly is a native Windows maintenance engine built without third-party depen
 | `config.last-good.json` | Verified configuration preserved after successful runs |
 | `BRANDING.md` | Brand guidelines and Fluke Fedora specifications |
 | `SKILL.md` | AI Agent Playbook |
+| `tools/` | Developer and maintainer toolchain (packaging, version management) |
 
 ### Core Toolchain (`core/`)
 | Script | Role |
@@ -250,5 +251,6 @@ A clear and concise description of the issue encountered.
 ### Expected Behavior
 What should have happened instead.
 ```
+
 
 

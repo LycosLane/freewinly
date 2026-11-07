@@ -18,7 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 
 # 1. Update VERSION file (Single Source of Truth for all PowerShell engine scripts)
 $versionFile = Join-Path $projectRoot "VERSION"
@@ -48,7 +48,7 @@ if (Test-Path -LiteralPath $skillFile) {
 Write-Host "`nFreeWinly canonical version successfully bumped to v$NewVersion!" -ForegroundColor Green
 
 # 5. Automatically refresh release bundles
-$bundleScript = Join-Path $projectRoot "bundle.ps1"
+$bundleScript = Join-Path $PSScriptRoot "bundle.ps1"
 if (Test-Path -LiteralPath $bundleScript) {
     & $bundleScript
 }
