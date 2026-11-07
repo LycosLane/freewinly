@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.1 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
+    FreeWinly v1.5.2 - The Open Source, Bloatware-Free Windows PC Maintenance Engine.
 .DESCRIPTION
     A modular, transparent, non-intrusive Windows 11 PC optimization toolchain.
     Designed for casual users via an interactive ASCII tree-view console, and for
@@ -55,7 +55,7 @@ Initialize-ConsoleTheme
 
 function Show-Banner {
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "         FreeWinly v1.5.1 - Open Source Windows Engine      " -ForegroundColor Cyan
+    Write-Host "         FreeWinly v1.5.2 - Open Source Windows Engine      " -ForegroundColor Cyan
     Write-Host "        Freeing Windows from bloatware, caches & fees       " -ForegroundColor Gray
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 }
@@ -217,7 +217,7 @@ function Invoke-DryRunCheck {
     if ($AsJson) {
         $jsonResult = [ordered]@{
             tool      = "FreeWinly"
-            version   = "1.5.1"
+            version   = "1.5.2"
             timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
             modules   = @()
         }
@@ -262,18 +262,49 @@ function Invoke-DryRunCheck {
             $stepPrefix = "[ $step/$($TargetModules.Count) ]"
             $paddedName = "$($m.Name)".PadRight(35, '.')
             Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
-            try {
-                $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
-                $outText = ($outLines | Out-String)
-                $outLines | Add-Content -Path $logFile -Encoding UTF8
-                if ($outText -match 'Exception|Failed|Error' -and $outText -notmatch 'Zero broken') {
-                    Write-Host "[ Notice ]" -ForegroundColor Yellow
-                } else {
-                    Write-Host "[ OK ]" -ForegroundColor Green
+
+            if ($m.BaseName -eq 'freewinly-update-software') {
+                try {
+                    $avail = & $m.Path -Action Scan
+                    $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
+                    $activeExcludes = if ($cleanSettings.excluded) { @($cleanSettings.excluded) } else { @() }
+                    $toUpdate = @($avail | Where-Object {
+                        $id = $_.Id
+                        $name = $_.Name
+                        -not ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) })
+                    })
+                    if ($toUpdate.Count -eq 0) {
+                        Write-Host "[ OK ] (All packages up to date)" -ForegroundColor Green
+                    } else {
+                        Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Yellow
+                        foreach ($pkg in $toUpdate) {
+                            $appName = $pkg.Name
+                            if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
+                            $padApp = "           - $appName".PadRight(35)
+                            $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
+                            $newVer = "$($pkg.AvailableVersion)".PadRight(12)
+                            Write-Host "$padApp $oldVer -> $newVer [ Update Available ]" -ForegroundColor White
+                        }
+                        Write-Host "  $stepPrefix $paddedName [ OK ] ($($toUpdate.Count) pending)" -ForegroundColor Green
+                    }
+                } catch {
+                    Write-Host "[ Error ]" -ForegroundColor Red
+                    Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
                 }
-            } catch {
-                Write-Host "[ Error ]" -ForegroundColor Red
-                Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
+            } else {
+                try {
+                    $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
+                    $outText = ($outLines | Out-String)
+                    $outLines | Add-Content -Path $logFile -Encoding UTF8
+                    if ($outText -match 'Exception|Failed|Error' -and $outText -notmatch 'Zero broken') {
+                        Write-Host "[ Notice ]" -ForegroundColor Yellow
+                    } else {
+                        Write-Host "[ OK ]" -ForegroundColor Green
+                    }
+                } catch {
+                    Write-Host "[ Error ]" -ForegroundColor Red
+                    Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
+                }
             }
         }
     } else {
@@ -327,7 +358,7 @@ function Invoke-SecuredCommandsHook {
         Write-Log "Running: $cmd" "Cyan"
         try {
             $cmdOut = Invoke-Expression $cmd 2>&1
-            $cmdOut | Out-Host
+            if ($outputMode -eq 'Advanced') { $cmdOut | Out-Host }
             $cmdOut | Add-Content -Path $TargetLogFile -Encoding UTF8
             Write-Log "RESULT: SUCCESS" "Green"
         } catch {
@@ -403,9 +434,10 @@ if ($needsAdmin -and -not $isAdmin) {
 }
 
 # 6. EXECUTION PIPELINE
+Initialize-ConsoleTheme
 Clear-Host
 "------------------------------------------------------------------" | Out-File -FilePath $logFile -Encoding UTF8
-Write-Log "FreeWinly v1.5.1 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
+Write-Log "FreeWinly v1.5.2 Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
 "------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 
 $configModified = $false
@@ -427,7 +459,7 @@ if ($config -and $config.uninstall -and $config.uninstall.Count -gt 0) {
     foreach ($id in $config.uninstall) {
         Write-Log "Uninstalling: $id ..." "Cyan"
         $uninstOut = & winget uninstall --id $id --silent --accept-source-agreements --disable-interactivity 2>&1
-        $uninstOut | Out-Host
+        if ($outputMode -eq 'Advanced') { $uninstOut | Out-Host }
         $uninstOut | Add-Content -Path $logFile -Encoding UTF8
         Write-Log "RESULT: $id => Uninstalled" "Green"
     }
@@ -441,7 +473,7 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
     foreach ($id in $config.install) {
         Write-Log "Installing: $id ..." "Cyan"
         $instOut = & winget install --id $id --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
-        $instOut | Out-Host
+        if ($outputMode -eq 'Advanced') { $instOut | Out-Host }
         $instOut | Add-Content -Path $logFile -Encoding UTF8
         Write-Log "RESULT: $id => Installed" "Green"
     }
@@ -459,22 +491,90 @@ if ($outputMode -eq 'Standard') {
         $paddedName = "$($m.Name)".PadRight(35, '.')
         Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
 
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        try {
-            $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
-            $sw.Stop()
-            $modOutput | Add-Content -Path $logFile -Encoding UTF8
-            $modStr = ($modOutput | Out-String)
-            if ($modStr -match 'Exception|Failed|Error' -and $modStr -notmatch 'Zero broken') {
-                Write-Host "[ Notice ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Yellow
-            } else {
-                Write-Host "[ OK ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+        if ($m.BaseName -eq 'freewinly-update-software') {
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            try {
+                $avail = & $m.Path -Action Scan
+                $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
+                $activeExcludes = if ($cleanSettings.excluded) { @($cleanSettings.excluded) } else { @() }
+                $toUpdate = @($avail | Where-Object {
+                    $id = $_.Id
+                    $name = $_.Name
+                    -not ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) })
+                })
+
+                if ($toUpdate.Count -eq 0) {
+                    $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
+                    $sw.Stop()
+                    if ($modOutput) { $modOutput | Add-Content -Path $logFile -Encoding UTF8 }
+                    Write-Host "[ OK ] (All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+                } else {
+                    Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Cyan
+                    $updatedCount = 0
+                    $noticeCount  = 0
+                    foreach ($pkg in $toUpdate) {
+                        $appName = $pkg.Name
+                        if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
+                        $padApp = "           - $appName".PadRight(35)
+                        $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
+                        $newVer = "$($pkg.AvailableVersion)".PadRight(12)
+                        Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
+
+                        $pkgSw = [System.Diagnostics.Stopwatch]::StartNew()
+                        $out = & winget upgrade --id $pkg.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+                        $pkgSw.Stop()
+                        $exitCode = $LASTEXITCODE
+                        $elapsed = [math]::Round($pkgSw.Elapsed.TotalSeconds, 1)
+
+                        if ($logFile) {
+                            $out | Add-Content -Path $logFile -Encoding UTF8
+                            Add-Content -Path $logFile -Value "RESULT: $($pkg.Id) => ExitCode $exitCode" -Encoding UTF8
+                        }
+
+                        $outStr = ($out | Out-String)
+                        if ($exitCode -eq 0) {
+                            $updatedCount++
+                            Write-Host "[ OK ] (${elapsed}s)" -ForegroundColor Green
+                        } elseif ($outStr -match 'different from the current version installed|different install technology') {
+                            $noticeCount++
+                            Write-Host "[ Notice ] (Manual install needed) (${elapsed}s)" -ForegroundColor Yellow
+                        } else {
+                            $noticeCount++
+                            Write-Host "[ Notice ] (ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Yellow
+                        }
+                    }
+                    $sw.Stop()
+                    $totalElapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+                    $summaryDetails = "$updatedCount updated"
+                    if ($noticeCount -gt 0) { $summaryDetails += ", $noticeCount notice$(if ($noticeCount -gt 1) { 's' })" }
+                    $statusColor = if ($noticeCount -gt 0) { "Yellow" } else { "Green" }
+                    $statusTag   = if ($noticeCount -gt 0) { "[ Notice ]" } else { "[ OK ]" }
+                    Write-Host "  $stepPrefix $paddedName $statusTag ($summaryDetails) (${totalElapsed}s)" -ForegroundColor $statusColor
+                }
+            } catch {
+                $sw.Stop()
+                $moduleErrors++
+                Write-Host "[ Error ]" -ForegroundColor Red
+                Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
             }
-        } catch {
-            $sw.Stop()
-            $moduleErrors++
-            Write-Host "[ Error ]" -ForegroundColor Red
-            Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+        } else {
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            try {
+                $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
+                $sw.Stop()
+                $modOutput | Add-Content -Path $logFile -Encoding UTF8
+                $modStr = ($modOutput | Out-String)
+                if ($modStr -match 'Exception|Failed|Error' -and $modStr -notmatch 'Zero broken') {
+                    Write-Host "[ Notice ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[ OK ] ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
+                }
+            } catch {
+                $sw.Stop()
+                $moduleErrors++
+                Write-Host "[ Error ]" -ForegroundColor Red
+                Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+            }
         }
     }
 } else {

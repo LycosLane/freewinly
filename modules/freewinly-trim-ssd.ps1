@@ -204,7 +204,7 @@ foreach ($dl in $targetDriveLetters) {
     Write-Host "Sending TRIM hint to Drive $dl`: ..." -ForegroundColor White
     try {
         $out = Optimize-Volume -DriveLetter $dl -ReTrim -Verbose -ErrorAction Stop 4>&1
-        $out | Out-Host
+        if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
         if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
         Write-Host "Drive $dl`: TRIM completed successfully." -ForegroundColor Green
         if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: TRIM completed successfully." -Encoding UTF8 }

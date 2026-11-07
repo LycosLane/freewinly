@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    FreeWinly v1.5.1 Interactive TUI & Keyboard Event Dispatcher.
+    FreeWinly v1.5.2 Interactive TUI & Keyboard Event Dispatcher.
 .DESCRIPTION
     Provides the pure 7-bit ASCII interactive terminal user interface for
     FreeWinly. Features expandable tree-view sub-options, per-drive and
@@ -12,12 +12,15 @@
 
 function Initialize-ConsoleTheme {
     try {
-        # Normalize Windows Administrator console forced DarkBlue background,
+        # Normalize Windows Administrator console forced DarkBlue/DarkMagenta background,
         # but preserve custom terminal profiles, Windows Terminal, and light themes.
-        if ($Host.UI.RawUI.BackgroundColor -eq [ConsoleColor]::DarkBlue) {
+        $bg = $Host.UI.RawUI.BackgroundColor
+        if ($bg -eq [ConsoleColor]::DarkBlue -or [int]$bg -eq 1 -or $bg -eq [ConsoleColor]::DarkMagenta -or [int]$bg -eq 5) {
+            [Console]::BackgroundColor = [ConsoleColor]::Black
+            [Console]::ForegroundColor = [ConsoleColor]::White
             $Host.UI.RawUI.BackgroundColor = [ConsoleColor]::Black
             $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White
-            Clear-Host
+            [Console]::Clear()
         }
     } catch { }
 }

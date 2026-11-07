@@ -49,8 +49,8 @@ function Get-WingetAvailablePackages {
                     $name = $line.Substring(0, $idStart).Trim()
                     $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
                     $verLen = [math]::Min($availStart - $verStart, $line.Length - $verStart)
-                    $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
-                    $availText = if ($line.Length -gt $availStart) { $line.Substring($availStart).Trim() } else { "" }
+                    $verText = if ($verLen -gt 0) { ($line.Substring($verStart, $verLen).Trim() -split '\s+')[0] } else { "" }
+                    $availText = if ($line.Length -gt $availStart) { ($line.Substring($availStart).Trim() -split '\s+')[0] } else { "" }
 
                     # Matches standard Publisher.Product IDs as well as 12-character Microsoft Store product IDs
                     if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$') {
@@ -175,17 +175,34 @@ $idx = 0
 foreach ($pkg in $toUpdate) {
     $idx++
     $id = $pkg.Id
-    Write-Host "[$idx/$($toUpdate.Count)] Updating $($pkg.Name) ($id) ..." -ForegroundColor Cyan
+    $appName = $pkg.Name
+    if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
+    $padApp = "  [$idx/$($toUpdate.Count)] $appName".PadRight(35)
+    $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
+    $newVer = "$($pkg.AvailableVersion)".PadRight(12)
+    Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
+
+    $swPkg = [System.Diagnostics.Stopwatch]::StartNew()
     $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+    $swPkg.Stop()
     $exitCode = $LASTEXITCODE
-    $out | Out-Host
+    $elapsed = [math]::Round($swPkg.Elapsed.TotalSeconds, 1)
+
+    if ($Settings -and $Settings.outputMode -eq 'Advanced') {
+        $out | Out-Host
+    }
+
     if ($LogFile) {
         $out | Add-Content -Path $LogFile -Encoding UTF8
         Add-Content -Path $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
     }
+
+    $outStr = ($out | Out-String)
     if ($exitCode -eq 0) {
-        Write-Host "RESULT: $id => SUCCESS" -ForegroundColor Green
+        Write-Host "[ OK ] (${elapsed}s)" -ForegroundColor Green
+    } elseif ($outStr -match 'different from the current version installed|different install technology') {
+        Write-Host "[ Notice ] (Manual install needed) (${elapsed}s)" -ForegroundColor Yellow
     } else {
-        Write-Host "RESULT: $id => FAILED/SKIPPED (ExitCode $exitCode)" -ForegroundColor Yellow
+        Write-Host "[ Notice ] (ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Yellow
     }
 }

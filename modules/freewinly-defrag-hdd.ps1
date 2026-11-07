@@ -170,7 +170,7 @@ if ($Action -eq 'Check') {
             Write-Host "Analyzing Drive $dl`: for fragmentation..." -ForegroundColor Cyan
             try {
                 $analysis = Optimize-Volume -DriveLetter $dl -Analyze -Verbose 4>&1 | Out-String
-                $analysis | Out-Host
+                if ($Settings -and $Settings.outputMode -eq 'Advanced') { $analysis | Out-Host }
             } catch {
                 Write-Host "Could not analyze Drive $dl`: $($_.Exception.Message)" -ForegroundColor Yellow
             }
@@ -200,7 +200,7 @@ foreach ($dl in $targetLetters) {
     Write-Host "Analyzing and defragmenting Drive $dl`: (skips automatically if not fragmented)..." -ForegroundColor Cyan
     try {
         $out = Optimize-Volume -DriveLetter $dl -Defrag -Verbose -ErrorAction Stop 4>&1
-        $out | Out-Host
+        if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
         if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
         Write-Host "Drive $dl`: Optimization completed." -ForegroundColor Green
     } catch {
