@@ -81,12 +81,19 @@ A console window opens with a countdown:
 
 ---
 
-### Option 2: Install via Scoop (One Command)
+### Option 2: Install via Scoop
 
-If you use [Scoop](https://scoop.sh), install FreeWinly with a single command:
+If you use [Scoop](https://scoop.sh), add the FreeWinly bucket and install with:
 
 ```powershell
-scoop install https://raw.githubusercontent.com/LycosLane/freewinly/main/tools/scoop/freewinly.json
+scoop bucket add freewinly https://github.com/LycosLane/freewinly
+scoop install freewinly
+```
+
+Or install directly from the manifest URL:
+
+```powershell
+scoop install https://raw.githubusercontent.com/LycosLane/freewinly/main/bucket/freewinly.json
 ```
 
 This adds `freewinly` to your PATH and creates a Start Menu shortcut with the official icon. To run FreeWinly anytime, simply type `freewinly` in any terminal.

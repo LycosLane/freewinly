@@ -45,8 +45,8 @@ if (Test-Path -LiteralPath $skillFile) {
         Set-Content -LiteralPath $skillFile -Encoding UTF8
 }
 
-# 5. Update tools/scoop/freewinly.json manifest
-$scoopFile = Join-Path $PSScriptRoot "scoop\freewinly.json"
+# 5. Update bucket/freewinly.json manifest
+$scoopFile = Join-Path $projectRoot "bucket\freewinly.json"
 if (Test-Path -LiteralPath $scoopFile) {
     $content = Get-Content -LiteralPath $scoopFile -Raw
     $content = $content -replace '"version":\s*"[0-9]+\.[0-9]+\.[0-9]+"', "`"version`": `"$NewVersion`""
