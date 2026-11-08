@@ -19,6 +19,10 @@
             "assets\\icons\\freewinly.ico"
         ]
     ],
+    "persist": [
+        "config.json",
+        "logs"
+    ],
     "checkver": "github",
     "autoupdate": {
         "url": "https://github.com/LycosLane/freewinly/releases/download/v$version/FreeWinly.zip"

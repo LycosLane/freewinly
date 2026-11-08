@@ -67,7 +67,28 @@ function Save-AtomicConfigFile {
         }
     }
 
-    # Write new content to temporary file in the same directory
+    # Check if target is a hardlink or symlink (e.g. managed by package managers like Scoop)
+    $isLinked = $false
+    if ($targetExists) {
+        try {
+            $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue
+            if ($item.LinkType -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                $isLinked = $true
+            }
+        } catch { }
+    }
+
+    if ($isLinked) {
+        # Direct write preserves hardlink/symlink targets across updates
+        try {
+            [System.IO.File]::WriteAllText($fullPath, $jsonContent, [System.Text.Encoding]::UTF8)
+        } catch {
+            throw "Failed to save linked configuration to '$fullPath': $($_.Exception.Message)"
+        }
+        return
+    }
+
+    # Write new content to temporary file in the same directory (atomic replacement for normal files)
     $tmpFile = Join-Path $dir ([System.IO.Path]::GetRandomFileName() + ".tmp")
     try {
         [System.IO.File]::WriteAllText($tmpFile, $jsonContent, [System.Text.Encoding]::UTF8)
