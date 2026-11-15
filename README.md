@@ -4,8 +4,8 @@
 
 # FreeWinly
 
-> Keep Windows fast, clean, and up to date without bloatware, background services, or subscriptions.  
-> *A transparent, modular, native Windows maintenance engine.*
+> Free, open-source maintenance and diagnostic toolkit for Windows 11:  
+> Automates Winget updates, DISM cleanup, SSD TRIM, aged cache purges, and driver health checks in pure PowerShell, with zero background services or fees.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D6.svg)]()
@@ -530,6 +530,6 @@ Contributions, bug reports, and new modules are welcome. Feel free to open an is
 
 ## License
 
-MIT License Â© 2026 LycosLane
+MIT License © 2026 LycosLane
 
 
