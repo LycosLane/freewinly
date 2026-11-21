@@ -20,38 +20,44 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
 # 1. Update VERSION file (Single Source of Truth for all PowerShell engine scripts)
 $versionFile = Join-Path $projectRoot "VERSION"
-Set-Content -LiteralPath $versionFile -Value $NewVersion -Encoding ASCII
+[System.IO.File]::WriteAllText($versionFile, "$NewVersion`n", $utf8NoBom)
 
 # 2. Update core/freewinly-version.ps1 fallback default
 $coreVerFile = Join-Path $projectRoot "core\freewinly-version.ps1"
 if (Test-Path -LiteralPath $coreVerFile) {
-    (Get-Content -LiteralPath $coreVerFile -Raw) -replace 'return "[0-9]+\.[0-9]+\.[0-9]+"', "return `"$NewVersion`"" |
-        Set-Content -LiteralPath $coreVerFile -Encoding ASCII
+    $content = [System.IO.File]::ReadAllText($coreVerFile, [System.Text.Encoding]::UTF8)
+    $content = $content -replace 'return "[0-9]+\.[0-9]+\.[0-9]+"', "return `"$NewVersion`""
+    [System.IO.File]::WriteAllText($coreVerFile, $content, $utf8NoBom)
 }
 
 # 3. Update README.md banner sample
 $readmeFile = Join-Path $projectRoot "README.md"
 if (Test-Path -LiteralPath $readmeFile) {
-    (Get-Content -LiteralPath $readmeFile -Raw) -replace 'FreeWinly v[0-9]+\.[0-9]+\.[0-9]+', "FreeWinly v$NewVersion" |
-        Set-Content -LiteralPath $readmeFile -Encoding UTF8
+    $content = [System.IO.File]::ReadAllText($readmeFile, [System.Text.Encoding]::UTF8)
+    $content = $content -replace 'FreeWinly v[0-9]+\.[0-9]+\.[0-9]+', "FreeWinly v$NewVersion"
+    [System.IO.File]::WriteAllText($readmeFile, $content, $utf8NoBom)
 }
 
-# 4. Update SKILL.md frontmatter description
+# 4. Update SKILL.md frontmatter description and metadata
 $skillFile = Join-Path $projectRoot "SKILL.md"
 if (Test-Path -LiteralPath $skillFile) {
-    (Get-Content -LiteralPath $skillFile -Raw) -replace 'FreeWinly v[0-9]+\.[0-9]+\.[0-9]+', "FreeWinly v$NewVersion" |
-        Set-Content -LiteralPath $skillFile -Encoding UTF8
+    $content = [System.IO.File]::ReadAllText($skillFile, [System.Text.Encoding]::UTF8)
+    $content = $content -replace 'FreeWinly v[0-9]+\.[0-9]+\.[0-9]+', "FreeWinly v$NewVersion"
+    $content = $content -replace '- FreeWinly Version: [0-9]+\.[0-9]+\.[0-9]+', "- FreeWinly Version: $NewVersion"
+    [System.IO.File]::WriteAllText($skillFile, $content, $utf8NoBom)
 }
 
 # 5. Update bucket/freewinly.json manifest
 $scoopFile = Join-Path $projectRoot "bucket\freewinly.json"
 if (Test-Path -LiteralPath $scoopFile) {
-    $content = Get-Content -LiteralPath $scoopFile -Raw
+    $content = [System.IO.File]::ReadAllText($scoopFile, [System.Text.Encoding]::UTF8)
     $content = $content -replace '"version":\s*"[0-9]+\.[0-9]+\.[0-9]+"', "`"version`": `"$NewVersion`""
     $content = $content -replace '/v[0-9]+\.[0-9]+\.[0-9]+/FreeWinly\.zip', "/v$NewVersion/FreeWinly.zip"
-    $content | Set-Content -LiteralPath $scoopFile -Encoding UTF8
+    [System.IO.File]::WriteAllText($scoopFile, $content, $utf8NoBom)
 }
 
 Write-Host "`nFreeWinly canonical version successfully bumped to v$NewVersion!" -ForegroundColor Green
