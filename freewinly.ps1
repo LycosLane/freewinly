@@ -806,7 +806,28 @@ if (-not $configWasCorrupted -and $moduleErrors -eq 0) {
 }
 
 if ($isInteractiveSession) {
-    Read-Host "Press Enter to close this window"
+    Write-Host "Press [L] to open log file, or [Enter / Esc] to close this window..." -ForegroundColor Cyan
+    try {
+        while ($true) {
+            $k = [Console]::ReadKey($true)
+            if ($k.Key -in @('Enter', 'Escape', 'Q')) {
+                break
+            } elseif ($k.Key -eq 'L') {
+                if (Test-Path -LiteralPath $logFile) {
+                    try {
+                        Start-Process -FilePath $logFile -ErrorAction Stop
+                    } catch {
+                        Start-Process -FilePath "notepad.exe" -ArgumentList @($logFile) -ErrorAction SilentlyContinue
+                    }
+                    Write-Host "Opened log file. Press [Enter / Esc] when ready to close." -ForegroundColor Gray
+                } else {
+                    Write-Host "Log file not found at '$logFile'." -ForegroundColor Yellow
+                }
+            }
+        }
+    } catch {
+        Read-Host "Press Enter to close this window"
+    }
 } else {
     # Deterministic exit code for CI/CD and automation
     if ($moduleErrors -gt 0) { exit 1 } else { exit 0 }

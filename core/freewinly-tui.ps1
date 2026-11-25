@@ -469,7 +469,28 @@ function Invoke-InteractiveMenu {
                 Clear-Host
                 $targetModules = @($DiscoveredModules | Where-Object { $_.Enabled })
                 & $DryRunCallback -TargetModules $targetModules -OutputMode $OutputMode
-                Read-Host "`nPress Enter to return to menu"
+                Write-Host "`nPress [L] to open log file, or [Enter / Esc] to return to menu..." -ForegroundColor Cyan
+                try {
+                    while ($true) {
+                        $k = [Console]::ReadKey($true)
+                        if ($k.Key -in @('Enter', 'Escape', 'Q')) {
+                            break
+                        } elseif ($k.Key -eq 'L') {
+                            if (Test-Path -LiteralPath $LogFile) {
+                                try {
+                                    Start-Process -FilePath $LogFile -ErrorAction Stop
+                                } catch {
+                                    Start-Process -FilePath "notepad.exe" -ArgumentList @($LogFile) -ErrorAction SilentlyContinue
+                                }
+                                Write-Host "Opened log file. Press [Enter / Esc] to return to menu." -ForegroundColor Gray
+                            } else {
+                                Write-Host "Log file not found at '$LogFile'." -ForegroundColor Yellow
+                            }
+                        }
+                    }
+                } catch {
+                    Read-Host "`nPress Enter to return to menu"
+                }
             }
             "E" {
                 $SubmenuView = switch ($SubmenuView) {
