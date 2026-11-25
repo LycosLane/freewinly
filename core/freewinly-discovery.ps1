@@ -124,7 +124,7 @@ function Test-UserPathRegistered {
     $userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
     if (-not $userPathRaw) { return $false }
     $normRoot = $ProjectRoot.TrimEnd('\')
-    return (($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
+    return (@($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
         $_.Trim().TrimEnd('\').Equals($normRoot, [System.StringComparison]::OrdinalIgnoreCase)
     }).Count -gt 0)
 }
@@ -238,6 +238,14 @@ function Test-ModuleContract {
         }
     }
 
+    if ($null -ne $info.Order -and ([string]$info.Order -notmatch '^\d+$')) {
+        return [PSCustomObject]@{
+            IsValid = $false
+            Reason  = "Metadata 'Order' property must be a non-negative integer."
+            Info    = $null
+        }
+    }
+
     return [PSCustomObject]@{
         IsValid = $true
         Reason  = $null
@@ -255,7 +263,9 @@ function Get-DiscoveredModules {
         [Parameter()]
         [array]$ModulesFilter = $null,
         [Parameter()]
-        [hashtable]$CliSettings = $null
+        [hashtable]$CliSettings = $null,
+        [Parameter()]
+        [switch]$Quiet = $false
     )
 
     $moduleFiles = Get-ChildItem (Join-Path $ModulesDir "*.ps1") -ErrorAction SilentlyContinue
@@ -267,7 +277,7 @@ function Get-DiscoveredModules {
         if (-not $validation.IsValid) {
             $msg = "[Module Ignored] '$($mf.Name)' was not loaded: $($validation.Reason)"
             $ignoredWarnings.Add($msg)
-            Write-Host $msg -ForegroundColor Yellow
+            if (-not $Quiet) { Write-Host $msg -ForegroundColor Yellow }
             continue
         }
         $validFileMap[$mf.BaseName] = [PSCustomObject]@{
@@ -379,20 +389,7 @@ function Get-DiscoveredModules {
         }
 
         $settingsObj = [PSCustomObject]$modSettings
-
-        # Update dynamic title if minAgeDays or lookbackDays was customized in settings
         $displayName = $info.Name
-        if ($baseName -eq 'freewinly-clean-cache' -and $null -ne $settingsObj.minAgeDays) {
-            $displayName = "Safe Cache & Temp Cleanup (>$($settingsObj.minAgeDays) days)"
-        } elseif ($baseName -eq 'freewinly-check-eventlog') {
-            if ($settingsObj.startDate) {
-                $endLabel = if ($settingsObj.endDate) { $settingsObj.endDate } else { "Today" }
-                $displayName = "System Stability & Event Logs ($($settingsObj.startDate) to $endLabel)"
-            } elseif ($settingsObj.lookbackDays) {
-                $displayName = "System Stability & Event Logs (Last $($settingsObj.lookbackDays)d)"
-            }
-        }
-
         $isApplicable = if ($null -ne $info.Applicable) { [bool]$info.Applicable } else { $true }
 
         # Skip inapplicable hardware modules (e.g. HDD Defrag on SSD-only PC) from menu unless explicitly requested via -Modules

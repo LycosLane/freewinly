@@ -44,8 +44,46 @@ Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recur
 # Ensure no local configuration files or backups are shipped
 Get-ChildItem -Path $stageDir -Filter "config*.json" -Recurse | Where-Object { $_.Name -ne "config.example.json" } | Remove-Item -Force -ErrorAction SilentlyContinue
 
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function New-DeterministicZip {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDir,
+        [Parameter(Mandatory = $true)][string]$DestinationZip
+    )
+    if (Test-Path -LiteralPath $DestinationZip) {
+        Remove-Item -LiteralPath $DestinationZip -Force
+    }
+    $fullSource = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
+    $fixedTime = [DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
+    $files = Get-ChildItem -LiteralPath $fullSource -Recurse -File | Sort-Object { $_.FullName.Substring($fullSource.Length + 1).Replace('\', '/') }
+
+    $zip = [System.IO.Compression.ZipFile]::Open($DestinationZip, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($f in $files) {
+            $relPath = $f.FullName.Substring($fullSource.Length + 1).Replace('\', '/')
+            $entry = $zip.CreateEntry($relPath, [System.IO.Compression.CompressionLevel]::Optimal)
+            $entry.LastWriteTime = $fixedTime
+            $inStream = [System.IO.File]::OpenRead($f.FullName)
+            try {
+                $outStream = $entry.Open()
+                try {
+                    $inStream.CopyTo($outStream)
+                } finally {
+                    $outStream.Dispose()
+                }
+            } finally {
+                $inStream.Dispose()
+            }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
+
 # 1. Package FreeWinly.zip (core release package)
-Compress-Archive -Path "$stageDir\*" -DestinationPath $coreZip -Force
+New-DeterministicZip -SourceDir $stageDir -DestinationZip $coreZip
 $coreSize = [math]::Round((Get-Item $coreZip).Length / 1KB, 1)
 
 # 2. Add SKILL.md and package FreeWinly4LLM.zip (AI agent skill package)
@@ -53,7 +91,7 @@ $skillSrc = Join-Path $projectRoot "SKILL.md"
 if (Test-Path $skillSrc) {
     Copy-Item -Path $skillSrc -Destination $stageDir -Force
 }
-Compress-Archive -Path "$stageDir\*" -DestinationPath $llmZip -Force
+New-DeterministicZip -SourceDir $stageDir -DestinationZip $llmZip
 $llmSize = [math]::Round((Get-Item $llmZip).Length / 1KB, 1)
 
 # Cleanup staging folder

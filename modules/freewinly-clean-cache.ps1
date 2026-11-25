@@ -112,7 +112,9 @@ foreach ($k in $targets.Keys) {
                         $files.Add($f)
                     }
                 }
-            } catch { }
+            } catch {
+                if ($LogFile) { Add-Content -Path $LogFile -Value "clean-cache enumeration warning ('$($curDir.FullName)'): $($_.Exception.Message)" -Encoding UTF8 }
+            }
         }
         $count = ($files | Measure-Object).Count
         $bytes = ($files | Measure-Object Length -Sum).Sum

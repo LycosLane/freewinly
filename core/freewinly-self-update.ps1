@@ -81,7 +81,8 @@ function Get-LatestFreeWinlyRelease {
         $sumsUrl = $null
     }
 
-    $updateAvail = ([version]$latestVer -gt [version]$FreeWinlyVersion)
+    $currentSemVer = if ($FreeWinlyVersion -match '^(\d+\.\d+\.\d+)') { [version]$matches[1] } else { [version]'0.0.0' }
+    $updateAvail = ([version]$latestVer -gt $currentSemVer)
 
     return [PSCustomObject]@{
         LatestVersion   = $latestVer
@@ -110,27 +111,29 @@ function Update-StandaloneInstall {
         Write-Host "Downloading $($ReleaseInfo.ZipAssetName) ($($ReleaseInfo.TagName))..." -ForegroundColor Cyan
         Invoke-WebRequest -Uri $ReleaseInfo.ZipUrl -OutFile $zipPath -TimeoutSec 60 -UseBasicParsing -ErrorAction Stop
 
-        if ($ReleaseInfo.ChecksumsUrl) {
-            $sumsPath = Join-Path $tempDir "SHA256SUMS.txt"
-            Invoke-WebRequest -Uri $ReleaseInfo.ChecksumsUrl -OutFile $sumsPath -TimeoutSec 20 -UseBasicParsing -ErrorAction Stop
-            $sumsLines = Get-Content -LiteralPath $sumsPath -ErrorAction Stop
-            $expectedHash = $null
-            foreach ($line in $sumsLines) {
-                if ($line -match '^\s*([A-Fa-f0-9]{64})\s+\*?(.+?)\s*$') {
-                    if ($matches[2].Trim() -eq $ReleaseInfo.ZipAssetName) {
-                        $expectedHash = $matches[1].ToUpperInvariant()
-                        break
-                    }
+        if (-not $ReleaseInfo.ChecksumsUrl) {
+            throw "Release $($ReleaseInfo.TagName) is missing SHA256SUMS.txt; aborting unverified download."
+        }
+        $sumsPath = Join-Path $tempDir "SHA256SUMS.txt"
+        Invoke-WebRequest -Uri $ReleaseInfo.ChecksumsUrl -OutFile $sumsPath -TimeoutSec 20 -UseBasicParsing -ErrorAction Stop
+        $sumsLines = Get-Content -LiteralPath $sumsPath -Encoding UTF8 -ErrorAction Stop
+        $expectedHash = $null
+        foreach ($line in $sumsLines) {
+            if ($line -match '^\s*([A-Fa-f0-9]{64})\s+\*?(.+?)\s*$') {
+                if ($matches[2].Trim() -eq $ReleaseInfo.ZipAssetName) {
+                    $expectedHash = $matches[1].ToUpperInvariant()
+                    break
                 }
-            }
-            if ($expectedHash) {
-                $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
-                if ($actualHash -ne $expectedHash) {
-                    throw "Checksum verification failed for $($ReleaseInfo.ZipAssetName) (expected $expectedHash, got $actualHash)."
-                }
-                Write-Host "[OK] SHA-256 checksum verified." -ForegroundColor Green
             }
         }
+        if (-not $expectedHash) {
+            throw "No SHA-256 checksum entry found for $($ReleaseInfo.ZipAssetName) in SHA256SUMS.txt."
+        }
+        $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+        if ($actualHash -ne $expectedHash) {
+            throw "Checksum verification failed for $($ReleaseInfo.ZipAssetName) (expected $expectedHash, got $actualHash)."
+        }
+        Write-Host "[OK] SHA-256 checksum verified." -ForegroundColor Green
 
         $stageDir = Join-Path $tempDir "stage"
         Expand-Archive -LiteralPath $zipPath -DestinationPath $stageDir -Force -ErrorAction Stop

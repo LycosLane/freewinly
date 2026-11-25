@@ -13,7 +13,9 @@ function Get-ConfigFileHash {
     if (Test-Path -LiteralPath $Path) {
         try {
             return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash
-        } catch { }
+        } catch {
+            Write-Warning "Could not hash config file '$Path': $($_.Exception.Message)"
+        }
     }
     return $null
 }
@@ -56,7 +58,7 @@ function Save-AtomicConfigFile {
 
     if ($targetExists) {
         # Check if content actually changed before backing up
-        $existingContent = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
+        $existingContent = Get-Content -LiteralPath $fullPath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
         if ($existingContent -ne $jsonContent) {
             # Update single rolling copy of config.previous.json
             try {
@@ -71,11 +73,13 @@ function Save-AtomicConfigFile {
     $isLinked = $false
     if ($targetExists) {
         try {
-            $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue
+            $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
             if ($item.LinkType -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
                 $isLinked = $true
             }
-        } catch { }
+        } catch {
+            Write-Warning "Could not inspect link attributes on '$fullPath': $($_.Exception.Message)"
+        }
     }
 
     if ($isLinked) {
@@ -158,8 +162,26 @@ function Get-SafeConfigFile {
     $prevPath     = Join-Path $dir "config.previous.json"
 
     if (Test-Path -LiteralPath $fullPath) {
-        $raw = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-        if ([string]::IsNullOrWhiteSpace($raw)) {
+        $isZeroLength = $false
+        $raw = $null
+        try {
+            $fileItem = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+            if ($fileItem.Length -eq 0) {
+                $isZeroLength = $true
+            } else {
+                $raw = Get-Content -LiteralPath $fullPath -Raw -Encoding UTF8 -ErrorAction Stop
+            }
+        } catch {
+            $readErr = $_.Exception.Message
+            Write-Warning "[Config Warning] Could not read '$fullPath': $readErr"
+            return [PSCustomObject]@{
+                Config       = $DefaultConfig
+                IsCorrupted  = $true
+                ParseError   = $readErr
+                RestoredFrom = "Memory:Defaults"
+            }
+        }
+        if ($isZeroLength -or ($null -ne $raw -and [string]::IsNullOrWhiteSpace($raw))) {
             return [PSCustomObject]@{
                 Config       = $DefaultConfig
                 IsCorrupted  = $false
@@ -169,8 +191,9 @@ function Get-SafeConfigFile {
         }
         try {
             $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
-            if ($null -eq $parsed) {
-                throw "Configuration JSON evaluated to null."
+            $isObj = ($null -ne $parsed) -and (-not ($parsed -is [System.Array])) -and (($parsed.GetType().Name -eq 'PSCustomObject') -or ($parsed -is [System.Collections.IDictionary]))
+            if (-not $isObj) {
+                throw "Configuration JSON must be a JSON object."
             }
             return [PSCustomObject]@{
                 Config       = $parsed
@@ -188,7 +211,7 @@ function Get-SafeConfigFile {
                 $lineHint = " (near offset $($matches[1]))"
             }
 
-            # Find first valid non-null backup
+            # Find first valid non-null object backup
             $backupToUse   = $null
             $backupName    = $null
             $backupRaw     = $null
@@ -200,10 +223,11 @@ function Get-SafeConfigFile {
             foreach ($cand in $backupCandidates) {
                 if (Test-Path -LiteralPath $cand.Path) {
                     try {
-                        $candRaw = Get-Content -LiteralPath $cand.Path -Raw -ErrorAction Stop
+                        $candRaw = Get-Content -LiteralPath $cand.Path -Raw -Encoding UTF8 -ErrorAction Stop
                         if (-not [string]::IsNullOrWhiteSpace($candRaw)) {
                             $candParsed = $candRaw | ConvertFrom-Json -ErrorAction Stop
-                            if ($null -ne $candParsed) {
+                            $candIsObj = ($null -ne $candParsed) -and (-not ($candParsed -is [System.Array])) -and (($candParsed.GetType().Name -eq 'PSCustomObject') -or ($candParsed -is [System.Collections.IDictionary]))
+                            if ($candIsObj) {
                                 $backupToUse  = $cand.Path
                                 $backupName   = $cand.Name
                                 $backupRaw    = $candRaw
@@ -211,7 +235,9 @@ function Get-SafeConfigFile {
                                 break
                             }
                         }
-                    } catch { }
+                    } catch {
+                        Write-Warning "[Config Warning] Backup '$($cand.Name)' is invalid: $($_.Exception.Message)"
+                    }
                 }
             }
 

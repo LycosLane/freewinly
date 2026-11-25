@@ -33,7 +33,36 @@ $modulesDir  = Join-Path $projectRoot "modules"
 
 $targetDirs = @($projectRoot, $coreDir, $modulesDir)
 
-$userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
+function Get-RawUserPath {
+    $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
+    if (-not $envKey) { return "" }
+    try {
+        $val = $envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        return [string]$val
+    } finally {
+        $envKey.Dispose()
+    }
+}
+
+function Set-RawUserPath {
+    param([string]$NewPathValue)
+    $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    if (-not $envKey) {
+        $envKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    }
+    try {
+        $kind = if ($NewPathValue -match '%[^%]+%') {
+            [Microsoft.Win32.RegistryValueKind]::ExpandString
+        } else {
+            [Microsoft.Win32.RegistryValueKind]::String
+        }
+        $envKey.SetValue('Path', $NewPathValue, $kind)
+    } finally {
+        $envKey.Dispose()
+    }
+}
+
+$userPathRaw = Get-RawUserPath
 $userPaths   = if ($userPathRaw) {
     @($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 } else {
@@ -45,7 +74,7 @@ function Compare-PathEntry {
     return $A.Trim().TrimEnd('\').Equals($B.Trim().TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase)
 }
 
-$isInstalled = ($userPaths | Where-Object { Compare-PathEntry $_ $projectRoot }).Count -gt 0
+$isInstalled = @($userPaths | Where-Object { Compare-PathEntry $_ $projectRoot }).Count -gt 0
 
 if ($Action -eq 'Status') {
     if ($isInstalled) {
@@ -63,13 +92,13 @@ if ($Action -eq 'Toggle') {
 if ($Action -eq 'Remove') {
     $filtered = @($userPaths | Where-Object {
         $p = $_
-        ($targetDirs | Where-Object { Compare-PathEntry $p $_ }).Count -eq 0
+        @($targetDirs | Where-Object { Compare-PathEntry $p $_ }).Count -eq 0
     })
     $newPathStr = $filtered -join ';'
-    [Environment]::SetEnvironmentVariable("Path", $newPathStr, "User")
+    Set-RawUserPath -NewPathValue $newPathStr
     $envEntries = @($env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
         $ep = $_
-        ($targetDirs | Where-Object { Compare-PathEntry $ep $_ }).Count -eq 0
+        @($targetDirs | Where-Object { Compare-PathEntry $ep $_ }).Count -eq 0
     })
     $env:Path = $envEntries -join ';'
     Write-Host "`nRemoved FreeWinly from User PATH." -ForegroundColor Yellow
@@ -83,7 +112,7 @@ foreach ($p in $userPaths) {
 }
 
 foreach ($td in $targetDirs) {
-    $exists = ($updatedPaths | Where-Object { Compare-PathEntry $_ $td }).Count -gt 0
+    $exists = @($updatedPaths | Where-Object { Compare-PathEntry $_ $td }).Count -gt 0
     if (-not $exists) {
         $updatedPaths.Add($td.TrimEnd('\'))
     }
@@ -99,7 +128,7 @@ if ($newPathStr.Length -ge 2048) {
     return
 }
 
-[Environment]::SetEnvironmentVariable("Path", $newPathStr, "User")
+Set-RawUserPath -NewPathValue $newPathStr
 $envList = [System.Collections.Generic.List[string]]::new()
 foreach ($ep in $env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)) {
     $envList.Add($ep)

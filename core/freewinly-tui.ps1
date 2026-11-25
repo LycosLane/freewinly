@@ -53,8 +53,14 @@ function Step-SubOptionValue {
                 } else {
                     $mod.Settings.customApps.$($Item.CustomAppName) = -not $custObj
                 }
-            } elseif ($null -ne $custObj -and $null -ne $custObj.enabled) {
-                $custObj.enabled = -not [bool]$custObj.enabled
+            } elseif ($null -ne $custObj) {
+                if ($null -ne $custObj.enabled) {
+                    $custObj.enabled = -not [bool]$custObj.enabled
+                } elseif ($custObj -is [System.Collections.IDictionary]) {
+                    $custObj['enabled'] = $false
+                } else {
+                    $custObj | Add-Member -NotePropertyName enabled -NotePropertyValue $false -Force
+                }
             }
         }
         'bool' {
@@ -71,14 +77,28 @@ function Step-SubOptionValue {
             $idx     = $presets.IndexOf($curVal)
             $nextVal = switch ($Direction) {
                 'StepLeft' {
-                    if ($idx -gt 0) { $presets[$idx - 1] } else { $presets[0] }
+                    if ($idx -gt 0) {
+                        $presets[$idx - 1]
+                    } elseif ($idx -lt 0) {
+                        $lower = @($presets | Where-Object { $_ -lt $curVal })
+                        if ($lower.Count -gt 0) { $lower[-1] } else { $presets[0] }
+                    } else { $presets[0] }
                 }
                 'StepRight' {
-                    if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) { $presets[$idx + 1] } else { $presets[-1] }
+                    if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) {
+                        $presets[$idx + 1]
+                    } elseif ($idx -lt 0) {
+                        $higher = @($presets | Where-Object { $_ -gt $curVal })
+                        if ($higher.Count -gt 0) { $higher[0] } else { $presets[-1] }
+                    } else { $presets[-1] }
                 }
                 'Toggle' {
-                    $nextIdx = if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) { $idx + 1 } else { 0 }
-                    $presets[$nextIdx]
+                    if ($idx -ge 0 -and $idx -lt ($presets.Count - 1)) {
+                        $presets[$idx + 1]
+                    } elseif ($idx -lt 0) {
+                        $higher = @($presets | Where-Object { $_ -gt $curVal })
+                        if ($higher.Count -gt 0) { $higher[0] } else { $presets[0] }
+                    } else { $presets[0] }
                 }
             }
             $mod.Settings.$($Item.SubKey) = $nextVal
@@ -106,6 +126,8 @@ function Invoke-InteractiveMenu {
         [int]$Countdown = 10,
         [Parameter()]
         [string]$SubmenuView = "Hidden",
+        [Parameter()]
+        [string]$OutputMode = $null,
         [Parameter()]
         [System.Collections.Generic.List[string]]$IgnoredWarnings,
         [Parameter()]
@@ -140,7 +162,7 @@ function Invoke-InteractiveMenu {
         Write-Host "  $mark $($m.Name)$admin" -ForegroundColor $col
     }
 
-    $OutputMode = if ($Config -and $Config.outputMode -eq 'Advanced') { 'Advanced' } else { 'Standard' }
+    $OutputMode = if ($OutputMode) { $OutputMode } elseif ($Config -and $Config.outputMode -eq 'Advanced') { 'Advanced' } else { 'Standard' }
     $openMenu = $false
 
     if ($Countdown -gt 0) {
@@ -563,11 +585,12 @@ function Invoke-InteractiveMenu {
             }
             "I" {
                 & (Join-Path $CoreDir "freewinly-setup-launcher.ps1")
-                Read-Host "`nPress Enter to return to menu"
             }
             "U" {
                 Clear-Host
                 & (Join-Path $CoreDir "freewinly-uninstall.ps1")
+                $configLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive $IsInteractiveSession -DefaultConfig $DefaultConfigTemplate
+                $Config = $configLoad.Config
                 Read-Host "`nPress Enter to return to menu"
             }
             "G" {

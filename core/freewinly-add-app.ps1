@@ -81,7 +81,7 @@ $defaultConfigTemplate = [PSCustomObject]@{
 
 # 1. Removal workflow
 if ($Remove) {
-    $cfgRes = Get-SafeConfigFile -Path $targetConfig -IsInteractive ([string]::IsNullOrWhiteSpace($Name)) -DefaultConfig $defaultConfigTemplate
+    $cfgRes = Get-SafeConfigFile -Path $targetConfig -IsInteractive $false -DefaultConfig $defaultConfigTemplate
     if ($cfgRes.IsCorrupted) {
         Write-Warning "Configuration '$targetConfig' is corrupted. Aborting to avoid overwriting user data."
         exit 1

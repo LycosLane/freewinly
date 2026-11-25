@@ -175,7 +175,9 @@ foreach ($envVar in @($env:APPDATA, $env:LOCALAPPDATA, $env:TEMP)) {
             if (-not ($baseDirs -contains $resolved)) {
                 $baseDirs += $resolved
             }
-        } catch { }
+        } catch {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
 }
 
@@ -193,10 +195,10 @@ function Test-CleanAppPathSafety {
     while ($p -match '\\\\') { $p = $p.Replace('\\', '\') }
     $p = $p.TrimEnd('\')
 
-    # Reject .. segments
+    # Reject . and .. segments
     $segments = $p.Split('\')
-    if ($segments -contains '..') {
-        return @{ IsValid = $false; Reason = "Path contains forbidden '..' traversal segment" }
+    if ($segments -contains '..' -or $segments -contains '.') {
+        return @{ IsValid = $false; Reason = "Path contains forbidden '.' or '..' traversal segment" }
     }
 
     # Reject drive roots (e.g. C: or C:\)
@@ -204,10 +206,19 @@ function Test-CleanAppPathSafety {
         return @{ IsValid = $false; Reason = "Drive roots are strictly forbidden" }
     }
 
-    # Reject invalid path characters (excluding wildcard * and drive-letter colon)
+    # Reject invalid path characters (excluding wildcard * and drive-letter colon, and blocking PS bracket wildcards)
     $noDrive = $p -replace '^[a-zA-Z]:', ''
-    if ($noDrive -match '[\<\>\"\|\?\:]') {
+    if ($noDrive -match '[\<\>\"\|\?\:\[\]]') {
         return @{ IsValid = $false; Reason = "Path contains invalid characters" }
+    }
+
+    # Normalize non-wildcard prefix via GetFullPath
+    if ($p -notmatch '\*') {
+        try {
+            $p = [System.IO.Path]::GetFullPath($p).TrimEnd('\')
+        } catch {
+            return @{ IsValid = $false; Reason = "Invalid path syntax" }
+        }
     }
 
     # Wildcard validation: at most ONE '*' wildcard in entire path
@@ -274,7 +285,9 @@ function Get-TargetDirectories {
                     }
                 }
             }
-        } catch { }
+        } catch {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
     return $dirs
 }
@@ -410,7 +423,9 @@ foreach ($app in $appsToProcess) {
                     $files.Add($f)
                 }
             }
-        } catch { }
+        } catch {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
 
     if ($files.Count -eq 0) { continue }

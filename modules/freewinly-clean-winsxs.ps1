@@ -81,7 +81,7 @@ if ($Action -eq 'Check') {
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [+] Component Store Health: Healthy (no corruption detected; exit code 0)." -ForegroundColor Green
         } else {
-            Write-Host "  [-] Component Store Health Status (exit code $LASTEXITCODE):" -ForegroundColor Yellow
+            Write-Host "  [-] Component Store Health Check failed (exit code $LASTEXITCODE):" -ForegroundColor Yellow
             $checkHealthOut.Trim().Split("`n") | ForEach-Object {
                 $line = $_.Trim()
                 if ($line) { Write-Host "      $line" -ForegroundColor Gray }
@@ -140,8 +140,12 @@ try {
 if ($verifySystemFiles) {
     Write-Host "`nRunning System File Checker verification (sfc.exe /verifyonly)..." -ForegroundColor Cyan
     try {
-        & sfc.exe /verifyonly
+        $sfcRaw = & sfc.exe /verifyonly 2>&1
         $sfcExit = $LASTEXITCODE
+        $sfcClean = (($sfcRaw | Out-String) -replace "`0", "").Trim()
+        if ($sfcClean) {
+            Write-Host $sfcClean -ForegroundColor Gray
+        }
         if ($sfcExit -eq 0) {
             Write-Host "  [+] System file verification completed. No integrity violations found." -ForegroundColor Green
             if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification passed: No integrity violations." -Encoding UTF8 }

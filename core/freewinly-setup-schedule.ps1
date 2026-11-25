@@ -122,7 +122,7 @@ function Save-ScheduleToConfig {
     )
     if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $cfg = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue $Type -Force
             $cfg | Add-Member -NotePropertyName scheduleDay -NotePropertyValue $Day -Force
             $cfg | Add-Member -NotePropertyName scheduleTime -NotePropertyValue $Time -Force
@@ -136,7 +136,7 @@ function Save-ScheduleToConfig {
 function Remove-ScheduleFromConfig {
     if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $cfg = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue "Disabled" -Force
             Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
         } catch {
@@ -158,7 +158,7 @@ function Register-FreeWinlyTask {
         Write-Host "Requesting elevation..." -ForegroundColor Cyan
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', $ScheduleType, '-At', $TimeStr, '-DayOfWeek', $Day)
+        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Action', $ScheduleType, '-At', $TimeStr, '-DayOfWeek', $Day)
         try {
             Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
         } catch {
@@ -167,7 +167,7 @@ function Register-FreeWinlyTask {
         return
     }
 
-    $time = try { [datetime]::ParseExact($TimeStr, 'HH:mm', $null) } catch { (Get-Date).Date.AddHours(12) }
+    $time = try { [datetime]::ParseExact($TimeStr, 'HH:mm', [System.Globalization.CultureInfo]::InvariantCulture) } catch { (Get-Date).Date.AddHours(12) }
 
     $trigger = switch ($ScheduleType) {
         'Weekly' {
@@ -215,7 +215,7 @@ function Remove-FreeWinlyTask {
         Write-Host "`nRemoving scheduled task requires Administrator privileges." -ForegroundColor Yellow
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', 'Remove')
+        $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Action', 'Remove')
         try {
             Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
         } catch {
@@ -247,8 +247,8 @@ function Adjust-Hour {
 }
 
 # Resolve defaults from config.json if present
-$cfg = if (Test-Path $configPath) {
-    try { Get-Content $configPath -Raw | ConvertFrom-Json } catch { $null }
+$cfg = if (Test-Path -LiteralPath $configPath) {
+    try { Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null }
 } else { $null }
 
 $defaultType = if ($cfg -and $cfg.scheduleType -and $cfg.scheduleType -ne "Disabled") { $cfg.scheduleType } else { "Weekly" }

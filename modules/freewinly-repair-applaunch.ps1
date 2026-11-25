@@ -268,7 +268,7 @@ foreach ($h in $brokenHooks) {
 # Clean up empty parent UseFilter properties if no remaining subkeys exist
 foreach ($parent in $parentsToClean) {
     if (Test-Path -LiteralPath $parent) {
-        $remaining = Get-ChildItem -LiteralPath $parent -ErrorAction SilentlyContinue
+        $remaining = @(Get-ChildItem -LiteralPath $parent -ErrorAction SilentlyContinue)
         if ($remaining.Count -eq 0) {
             Remove-ItemProperty -LiteralPath $parent -Name "UseFilter" -ErrorAction SilentlyContinue
         }

@@ -110,6 +110,7 @@ if ($checkConnectivity) {
         $dnsOk = $true
     } catch {
         $dnsSw.Stop()
+        if ($LogFile) { Add-Content -Path $LogFile -Value "DNS Resolution warning ('$testDomain'): $($_.Exception.Message)" -Encoding UTF8 }
     }
 
     if ($dnsOk) {

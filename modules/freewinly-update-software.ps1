@@ -35,11 +35,17 @@ function Get-WingetAvailablePackages {
     $origEncoding = [Console]::OutputEncoding
     try {
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-        $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
+        $lines = @(& winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream)
     } finally {
         [Console]::OutputEncoding = $origEncoding
     }
-    $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
+    $sepIdx = -1
+    for ($idx = 0; $idx -lt $lines.Count; $idx++) {
+        if ($lines[$idx] -match '^-{20,}') {
+            $sepIdx = $idx
+            break
+        }
+    }
     $packages = [System.Collections.Generic.List[PSCustomObject]]::new()
     if ($sepIdx -ge 1) {
         $header     = $lines[$sepIdx - 1]
@@ -51,6 +57,7 @@ function Get-WingetAvailablePackages {
 
             for ($i = $sepIdx + 1; $i -lt $lines.Count; $i++) {
                 $line = $lines[$i]
+                if ([string]::IsNullOrWhiteSpace($line) -or $line -match '^-{20,}') { break }
                 if ($line.Length -gt $verStart) {
                     $name = $line.Substring(0, $idStart).Trim()
                     $id   = $line.Substring($idStart, $verStart - $idStart).Trim()

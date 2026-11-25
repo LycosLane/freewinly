@@ -55,7 +55,7 @@ Each feature is a self-contained script in `modules/` that can be run directly f
 
 - **Software Updates via Winget:** Uses Microsoft's official `winget` engine to update software silently, with version mismatch detection.
 - **Auto-Start Countdown:** Counts down 10 seconds before running default tasks automatically. Press any key to open the interactive menu.
-- **Expandable Tree-View Menu (`[+]` / `[-]`):** Pure 7-bit ASCII tree view. Toggle tasks with `[Space]`, expand/collapse per-module sub-options with `[Tab]` or `[Left/Right]`, adjust numeric sliders, cycle view modes with `[E]`, reorder with `[+]` / `[-]`, and run immediately with `[Enter]`.
+- **Expandable Tree-View Menu (`[+]` / `[-]`):** Pure 7-bit ASCII tree view. Toggle tasks with `[Space]` / `[Enter]`, expand/collapse per-module sub-options with `[Tab]` or `[Left/Right]`, adjust numeric sliders, cycle view modes with `[E]`, reorder with `[+]` / `[-]`, and run immediately with `[R]`.
 - **Browser & App Cache Cleanup:** Purges disposable shader, code, and disk caches across Microsoft Edge, Chrome, Firefox, LibreWolf, Brave, Vivaldi, Opera, Discord, Teams, Slack, Spotify, Steam, and VS Code. Strictly preserves cookies, logins, and sessions; automatically skips running applications.
 - **Network Cache & Connectivity Diagnostics:** Tests active adapters, default gateway reachability, and DNS resolution latency. Flushes the DNS resolver cache, purges stale ARP neighbor routes, and provides optional NetBIOS reload and Winsock reset.
 - **Windows Component Store Cleanup (DISM):** Analyzes component store health and safely purges superseded Windows Update payloads from `C:\Windows\WinSxS` via native DISM, with optional `/ResetBase` and System File Checker (`sfc /verifyonly`) validation.
@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.7.0 - Open Source Windows Engine      
+         FreeWinly v1.7.1 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -304,6 +304,7 @@ Execution order is controlled via `modulesExecutionOrder` in `config.json` (and 
 | `core/freewinly-setup-schedule.ps1` | Native Windows Task Scheduler installer |
 | `core/freewinly-setup-launcher.ps1` | Start Menu launcher manager (Install/Remove/Status) |
 | `core/freewinly-setup-path.ps1` | User PATH CLI auto-complete manager |
+| `core/freewinly-self-update.ps1` | Opt-in GitHub release checker and self-updater (off by default) |
 | `core/freewinly-uninstall.ps1` | Complete uninstaller with preview and confirmation |
 
 ### Maintenance Modules (`modules/`)

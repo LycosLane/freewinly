@@ -201,7 +201,7 @@ try {
         }
     }
 } catch {
-    if ($_.Exception.Message -notmatch 'No events were found') {
+    if ($_.FullyQualifiedErrorId -notmatch '^NoMatchingEventsFound' -and $_.Exception.Message -notmatch 'No events were found') {
         $queryFailed = $true
         Write-Host "Failed to query Windows Event Logs (see log for details)." -ForegroundColor Yellow
         if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log query failed: $($_.Exception.Message)" -Encoding UTF8 }

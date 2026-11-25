@@ -47,7 +47,10 @@ $Searcher = $null
 $SearchResult = $null
 $UpdatesToDownload = $null
 $Downloader = $null
+$DownloadResult = $null
 $Installer = $null
+$InstallResult = $null
+$releasedItems = [System.Collections.Generic.List[object]]::new()
 
 try {
     $cbsReboot = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
@@ -80,6 +83,7 @@ try {
 
     Write-Host "Found $($SearchResult.Updates.Count) pending update(s):" -ForegroundColor Yellow
     foreach ($u in $SearchResult.Updates) {
+        $releasedItems.Add($u)
         $sizeMB = [math]::Round($u.MaxDownloadSize / 1MB, 1)
         Write-Host "  -> $($u.Title) ($sizeMB MB)" -ForegroundColor White
     }
@@ -134,7 +138,12 @@ try {
     Write-Host "Error during Windows Update: $($_.Exception.Message)" -ForegroundColor Red
     if ($LogFile) { Add-Content -Path $LogFile -Value "Error during Windows Update: $($_.Exception.Message)" -Encoding UTF8 }
 } finally {
-    foreach ($comObj in @($Installer, $Downloader, $UpdatesToDownload, $SearchResult, $Searcher, $Session)) {
+    foreach ($uObj in $releasedItems) {
+        if ($null -ne $uObj) {
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($uObj) | Out-Null } catch { }
+        }
+    }
+    foreach ($comObj in @($InstallResult, $Installer, $DownloadResult, $Downloader, $UpdatesToDownload, $SearchResult, $Searcher, $Session)) {
         if ($null -ne $comObj) {
             try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObj) | Out-Null } catch { }
         }

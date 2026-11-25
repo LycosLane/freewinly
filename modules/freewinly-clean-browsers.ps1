@@ -103,7 +103,9 @@ function Get-TargetDirectories {
                     $dirs.Add($item)
                 }
             }
-        } catch { }
+        } catch {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-browsers target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
     return $dirs
 }
@@ -223,7 +225,9 @@ foreach ($target in $targets) {
                     $files.Add($f)
                 }
             }
-        } catch { }
+        } catch {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-browsers target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+        }
     }
 
     if ($files.Count -eq 0) { continue }
