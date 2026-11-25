@@ -59,6 +59,13 @@ $llmSize = [math]::Round((Get-Item $llmZip).Length / 1KB, 1)
 # Cleanup staging folder
 Remove-Item -Recurse -Force $stageDir
 
+# 3. Generate SHA256SUMS.txt for release asset verification
+$sumsPath = Join-Path $distDir "SHA256SUMS.txt"
+$coreHash = (Get-FileHash -LiteralPath $coreZip -Algorithm SHA256).Hash
+$llmHash  = (Get-FileHash -LiteralPath $llmZip -Algorithm SHA256).Hash
+$sumsContent = "$coreHash  FreeWinly.zip`r`n$llmHash  FreeWinly4LLM.zip`r`n"
+[System.IO.File]::WriteAllText($sumsPath, $sumsContent, (New-Object System.Text.UTF8Encoding($false)))
+
 Write-Host "`n============================================================" -ForegroundColor Cyan
 Write-Host "       FreeWinly Dual Release Packages Generated!           " -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -66,4 +73,6 @@ Write-Host "1. Pure Tool (For Humans / Offline):" -ForegroundColor White
 Write-Host "   $coreZip ($coreSize KB)" -ForegroundColor Green
 Write-Host "`n2. AI Agent Edition (Includes SKILL.md):" -ForegroundColor White
 Write-Host "   $llmZip ($llmSize KB)" -ForegroundColor Green
+Write-Host "`n3. Checksums:" -ForegroundColor White
+Write-Host "   $sumsPath" -ForegroundColor Cyan
 Write-Host "`nReady to upload to GitHub Releases -> Assets.`n" -ForegroundColor Cyan

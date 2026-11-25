@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.5.5 - Open Source Windows Engine      
+         FreeWinly v1.6.0 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -167,7 +167,8 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
   [   S   ]  Save Selection & Order as Default
   [   O   ]  Run Configuration & Exclusion Wizard
   [   I   ]  Install / Update Start Menu Launcher
-  [   U   ]  Uninstall FreeWinly Completely
+  [   U   ]  Clean Windows Integrations & Shortcuts
+  [   G   ]  Check for FreeWinly Updates (Opt-in)
   [   Q   ]  Quit Without Running
 ```
 
@@ -188,6 +189,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 | **`P`** | Toggle **User `PATH` CLI Auto-Complete** (registers FreeWinly in your user `PATH` without needing Admin rights) |
 | **`S`** | Save current module selection, order, sub-options, and view mode to `config.json` as permanent defaults |
 | **`O`** | Run configuration & exclusion wizard (scans for standalone apps and suggests exclusions) |
+| **`G`** | Explicitly check GitHub Releases for a newer FreeWinly version (off by default, restarts cleanly after updating) |
 | **`I`** | Install or update Start Menu launcher (`FreeWinly.lnk`) |
 | **`U`** | Complete **Uninstaller** (previews and cleanly removes Task Scheduler tasks, all shortcuts, and User `PATH` integrations) |
 | **`Q`** | Exit without making any changes |

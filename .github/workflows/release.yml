@@ -27,6 +27,7 @@ jobs:
           files: |
             dist/FreeWinly.zip
             dist/FreeWinly4LLM.zip
+            dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') || contains(github.ref, '-alpha') }}

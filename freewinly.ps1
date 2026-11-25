@@ -126,6 +126,7 @@ Core Utilities:
   .\core\freewinly-setup-launcher.ps1  Manage Start Menu, Desktop & Startup shortcuts
   .\core\freewinly-setup-path.ps1      Manage User PATH registration (Install / Remove / Toggle / Status)
   .\core\freewinly-add-app.ps1         Register or remove custom desktop app cache definitions
+  .\core\freewinly-self-update.ps1     Opt-in check and self-update for FreeWinly (Check / Update)
   .\core\freewinly-uninstall.ps1       Cleanly remove FreeWinly from this PC
 "@ -ForegroundColor Yellow
     exit 0
@@ -529,6 +530,17 @@ if (-not $Run) {
     $countdown   = $menuResult.Countdown
     $submenuView = $menuResult.SubmenuView
     if ($menuResult.OutputMode) { $outputMode = $menuResult.OutputMode }
+
+    if ($menuResult.Action -eq 'Restart') {
+        Write-Host "`nRestarting FreeWinly with updated files..." -ForegroundColor Cyan
+        $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
+        if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
+        $restartArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+        if ($ConfigPath) { $restartArgs += @('-ConfigPath', $ConfigPath) }
+        if ($outputMode) { $restartArgs += @('-OutputMode', $outputMode) }
+        & $psHost @restartArgs
+        exit $LASTEXITCODE
+    }
 }
 
 # 5. JUST-IN-TIME (JIT) ELEVATION CHECK

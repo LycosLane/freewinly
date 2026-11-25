@@ -15,7 +15,7 @@ function Get-FreeWinlyVersion {
         $v = (Get-Content -LiteralPath $versionFile -Raw).Trim()
         if ($v -match '^[0-9]+\.[0-9]+\.[0-9]+') { return $v }
     }
-    return "1.5.5"
+    return "1.6.0"
 }
 
 $global:FreeWinlyVersion = Get-FreeWinlyVersion

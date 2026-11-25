@@ -235,6 +235,7 @@ function Invoke-InteractiveMenu {
             @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O" },
             @{ Label = "[   I   ]  Install / Update Start Menu Launcher"; Key = "I" },
             @{ Label = "[   U   ]  Clean Windows Integrations & Shortcuts"; Key = "U" },
+            @{ Label = "[   G   ]  Check for FreeWinly Updates (Opt-in)"; Key = "G" },
             @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
         )
         $totalOptions = $visibleItems.Count + $actions.Count
@@ -544,6 +545,20 @@ function Invoke-InteractiveMenu {
             "U" {
                 Clear-Host
                 & (Join-Path $CoreDir "freewinly-uninstall.ps1")
+                Read-Host "`nPress Enter to return to menu"
+            }
+            "G" {
+                Clear-Host
+                $global:LASTEXITCODE = 0
+                & (Join-Path $CoreDir "freewinly-self-update.ps1") -NoRestart
+                if ($LASTEXITCODE -eq 42) {
+                    return @{
+                        Action      = 'Restart'
+                        Countdown   = $Countdown
+                        SubmenuView = $SubmenuView
+                        OutputMode  = $OutputMode
+                    }
+                }
                 Read-Host "`nPress Enter to return to menu"
             }
             { $_ -in @("Q", "Escape") } {

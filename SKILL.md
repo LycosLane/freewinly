@@ -1,6 +1,6 @@
 ---
 name: freewinly
-description: FreeWinly v1.5.5 - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
+description: FreeWinly v1.6.0 - Open source, bloatware-free Windows PC maintenance & diagnostic engine using native Windows tools (Winget, PowerShell 5.1+, COM APIs, DISM, and TRIM). Use whenever the user asks to check, maintain, update, audit, or clean their PC.
 ---
 
 # FreeWinly - Open Source Windows Maintenance & AI Agent Playbook
@@ -37,6 +37,7 @@ FreeWinly is a native Windows maintenance engine built without third-party depen
 | `core/freewinly-setup-schedule.ps1` | Native Windows Task Scheduler installer |
 | `core/freewinly-setup-launcher.ps1` | Start Menu launcher manager (Install/Remove/Status) |
 | `core/freewinly-setup-path.ps1` | User PATH CLI auto-complete manager |
+| `core/freewinly-self-update.ps1` | Opt-in GitHub release checker and self-updater (off by default) |
 | `core/freewinly-uninstall.ps1` | Complete uninstaller with preview and confirmation |
 
 ### Maintenance Modules (`modules/`)
@@ -227,7 +228,7 @@ When assisting a user who encounters a recurring failure, unexpected crash, or w
 
 ```markdown
 ### Environment
-- FreeWinly Version: 1.5.5
+- FreeWinly Version: 1.6.0
 - Windows Version: Windows 11 Pro (Build 22631.xxxx)
 - PowerShell Version: 5.1.22621.xxxx (or 7.x)
 - Execution Mode: Interactive TUI / Headless CLI (-Run) / Audit (-Check)
