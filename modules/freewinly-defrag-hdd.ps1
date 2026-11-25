@@ -127,7 +127,8 @@ if ($detectedLetters.Count -eq 0) {
 }
 
 # Resolve minimum days threshold and last run timestamp
-$minDays = if ($Settings -and $null -ne $Settings.minIntervalDays) { [int]$Settings.minIntervalDays } else { 30 }
+$parsedMinDays = 0
+$minDays = if ($Settings -and [int]::TryParse([string]$Settings.minIntervalDays, [ref]$parsedMinDays)) { $parsedMinDays } else { 30 }
 $lastRunStr = if ($Settings -and $Settings.lastRun) { [string]$Settings.lastRun } else { $null }
 $lastRunDate = if ($lastRunStr) { try { [datetime]$lastRunStr } catch { $null } } else { $null }
 $daysSince = if ($lastRunDate) { ((Get-Date) - $lastRunDate).TotalDays } else { [double]::MaxValue }
@@ -175,7 +176,7 @@ if ($Action -eq 'Check') {
             Write-Host "Analyzing Drive $dl`: for fragmentation..." -ForegroundColor Cyan
             try {
                 $analysis = Optimize-Volume -DriveLetter $dl -Analyze -Verbose 4>&1 | Out-String
-                if ($Settings -and $Settings.outputMode -eq 'Advanced') { $analysis | Out-Host }
+                if ($env:FREEWINLY_OUTPUT_MODE -eq 'Advanced' -or ($Settings -and $Settings.outputMode -eq 'Advanced')) { $analysis | Out-Host }
             } catch {
                 Write-Host "Could not analyze Drive $dl`: $($_.Exception.Message)" -ForegroundColor Yellow
             }
@@ -195,7 +196,7 @@ if ($targetLetters.Count -eq 0) {
 
 if (-not $isDue) {
     Write-Host "HDD defragmentation skipped: Only $([math]::Round($daysSince, 0)) days since last run (minimum threshold: $minDays days)." -ForegroundColor Yellow
-    if ($LogFile) { Add-Content -Path $LogFile -Value "HDD Defrag skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "HDD Defrag skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
     return
 }
 
@@ -208,17 +209,17 @@ foreach ($dl in $targetLetters) {
     Write-Host "Analyzing and defragmenting Drive $dl`: (skips automatically if not fragmented)..." -ForegroundColor Cyan
     try {
         $out = Optimize-Volume -DriveLetter $dl -Defrag -Verbose -ErrorAction Stop 4>&1
-        if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
+        if ($env:FREEWINLY_OUTPUT_MODE -eq 'Advanced' -or ($Settings -and $Settings.outputMode -eq 'Advanced')) { $out | Out-Host }
         if ($LogFile) {
             $outStr = ($out | Out-String).TrimEnd()
-            if ($outStr) { Add-Content -Path $LogFile -Value $outStr -Encoding UTF8 }
+            if ($outStr) { Add-Content -LiteralPath $LogFile -Value $outStr -Encoding UTF8 }
         }
         Write-Host "Drive $dl`: Optimization completed." -ForegroundColor Green
         $succeededCount++
     } catch {
         $failedCount++
         Write-Host "Error optimizing Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Error optimizing Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Error optimizing Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 

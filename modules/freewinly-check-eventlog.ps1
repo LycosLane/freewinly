@@ -116,11 +116,12 @@ $end = ConvertTo-DateTimeOrNull $rawEnd
 
 # 3. If no explicit StartDate, resolve LookbackDays (default: 7)
 $days = 0
+$parsedLookback = 0
 if (-not $start) {
     $rawDays = if ($LookbackDays -gt 0) {
         $LookbackDays
-    } elseif ($Settings -and $null -ne $Settings.lookbackDays) {
-        [int]$Settings.lookbackDays
+    } elseif ($Settings -and [int]::TryParse([string]$Settings.lookbackDays, [ref]$parsedLookback)) {
+        $parsedLookback
     } else {
         7
     }
@@ -204,7 +205,7 @@ try {
     if ($_.FullyQualifiedErrorId -notmatch '^NoMatchingEventsFound' -and $_.Exception.Message -notmatch 'No events were found') {
         $queryFailed = $true
         Write-Host "Failed to query Windows Event Logs (see log for details)." -ForegroundColor Yellow
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log query failed: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Event Log query failed: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
@@ -214,7 +215,7 @@ if ($queryFailed) {
 
 if ($events.Count -eq 0) {
     Write-Host "[OK] Clean stability record. No recurring crashes or critical warnings in the specified window ($windowDesc)." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log Health: Clean record ($windowDesc)." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Event Log Health: Clean record ($windowDesc)." -Encoding UTF8 }
     return
 }
 
@@ -225,6 +226,6 @@ foreach ($ev in $events) {
     Write-Host "    Advice: $($ev.Advice)" -ForegroundColor Cyan
     Write-Host "    Sample: $($ev.Sample)" -ForegroundColor Gray
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "Event Warning [$($ev.Count)x]: $($ev.Provider) ID $($ev.EventId) | $($ev.Advice)" -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "Event Warning [$($ev.Count)x]: $($ev.Provider) ID $($ev.EventId) | $($ev.Advice)" -Encoding UTF8
     }
 }

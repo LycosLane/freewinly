@@ -158,7 +158,8 @@ $targetDriveLetters = if ($Settings -and $Settings.drives) {
 }
 
 # Resolve optional cadence interval
-$minDays = if ($Settings -and $Settings.minIntervalDays) { [int]$Settings.minIntervalDays } else { 0 }
+$parsedMinDays = 0
+$minDays = if ($Settings -and [int]::TryParse([string]$Settings.minIntervalDays, [ref]$parsedMinDays)) { $parsedMinDays } else { 0 }
 $lastRunStr = if ($Settings -and $Settings.lastRun) { [string]$Settings.lastRun } else { $null }
 $lastRunDate = if ($lastRunStr) { try { [datetime]$lastRunStr } catch { $null } } else { $null }
 $daysSince = if ($lastRunDate) { ((Get-Date) - $lastRunDate).TotalDays } else { [double]::MaxValue }
@@ -204,7 +205,7 @@ if ($targetDriveLetters.Count -eq 0) {
 
 if (-not $isDue) {
     Write-Host "SSD TRIM skipped: Only $([math]::Round($daysSince, 0)) days since last run (configured interval: $minDays days)." -ForegroundColor Yellow
-    if ($LogFile) { Add-Content -Path $LogFile -Value "SSD TRIM skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "SSD TRIM skipped: $([math]::Round($daysSince, 0)) days elapsed (min $minDays days)." -Encoding UTF8 }
     return
 }
 
@@ -217,23 +218,23 @@ foreach ($dl in $targetDriveLetters) {
     Write-Host "Sending TRIM hint to Drive $dl`: ..." -ForegroundColor White
     try {
         $out = Optimize-Volume -DriveLetter $dl -ReTrim -Verbose -ErrorAction Stop 4>&1
-        if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
+        if ($env:FREEWINLY_OUTPUT_MODE -eq 'Advanced' -or ($Settings -and $Settings.outputMode -eq 'Advanced')) { $out | Out-Host }
         if ($LogFile) {
             $outStr = ($out | Out-String).TrimEnd()
-            if ($outStr) { Add-Content -Path $LogFile -Value $outStr -Encoding UTF8 }
+            if ($outStr) { Add-Content -LiteralPath $LogFile -Value $outStr -Encoding UTF8 }
         }
         Write-Host "Drive $dl`: TRIM completed successfully." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: TRIM completed successfully." -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Drive $dl`: TRIM completed successfully." -Encoding UTF8 }
         $succeededCount++
     } catch {
         if ($_.Exception.Message -match '0x8900002A|not supported by the hardware') {
             Write-Host "[Info] Drive $dl`: Storage controller (or virtual disk) does not require hardware TRIM. Skipping." -ForegroundColor Gray
-            if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: Hardware TRIM not required/supported by storage controller." -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Drive $dl`: Hardware TRIM not required/supported by storage controller." -Encoding UTF8 }
             $succeededCount++
         } else {
             $failedCount++
             Write-Host "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
-            if ($LogFile) { Add-Content -Path $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 }

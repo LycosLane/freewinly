@@ -88,7 +88,7 @@ function Write-Log {
     param([string]$Message, [string]$Color = "White")
     $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     Write-Host $Message -ForegroundColor $Color
-    Add-Content -Path $logFile -Value "[$timestamp] $Message" -Encoding UTF8
+    Add-Content -LiteralPath $logFile -Value "[$timestamp] $Message" -Encoding UTF8
 }
 
 $defaultConfigTemplate = [PSCustomObject]@{
@@ -193,11 +193,11 @@ function Save-ConfigState {
     $script:submenuView = $NewSubmenuView
     $script:outputMode  = $NewOutputMode
 
-    # Snapshot in-memory hook lists before reloading disk config so cleared hooks are never clobbered
-    $hookSnapPre   = if ($script:config -and $null -ne $script:config.preCommands)  { @($script:config.preCommands) }  else { $null }
-    $hookSnapUn    = if ($script:config -and $null -ne $script:config.uninstall)    { @($script:config.uninstall) }    else { $null }
-    $hookSnapIn    = if ($script:config -and $null -ne $script:config.install)      { @($script:config.install) }      else { $null }
-    $hookSnapPost  = if ($script:config -and $null -ne $script:config.postCommands) { @($script:config.postCommands) } else { $null }
+    # Snapshot in-memory hook lists only if this session modified them, so external edits are preserved
+    $hookSnapPre   = if ($script:modifiedHooks.preCommands  -and $script:config -and $null -ne $script:config.preCommands)  { @($script:config.preCommands) }  else { $null }
+    $hookSnapUn    = if ($script:modifiedHooks.uninstall    -and $script:config -and $null -ne $script:config.uninstall)    { @($script:config.uninstall) }    else { $null }
+    $hookSnapIn    = if ($script:modifiedHooks.install      -and $script:config -and $null -ne $script:config.install)      { @($script:config.install) }      else { $null }
+    $hookSnapPost  = if ($script:modifiedHooks.postCommands -and $script:config -and $null -ne $script:config.postCommands) { @($script:config.postCommands) } else { $null }
 
     # Reload latest non-corrupted config from disk so sub-tools (schedule, wizard, custom apps) are preserved
     if (Test-Path -LiteralPath $ConfigPath) {
@@ -225,8 +225,10 @@ function Save-ConfigState {
     foreach ($ob in $orderedBaseNames) {
         if (-not $basesToWrite.Contains($ob)) { $basesToWrite.Add($ob) }
     }
+    $script:orderedBaseNames.Clear()
+    foreach ($b in $basesToWrite) { $script:orderedBaseNames.Add($b) }
 
-    foreach ($baseName in $orderedBaseNames) {
+    foreach ($baseName in $basesToWrite) {
         if ($dmByBase.ContainsKey($baseName)) {
             $dm = $dmByBase[$baseName]
             $block = [ordered]@{
@@ -323,6 +325,7 @@ function Invoke-DryRunCheck {
     }
     Write-Host "`n=== [Dry-Run Check / Diagnostic Audit] Inspecting $($TargetModules.Count) module(s) [$CurrentOutputMode Mode] ===" -ForegroundColor Cyan
     Write-Host "Read-Only mode: No system modifications, updates, or deletions will be performed.`n" -ForegroundColor Gray
+    $env:FREEWINLY_OUTPUT_MODE = $CurrentOutputMode
 
     if ($CurrentOutputMode -eq 'Standard') {
         $totalCount = $TargetModules.Count
@@ -371,14 +374,14 @@ function Invoke-DryRunCheck {
                     }
                 } catch {
                     Write-Host "[ Error ]" -ForegroundColor Red
-                    Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
+                    Add-Content -LiteralPath $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
                 }
             } else {
                 try {
                     $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
                     $outText = ($outLines | Out-String)
                     if (-not [string]::IsNullOrWhiteSpace($outText)) {
-                        Add-Content -Path $logFile -Value $outText.TrimEnd() -Encoding UTF8
+                        Add-Content -LiteralPath $logFile -Value $outText.TrimEnd() -Encoding UTF8
                     }
                     if ($outText -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
                         Write-Host "[ Notice ]" -ForegroundColor Yellow
@@ -387,7 +390,7 @@ function Invoke-DryRunCheck {
                     }
                 } catch {
                     Write-Host "[ Error ]" -ForegroundColor Red
-                    Add-Content -Path $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
+                    Add-Content -LiteralPath $logFile -Value "Error during check for $($m.Name): $($_.Exception.Message)" -Encoding UTF8
                 }
             }
         }
@@ -449,7 +452,7 @@ function Invoke-SecuredCommandsHook {
             if ($outputMode -eq 'Advanced') { $cmdOut | Out-Host }
             $cmdStr = ($cmdOut | Out-String)
             if (-not [string]::IsNullOrWhiteSpace($cmdStr)) {
-                Add-Content -Path $TargetLogFile -Value $cmdStr.TrimEnd() -Encoding UTF8
+                Add-Content -LiteralPath $TargetLogFile -Value $cmdStr.TrimEnd() -Encoding UTF8
             }
             if ($cmdOk -and ($null -eq $cmdExit -or $cmdExit -eq 0)) {
                 Write-Log "RESULT: SUCCESS" "Green"
@@ -485,7 +488,7 @@ function Invoke-SecuredPackagesHook {
         return $PackageIds
     }
 
-    $packageIdRegex = '^[A-Za-z0-9\._-]+(\.[A-Za-z0-9\._-]+)*$|^[A-Za-z0-9]{12}$'
+    $packageIdRegex = '^[A-Za-z0-9\._+-]+(\.[A-Za-z0-9\._+-]+)*$|^[A-Za-z0-9]{12}$'
 
     Write-Host "`n============================================================" -ForegroundColor Cyan
     Write-Host "     [SECURITY GATE] Software $HookName Authorization       " -ForegroundColor White
@@ -522,13 +525,19 @@ function Invoke-SecuredPackagesHook {
         } else {
             @('install', '--id', $id, '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
         }
-        $global:LASTEXITCODE = 0
-        $procOut = & winget @wingetArgs 2>&1
-        $pkgExit = $LASTEXITCODE
+        $origWingetEnc = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+            $global:LASTEXITCODE = 0
+            $procOut = & winget @wingetArgs 2>&1
+            $pkgExit = $LASTEXITCODE
+        } finally {
+            [Console]::OutputEncoding = $origWingetEnc
+        }
         if ($OutputMode -eq 'Advanced') { $procOut | Out-Host }
         $procStr = ($procOut | Out-String)
         if (-not [string]::IsNullOrWhiteSpace($procStr)) {
-            Add-Content -Path $TargetLogFile -Value $procStr.TrimEnd() -Encoding UTF8
+            Add-Content -LiteralPath $TargetLogFile -Value $procStr.TrimEnd() -Encoding UTF8
         }
         if ($pkgExit -eq 0) {
             Write-Log "RESULT: $id => Completed" "Green"
@@ -601,7 +610,12 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 $needsAdmin = @($activeModules | Where-Object { $_.RequiresAdmin -eq $true }).Count -gt 0
 
 if ($needsAdmin -and -not $isAdmin) {
-    if (-not $Settings -and -not $Modules) {
+    if ($Settings) {
+        Write-Host "`n[ERROR] CLI -Settings overrides cannot be forwarded across UAC elevation." -ForegroundColor Red
+        Write-Host "Please re-run this command from an elevated Administrator terminal." -ForegroundColor Yellow
+        exit 1
+    }
+    if (-not $Modules) {
         Save-ConfigState
     }
     Write-Host "`nSelected tasks require Administrator privileges." -ForegroundColor Yellow
@@ -614,7 +628,7 @@ if ($needsAdmin -and -not $isAdmin) {
     $elevationArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Run')
     if ($isInteractiveSession) { $elevationArgs += '-Interactive' }
     if ($SkipHooks) { $elevationArgs += '-SkipHooks' }
-    if ($selectedNames) { $elevationArgs += @('-Modules', $selectedNames) }
+    if ($selectedNames) { $elevationArgs += @('-Modules', "`"$selectedNames`"") }
     if ($ConfigPath) { $elevationArgs += @('-ConfigPath', "`"$ConfigPath`"") }
     if ($outputMode) { $elevationArgs += @('-OutputMode', $outputMode) }
 
@@ -636,19 +650,26 @@ if ($needsAdmin -and -not $isAdmin) {
 # 6. EXECUTION PIPELINE
 Initialize-ConsoleTheme
 Clear-Host
-"------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
+"------------------------------------------------------------------" | Add-Content -LiteralPath $logFile -Encoding UTF8
 Write-Log "FreeWinly v$FreeWinlyVersion Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
-"------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
+"------------------------------------------------------------------" | Add-Content -LiteralPath $logFile -Encoding UTF8
 
 $configModified = $false
+$script:modifiedHooks = @{
+    preCommands  = $false
+    uninstall    = $false
+    install      = $false
+    postCommands = $false
+}
 $moduleErrors = 0
-$settingsSnapshotBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
+$settingsSnapshotBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
 
 # 6.0 PRE-COMMANDS HOOK (With Prompt Injection Security Firewall)
 if (-not $SkipHooks -and $config -and $config.preCommands -and $config.preCommands.Count -gt 0) {
     $remainingPre = @(Invoke-SecuredCommandsHook -HookName "preCommands" -Commands $config.preCommands -IsInteractive $isInteractiveSession -TargetLogFile $logFile)
     if ($remainingPre.Count -ne $config.preCommands.Count) {
         $config.preCommands = $remainingPre
+        $script:modifiedHooks.preCommands = $true
         $configModified = $true
     }
 }
@@ -658,6 +679,7 @@ if (-not $SkipHooks -and $config -and $config.uninstall -and $config.uninstall.C
     $remainingUninst = @(Invoke-SecuredPackagesHook -HookName "Uninstall" -PackageIds $config.uninstall -IsInteractive $isInteractiveSession -OutputMode $outputMode -TargetLogFile $logFile)
     if ($remainingUninst.Count -ne $config.uninstall.Count) {
         $config.uninstall = $remainingUninst
+        $script:modifiedHooks.uninstall = $true
         $configModified = $true
     }
 }
@@ -667,6 +689,7 @@ if (-not $SkipHooks -and $config -and $config.install -and $config.install.Count
     $remainingInst = @(Invoke-SecuredPackagesHook -HookName "Install" -PackageIds $config.install -IsInteractive $isInteractiveSession -OutputMode $outputMode -TargetLogFile $logFile)
     if ($remainingInst.Count -ne $config.install.Count) {
         $config.install = $remainingInst
+        $script:modifiedHooks.install = $true
         $configModified = $true
     }
 }
@@ -752,7 +775,7 @@ function Get-ModuleNoticeSummary {
         } else {
             $reasonLine = 'Completed with warnings (press L for log)'
         }
-        $isOpError = ($OutputText -match '(?<!0\s+)\b(Exception|Failed|Error|Aborted)\b') -and ($Module.BaseName -notmatch '^freewinly-check-')
+        $isOpError = (($OutputText -match '(?<!0\s+)\b(Exception|Failed|Error|Aborted)\b') -and ($Module.BaseName -notmatch '^freewinly-check-')) -or ($OutputText -match 'Failed to query (Windows Event Logs|hardware status)')
         return [PSCustomObject]@{
             HasNotice  = $true
             Reason     = if ($needsElev) { "$reasonLine (requires Admin)" } else { $reasonLine }
@@ -780,6 +803,7 @@ function Invoke-ModuleBatch {
     $batchNotices = [System.Collections.Generic.List[PSCustomObject]]::new()
     $batchErrors  = 0
     $isStd        = ($outputMode -eq 'Standard')
+    $env:FREEWINLY_OUTPUT_MODE = $outputMode
 
     if ($isStd) {
         Write-Host "`nExecuting $($TargetModules.Count) active maintenance module(s) [Standard Mode]:`n" -ForegroundColor Cyan
@@ -819,7 +843,13 @@ function Invoke-ModuleBatch {
                     continue
                 }
 
-                & winget source update --disable-interactivity 2>&1 | Out-Null
+                $origSyncEnc = [Console]::OutputEncoding
+                try {
+                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+                    & winget source update --disable-interactivity 2>&1 | Out-Null
+                } finally {
+                    [Console]::OutputEncoding = $origSyncEnc
+                }
                 $avail = & $m.Path -Action Scan
                 $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
                 if ($cleanSettings.excluded) {
@@ -835,7 +865,7 @@ function Invoke-ModuleBatch {
                                 $keptExcl.Add($exItem)
                             } else {
                                 $exclChanged = $true
-                                Add-Content -Path $logFile -Value "Expired postponement removed: $($exItem.id)" -Encoding UTF8
+                                Add-Content -LiteralPath $logFile -Value "Expired postponement removed: $($exItem.id)" -Encoding UTF8
                             }
                         }
                     }
@@ -849,7 +879,7 @@ function Invoke-ModuleBatch {
                     $id = $pkg.Id
                     $name = $pkg.Name
                     if ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) }) {
-                        Add-Content -Path $logFile -Value "SKIPPED: $name ($id)" -Encoding UTF8
+                        Add-Content -LiteralPath $logFile -Value "SKIPPED: $name ($id)" -Encoding UTF8
                         if (-not $isStd) { Write-Host "SKIPPED: $name ($id)" -ForegroundColor Yellow }
                     } else {
                         $toUpdate.Add($pkg)
@@ -860,7 +890,7 @@ function Invoke-ModuleBatch {
                     $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
                     $sw.Stop()
                     if (-not $isStd -and $modOutput) { $modOutput | Out-Host }
-                    if ($modOutput) { Add-Content -Path $logFile -Value ($modOutput | Out-String).TrimEnd() -Encoding UTF8 }
+                    if ($modOutput) { Add-Content -LiteralPath $logFile -Value ($modOutput | Out-String).TrimEnd() -Encoding UTF8 }
                     if ($isStd) {
                         Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
                         Write-Host "(All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
@@ -885,15 +915,22 @@ function Invoke-ModuleBatch {
                         Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
 
                         $pkgSw = [System.Diagnostics.Stopwatch]::StartNew()
-                        $out = & winget upgrade --id $pkg.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+                        $origUpgEnc = [Console]::OutputEncoding
+                        try {
+                            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+                            $global:LASTEXITCODE = 0
+                            $out = & winget upgrade --id $pkg.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+                            $exitCode = $LASTEXITCODE
+                        } finally {
+                            [Console]::OutputEncoding = $origUpgEnc
+                        }
                         $pkgSw.Stop()
-                        $exitCode = $LASTEXITCODE
                         $elapsed = [math]::Round($pkgSw.Elapsed.TotalSeconds, 1)
 
                         if (-not $isStd -and $out) { $out | Out-Host }
                         if ($logFile) {
-                            $out | Add-Content -Path $logFile -Encoding UTF8
-                            Add-Content -Path $logFile -Value "RESULT: $($pkg.Id) => ExitCode $exitCode" -Encoding UTF8
+                            $out | Add-Content -LiteralPath $logFile -Encoding UTF8
+                            Add-Content -LiteralPath $logFile -Value "RESULT: $($pkg.Id) => ExitCode $exitCode" -Encoding UTF8
                         }
 
                         $outStr = ($out | Out-String)
@@ -949,7 +986,7 @@ function Invoke-ModuleBatch {
                 if (-not $isStd -and $modOutput) { $modOutput | Out-Host }
                 $modStr = ($modOutput | Out-String)
                 if (-not [string]::IsNullOrWhiteSpace($modStr)) {
-                    Add-Content -Path $logFile -Value $modStr.TrimEnd() -Encoding UTF8
+                    Add-Content -LiteralPath $logFile -Value $modStr.TrimEnd() -Encoding UTF8
                 }
                 $noticeInfo = Get-ModuleNoticeSummary -Module $m -OutputText $modStr
                 if ($noticeInfo.HasNotice) {
@@ -994,6 +1031,7 @@ function Invoke-ModuleBatch {
 }
 
 # 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
+$hookErrors = $moduleErrors
 $batchResult = Invoke-ModuleBatch -TargetModules $activeModules
 $moduleErrors += $batchResult.Errors
 
@@ -1002,12 +1040,13 @@ if (-not $SkipHooks -and $config -and $config.postCommands -and $config.postComm
     $remainingPost = @(Invoke-SecuredCommandsHook -HookName "postCommands" -Commands $config.postCommands -IsInteractive $isInteractiveSession -TargetLogFile $logFile)
     if ($remainingPost.Count -ne $config.postCommands.Count) {
         $config.postCommands = $remainingPost
+        $script:modifiedHooks.postCommands = $true
         $configModified = $true
     }
 }
 
 # Persist if any module updated its Settings (skip if transient CLI -Settings override was passed)
-$settingsSnapshotAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
+$settingsSnapshotAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
 if (-not $Settings -and ($settingsSnapshotBefore -ne $settingsSnapshotAfter)) {
     $configModified = $true
 }
@@ -1060,12 +1099,12 @@ if ($isInteractiveSession) {
                     Write-Host "Log file not found at '$logFile'." -ForegroundColor Yellow
                 }
             } elseif ($k.Key -eq 'R' -and $retryModules.Count -gt 0) {
-                $retryBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
+                $retryBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
                 $retryResult = Invoke-ModuleBatch -TargetModules $retryModules
                 $nonRetryNotices = @($currentNotices | Where-Object { -not $_.Retryable })
                 $currentNotices = @($nonRetryNotices) + @($retryResult.Notices)
-                $moduleErrors = $retryResult.Errors
-                $retryAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 5 -Compress)
+                $moduleErrors = $hookErrors + $retryResult.Errors
+                $retryAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
                 if (-not $Settings -and ($retryBefore -ne $retryAfter) -and (Test-Path (Split-Path -Parent $ConfigPath))) {
                     Save-ConfigState
                 }
@@ -1077,13 +1116,17 @@ if ($isInteractiveSession) {
                 }
                 Show-RunSummary -Notices $currentNotices
             } elseif ($k.Key -eq 'E' -and $canElevateRetry) {
-                if (-not $Settings -and -not $Modules) {
+                if ($Settings) {
+                    Write-Host "`n[ERROR] CLI -Settings overrides cannot be forwarded across UAC elevation." -ForegroundColor Red
+                    continue
+                }
+                if (-not $Modules) {
                     Save-ConfigState
                 }
                 $retryNames = ($retryModules | Select-Object -ExpandProperty BaseName) -join ','
                 $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
                 if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
-                $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Run', '-Interactive', '-SkipHooks', '-Modules', $retryNames)
+                $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Run', '-Interactive', '-SkipHooks', '-Modules', "`"$retryNames`"")
                 if ($ConfigPath) { $elevArgs += @('-ConfigPath', "`"$ConfigPath`"") }
                 if ($outputMode) { $elevArgs += @('-OutputMode', $outputMode) }
                 try {

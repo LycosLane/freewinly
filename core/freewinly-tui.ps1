@@ -73,7 +73,8 @@ function Step-SubOptionValue {
         }
         'int' {
             $presets = Get-IntPresets -Key $Item.SubKey
-            $curVal  = [int]$mod.Settings.$($Item.SubKey)
+            $parsedCur = 0
+            $curVal  = if ([int]::TryParse([string]$mod.Settings.$($Item.SubKey), [ref]$parsedCur)) { $parsedCur } else { $presets[0] }
             $idx     = $presets.IndexOf($curVal)
             $nextVal = switch ($Direction) {
                 'StepLeft' {
@@ -332,7 +333,8 @@ function Invoke-InteractiveMenu {
                     $color = if ($isSelected) { "Cyan" } else { "Yellow" }
                     Write-Host $line -ForegroundColor $color
                 } else {
-                    $intVal = [int]$m.Settings.$($item.SubKey)
+                    $parsedInt = 0
+                    $intVal = if ([int]::TryParse([string]$m.Settings.$($item.SubKey), [ref]$parsedInt)) { $parsedInt } else { 0 }
                     $line = "$pointer      < ${intVal}d > $($item.Label)"
                     $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled) { "White" } else { "DarkGray" }
                     Write-Host $line -ForegroundColor $color
@@ -565,6 +567,12 @@ function Invoke-InteractiveMenu {
             }
             "S" {
                 & $SaveConfigCallback -Countdown $Countdown -SubmenuView $SubmenuView -OutputMode $OutputMode
+                $expandedArr = @($DiscoveredModules | Where-Object { $_.Expanded } | Select-Object -ExpandProperty BaseName)
+                if ($Config -is [System.Collections.IDictionary]) {
+                    $Config['expandedModules'] = $expandedArr
+                } elseif ($null -ne $Config) {
+                    $Config | Add-Member -NotePropertyName expandedModules -NotePropertyValue $expandedArr -Force
+                }
                 Write-Host "`n  -> Module selection, order, sub-options, and view saved to config.json!" -ForegroundColor Green
                 Start-Sleep -Milliseconds 800
             }

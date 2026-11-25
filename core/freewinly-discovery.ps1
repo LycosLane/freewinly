@@ -290,7 +290,7 @@ function Get-DiscoveredModules {
     # 1. First in sequence defined in config.modulesExecutionOrder
     # 2. Followed by any newly added modules sorted by their Info.Order
     $orderedBaseNames = [System.Collections.Generic.List[string]]::new()
-    $hasModOrderConfig = ($null -ne $Config.modulesExecutionOrder)
+    $hasModOrderConfig = ($null -ne $Config.modulesExecutionOrder) -and (-not ($Config.modulesExecutionOrder -is [System.Array])) -and (($Config.modulesExecutionOrder -is [System.Collections.IDictionary]) -or ($Config.modulesExecutionOrder.GetType().Name -eq 'PSCustomObject'))
 
     if ($hasModOrderConfig) {
         $cfgKeys = if ($Config.modulesExecutionOrder -is [System.Collections.IDictionary]) {
@@ -348,9 +348,12 @@ function Get-DiscoveredModules {
         if ($null -ne $cfgEntry) {
             if ($cfgEntry -is [bool]) {
                 $enabledInCfg = $cfgEntry
-            } else {
-                if ($null -ne $cfgEntry.enabled) {
+            } elseif ((-not ($cfgEntry -is [System.Array])) -and (($cfgEntry -is [System.Collections.IDictionary]) -or ($cfgEntry.GetType().Name -eq 'PSCustomObject'))) {
+                if ($null -ne $cfgEntry.enabled -and $cfgEntry.enabled -is [bool]) {
                     $enabledInCfg = [bool]$cfgEntry.enabled
+                } elseif ($null -ne $cfgEntry.enabled) {
+                    $parsedBool = $false
+                    if ([bool]::TryParse([string]$cfgEntry.enabled, [ref]$parsedBool)) { $enabledInCfg = $parsedBool }
                 }
                 $uKeys = if ($cfgEntry -is [System.Collections.IDictionary]) {
                     $cfgEntry.Keys

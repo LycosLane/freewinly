@@ -105,7 +105,7 @@ if ($Action -eq 'Check') {
 # Action -eq 'Run'
 if (-not $isAdmin) {
     Write-Host "  [-] Error: Windows Component Store cleanup requires Administrator privileges. Skipping." -ForegroundColor Red
-    if ($LogFile) { Add-Content -Path $LogFile -Value "DISM cleanup skipped: Administrator privileges required." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "DISM cleanup skipped: Administrator privileges required." -Encoding UTF8 }
     return
 }
 
@@ -127,14 +127,17 @@ try {
     $dismExit = $LASTEXITCODE
     if ($dismExit -eq 0) {
         Write-Host "  [+] DISM Component Store cleanup completed successfully." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM Component Store cleanup completed successfully (ResetBase: $resetBase)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "DISM Component Store cleanup completed successfully (ResetBase: $resetBase)" -Encoding UTF8 }
+    } elseif ($dismExit -eq 3010) {
+        Write-Host "  [+] DISM Component Store cleanup completed (reboot required to finish)." -ForegroundColor Yellow
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "DISM Component Store cleanup completed (ExitCode 3010: Reboot required)" -Encoding UTF8 }
     } else {
         Write-Host "  [-] DISM failed with exit code $dismExit. Review 'C:\Windows\Logs\DISM\dism.log' for diagnostic details." -ForegroundColor Yellow
-        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM failed with exit code $dismExit (See C:\Windows\Logs\DISM\dism.log)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "DISM failed with exit code $dismExit (See C:\Windows\Logs\DISM\dism.log)" -Encoding UTF8 }
     }
 } catch {
     Write-Host "  [-] Failed to start DISM: $($_.Exception.Message)" -ForegroundColor Red
-    if ($LogFile) { Add-Content -Path $LogFile -Value "DISM failed: $($_.Exception.Message)" -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "DISM failed: $($_.Exception.Message)" -Encoding UTF8 }
 }
 
 if ($verifySystemFiles) {
@@ -148,13 +151,13 @@ if ($verifySystemFiles) {
         }
         if ($sfcExit -eq 0) {
             Write-Host "  [+] System file verification completed. No integrity violations found." -ForegroundColor Green
-            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification passed: No integrity violations." -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "SFC verification passed: No integrity violations." -Encoding UTF8 }
         } else {
             Write-Host "  [-] System file verification failed with exit code $sfcExit. Review 'C:\Windows\Logs\CBS\cbs.log' for details." -ForegroundColor Yellow
-            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification failed with exit code $sfcExit (See C:\Windows\Logs\CBS\cbs.log)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "SFC verification failed with exit code $sfcExit (See C:\Windows\Logs\CBS\cbs.log)" -Encoding UTF8 }
         }
     } catch {
         Write-Host "  [-] Failed to start SFC: $($_.Exception.Message)" -ForegroundColor Red
-        if ($LogFile) { Add-Content -Path $LogFile -Value "SFC failed: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "SFC failed: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }

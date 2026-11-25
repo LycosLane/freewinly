@@ -39,7 +39,8 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays   = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 3 }
+$parsedMinAge = 0
+$minAgeDays   = if ($null -ne $Settings -and [int]::TryParse([string]$Settings.minAgeDays, [ref]$parsedMinAge)) { [math]::Max(0, $parsedMinAge) } else { 3 }
 $cleanEdge    = if ($null -ne $Settings -and $null -ne $Settings.cleanEdge) { [bool]$Settings.cleanEdge } else { $true }
 $cleanChrome  = if ($null -ne $Settings -and $null -ne $Settings.cleanChrome) { [bool]$Settings.cleanChrome } else { $true }
 $cleanFirefox = if ($null -ne $Settings -and $null -ne $Settings.cleanFirefox) { [bool]$Settings.cleanFirefox } else { $true }
@@ -104,7 +105,7 @@ function Get-TargetDirectories {
                 }
             }
         } catch {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-browsers target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-browsers target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
     return $dirs
@@ -226,7 +227,7 @@ foreach ($target in $targets) {
                 }
             }
         } catch {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-browsers target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-browsers target lookup warning ('$($curDir.FullName)'): $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 
@@ -253,7 +254,7 @@ foreach ($target in $targets) {
             $totalFreedFiles += $appFreedCount
             $mb = [math]::Round($appFreedBytes / 1MB, 1)
             Write-Host "  [+] Cleaned $appName ($appFreedCount files) -> Freed $mb MB" -ForegroundColor Green
-            if ($LogFile) { Add-Content -Path $LogFile -Value "Cleaned $($appName): $appFreedCount files -> Freed $mb MB" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Cleaned $($appName): $appFreedCount files -> Freed $mb MB" -Encoding UTF8 }
         }
     } else {
         # Check / Preview mode
@@ -268,7 +269,7 @@ $summaryMb = [math]::Round($totalBytes / 1MB, 1)
 if ($Action -eq 'Run') {
     if ($totalBytes -gt 0) {
         Write-Host "`nTotal browser cache freed: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Total browser cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Total browser cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
     } else {
         Write-Host "`nNo expired browser cache files needed cleanup (threshold: >$minAgeDays days)." -ForegroundColor Gray
     }

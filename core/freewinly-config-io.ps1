@@ -82,10 +82,11 @@ function Save-AtomicConfigFile {
         }
     }
 
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     if ($isLinked) {
         # Direct write preserves hardlink/symlink targets across updates
         try {
-            [System.IO.File]::WriteAllText($fullPath, $jsonContent, [System.Text.Encoding]::UTF8)
+            [System.IO.File]::WriteAllText($fullPath, $jsonContent, $utf8NoBom)
         } catch {
             throw "Failed to save linked configuration to '$fullPath': $($_.Exception.Message)"
         }
@@ -95,7 +96,7 @@ function Save-AtomicConfigFile {
     # Write new content to temporary file in the same directory (atomic replacement for normal files)
     $tmpFile = Join-Path $dir ([System.IO.Path]::GetRandomFileName() + ".tmp")
     try {
-        [System.IO.File]::WriteAllText($tmpFile, $jsonContent, [System.Text.Encoding]::UTF8)
+        [System.IO.File]::WriteAllText($tmpFile, $jsonContent, $utf8NoBom)
 
         if ($targetExists) {
             try {
@@ -190,6 +191,9 @@ function Get-SafeConfigFile {
             }
         }
         try {
+            if (-not $raw.TrimStart().StartsWith('{')) {
+                throw "Configuration JSON must be a JSON object."
+            }
             $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
             $isObj = ($null -ne $parsed) -and (-not ($parsed -is [System.Array])) -and (($parsed.GetType().Name -eq 'PSCustomObject') -or ($parsed -is [System.Collections.IDictionary]))
             if (-not $isObj) {
@@ -224,7 +228,7 @@ function Get-SafeConfigFile {
                 if (Test-Path -LiteralPath $cand.Path) {
                     try {
                         $candRaw = Get-Content -LiteralPath $cand.Path -Raw -Encoding UTF8 -ErrorAction Stop
-                        if (-not [string]::IsNullOrWhiteSpace($candRaw)) {
+                        if (-not [string]::IsNullOrWhiteSpace($candRaw) -and $candRaw.TrimStart().StartsWith('{')) {
                             $candParsed = $candRaw | ConvertFrom-Json -ErrorAction Stop
                             $candIsObj = ($null -ne $candParsed) -and (-not ($candParsed -is [System.Array])) -and (($candParsed.GetType().Name -eq 'PSCustomObject') -or ($candParsed -is [System.Collections.IDictionary]))
                             if ($candIsObj) {

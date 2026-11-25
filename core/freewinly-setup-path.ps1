@@ -44,6 +44,37 @@ function Get-RawUserPath {
     }
 }
 
+function Send-EnvironmentChange {
+    try {
+        if (-not ([System.Management.Automation.PSTypeName]'FreeWinly.NativeMethods').Type) {
+            Add-Type -Namespace 'FreeWinly' -Name 'NativeMethods' -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+public static extern System.IntPtr SendMessageTimeout(
+    System.IntPtr hWnd,
+    uint Msg,
+    System.UIntPtr wParam,
+    string lParam,
+    uint fuFlags,
+    uint uTimeout,
+    out System.UIntPtr lpdwResult
+);
+'@
+        }
+        $res = [System.UIntPtr]::Zero
+        [void][FreeWinly.NativeMethods]::SendMessageTimeout(
+            [System.IntPtr]0xffff,
+            0x001A,
+            [System.UIntPtr]::Zero,
+            "Environment",
+            0x0002,
+            5000,
+            [ref]$res
+        )
+    } catch {
+        # Best-effort broadcast; never fail PATH update if window broadcast times out
+    }
+}
+
 function Set-RawUserPath {
     param([string]$NewPathValue)
     $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
@@ -60,6 +91,7 @@ function Set-RawUserPath {
     } finally {
         $envKey.Dispose()
     }
+    Send-EnvironmentChange
 }
 
 $userPathRaw = Get-RawUserPath

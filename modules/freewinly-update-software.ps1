@@ -33,9 +33,12 @@ function Get-WingetAvailablePackages {
         return @()
     }
     $origEncoding = [Console]::OutputEncoding
+    $wingetExit = 0
     try {
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $global:LASTEXITCODE = 0
         $lines = @(& winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream)
+        $wingetExit = $LASTEXITCODE
     } finally {
         [Console]::OutputEncoding = $origEncoding
     }
@@ -45,6 +48,11 @@ function Get-WingetAvailablePackages {
             $sepIdx = $idx
             break
         }
+    }
+    if ($sepIdx -lt 1 -and $wingetExit -ne 0 -and $wingetExit -ne -1978335189) {
+        $errSnippet = (($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 3) -join ' ').Trim()
+        if ($errSnippet.Length -gt 200) { $errSnippet = $errSnippet.Substring(0, 197) + '...' }
+        throw "Winget upgrade scan failed (ExitCode $wingetExit): $errSnippet"
     }
     $packages = [System.Collections.Generic.List[PSCustomObject]]::new()
     if ($sepIdx -ge 1) {
@@ -62,11 +70,11 @@ function Get-WingetAvailablePackages {
                     $name = $line.Substring(0, $idStart).Trim()
                     $id   = $line.Substring($idStart, $verStart - $idStart).Trim()
                     $verLen = [math]::Min($availStart - $verStart, $line.Length - $verStart)
-                    $verText = if ($verLen -gt 0) { ($line.Substring($verStart, $verLen).Trim() -split '\s+')[0] } else { "" }
+                    $verText = if ($verLen -gt 0) { $line.Substring($verStart, $verLen).Trim() } else { "" }
                     $availText = if ($line.Length -gt $availStart) { ($line.Substring($availStart).Trim() -split '\s+')[0] } else { "" }
 
                     # Matches standard Publisher.Product IDs as well as 12-character Microsoft Store product IDs
-                    if ($id -match '^[A-Za-z0-9\._-]+\.[A-Za-z0-9\._-]+$|^[A-Za-z0-9]{12}$') {
+                    if ($id -match '^[A-Za-z0-9\._+-]+\.[A-Za-z0-9\._+-]+$|^[A-Za-z0-9]{12}$') {
                         $packages.Add([PSCustomObject]@{
                             Id               = $id
                             Name             = $name
@@ -103,7 +111,7 @@ Write-Host "`n--- [freewinly-update-software] Software Updates (Winget) [$Action
 
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "Winget CLI is not available on this system. Skipping." -ForegroundColor Yellow
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Winget CLI not available on this system." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Winget CLI not available on this system." -Encoding UTF8 }
     return
 }
 
@@ -175,12 +183,12 @@ foreach ($pkg in $packages) {
 
 foreach ($s in $skipped) {
     Write-Host "SKIPPED: $($s.Name) ($($s.Id))" -ForegroundColor Yellow
-    if ($LogFile) { Add-Content -Path $LogFile -Value "SKIPPED: $($s.Name) ($($s.Id))" -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "SKIPPED: $($s.Name) ($($s.Id))" -Encoding UTF8 }
 }
 
 if ($toUpdate.Count -eq 0) {
     Write-Host "All non-excluded packages are up to date." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "All non-excluded packages are up to date." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "All non-excluded packages are up to date." -Encoding UTF8 }
     return
 }
 
@@ -211,13 +219,13 @@ foreach ($pkg in $toUpdate) {
     $exitCode = $LASTEXITCODE
     $elapsed = [math]::Round($swPkg.Elapsed.TotalSeconds, 1)
 
-    if ($Settings -and $Settings.outputMode -eq 'Advanced') {
+    if ($env:FREEWINLY_OUTPUT_MODE -eq 'Advanced' -or ($Settings -and $Settings.outputMode -eq 'Advanced')) {
         $out | Out-Host
     }
 
     if ($LogFile) {
-        $out | Add-Content -Path $LogFile -Encoding UTF8
-        Add-Content -Path $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
+        $out | Add-Content -LiteralPath $LogFile -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "RESULT: $id => ExitCode $exitCode" -Encoding UTF8
     }
 
     $outStr = ($out | Out-String)

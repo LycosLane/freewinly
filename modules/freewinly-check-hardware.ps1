@@ -77,7 +77,7 @@ try {
         })
     }
 } catch {
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Hardware Check CIM query failed: $($_.Exception.Message)" -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Hardware Check CIM query failed: $($_.Exception.Message)" -Encoding UTF8 }
     try {
         $pnp = Get-PnpDevice -ErrorAction Stop | Where-Object { $_.Status -ne 'OK' }
         foreach ($p in $pnp) {
@@ -92,7 +92,7 @@ try {
     } catch {
         $queryFailed = $true
         Write-Host "Failed to query hardware status (see log for details)." -ForegroundColor Red
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Hardware Check Get-PnpDevice fallback failed: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Hardware Check Get-PnpDevice fallback failed: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
@@ -102,7 +102,7 @@ if ($queryFailed) {
 
 if ($problemDevices.Count -eq 0) {
     Write-Host "[OK] All hardware devices and drivers report healthy (Status = OK)." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Hardware Check: All devices report Status = OK." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Hardware Check: All devices report Status = OK." -Encoding UTF8 }
     return
 }
 
@@ -113,6 +113,6 @@ foreach ($d in $problemDevices) {
     Write-Host "    Code:   $($d.ErrorCode)" -ForegroundColor Yellow
     Write-Host "    Action: $($d.Actionable)" -ForegroundColor Cyan
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "Hardware Warning: $($d.Name) | Code $($d.ErrorCode) | $($d.Actionable)" -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "Hardware Warning: $($d.Name) | Code $($d.ErrorCode) | $($d.Actionable)" -Encoding UTF8
     }
 }

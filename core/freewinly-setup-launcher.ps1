@@ -111,6 +111,7 @@ if ($Action -eq 'Status') {
 
 if ($Action -in @('Install', 'Remove')) {
     $keysToProcess = if ($Target -eq 'All') { @($shortcutMap.Keys) } else { @($Target) }
+    $hadError = $false
     foreach ($k in $keysToProcess) {
         $entry = $shortcutMap[$k]
         if ($Action -eq 'Install') {
@@ -118,6 +119,7 @@ if ($Action -in @('Install', 'Remove')) {
             if ($created) {
                 Write-Host "[OK] Created shortcut for $($entry.Name): $($entry.Path)" -ForegroundColor Green
             } else {
+                $hadError = $true
                 Write-Host "[ERROR] Failed to create shortcut for $($entry.Name): $($entry.Path)" -ForegroundColor Red
             }
         } else {
@@ -129,7 +131,7 @@ if ($Action -in @('Install', 'Remove')) {
             }
         }
     }
-    exit 0
+    if ($hadError) { exit 1 } else { exit 0 }
 }
 
 # Interactive Menu Mode
@@ -165,10 +167,16 @@ while ($true) {
         if (Test-Path $entry.Path) {
             Remove-ShortcutFile -Path $entry.Path | Out-Null
         } else {
-            Create-ShortcutFile -Path $entry.Path | Out-Null
+            if (-not (Create-ShortcutFile -Path $entry.Path)) {
+                Read-Host "`nPress Enter to continue"
+            }
         }
     } elseif ($choice -eq '4') {
-        foreach ($k in $keys) { Create-ShortcutFile -Path $shortcutMap[$k].Path | Out-Null }
+        $anyFailed = $false
+        foreach ($k in $keys) {
+            if (-not (Create-ShortcutFile -Path $shortcutMap[$k].Path)) { $anyFailed = $true }
+        }
+        if ($anyFailed) { Read-Host "`nPress Enter to continue" }
     } elseif ($choice -eq '5') {
         foreach ($k in $keys) { Remove-ShortcutFile -Path $shortcutMap[$k].Path | Out-Null }
     } elseif ($choice -in @('Q', [char]27)) {

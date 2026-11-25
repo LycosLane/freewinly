@@ -65,7 +65,7 @@ try {
     if ($isServicingActive) {
         Write-Host "  [-] Windows Servicing (TiWorker / TrustedInstaller) is actively running." -ForegroundColor Yellow
         Write-Host "      Skipping Windows Update search to prevent lock contention." -ForegroundColor Gray
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Windows Update search skipped: Servicing worker actively running." -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Windows Update search skipped: Servicing worker actively running." -Encoding UTF8 }
         return
     }
 
@@ -77,7 +77,7 @@ try {
 
     if ($SearchResult.Updates.Count -eq 0) {
         Write-Host "No pending Windows Updates found." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "No pending Windows Updates found." -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "No pending Windows Updates found." -Encoding UTF8 }
         return
     }
 
@@ -108,7 +108,7 @@ try {
     if ($DownloadResult.ResultCode -notin @(2, 3)) {
         Write-Host "Windows Update download failed (ResultCode: $($DownloadResult.ResultCode); see log for details)." -ForegroundColor Red
         if ($LogFile) {
-            Add-Content -Path $LogFile -Value "Windows Update download failed: ResultCode $($DownloadResult.ResultCode) | HResult $($DownloadResult.HResult)" -Encoding UTF8
+            Add-Content -LiteralPath $LogFile -Value "Windows Update download failed: ResultCode $($DownloadResult.ResultCode) | HResult $($DownloadResult.HResult)" -Encoding UTF8
         }
         return
     }
@@ -132,11 +132,11 @@ try {
     }
     Write-Host "Windows Update $resLabel (ResultCode: $($InstallResult.ResultCode), RebootRequired: $($InstallResult.RebootRequired))" -ForegroundColor $resColor
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "Windows Update $resLabel (ResultCode: $($InstallResult.ResultCode) | RebootRequired: $($InstallResult.RebootRequired))" -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "Windows Update $resLabel (ResultCode: $($InstallResult.ResultCode) | RebootRequired: $($InstallResult.RebootRequired))" -Encoding UTF8
     }
 } catch {
     Write-Host "Error during Windows Update: $($_.Exception.Message)" -ForegroundColor Red
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Error during Windows Update: $($_.Exception.Message)" -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Error during Windows Update: $($_.Exception.Message)" -Encoding UTF8 }
 } finally {
     foreach ($uObj in $releasedItems) {
         if ($null -ne $uObj) {

@@ -122,7 +122,12 @@ function Save-ScheduleToConfig {
     )
     if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $load = Get-SafeConfigFile -Path $configPath -IsInteractive $false -DefaultConfig $null
+            if ($load.IsCorrupted -or $null -eq $load.Config) {
+                Write-Warning "Skipping schedule save to config.json: configuration file is empty or invalid."
+                return
+            }
+            $cfg = $load.Config
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue $Type -Force
             $cfg | Add-Member -NotePropertyName scheduleDay -NotePropertyValue $Day -Force
             $cfg | Add-Member -NotePropertyName scheduleTime -NotePropertyValue $Time -Force
@@ -136,7 +141,12 @@ function Save-ScheduleToConfig {
 function Remove-ScheduleFromConfig {
     if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $load = Get-SafeConfigFile -Path $configPath -IsInteractive $false -DefaultConfig $null
+            if ($load.IsCorrupted -or $null -eq $load.Config) {
+                Write-Warning "Skipping schedule removal in config.json: configuration file is empty or invalid."
+                return
+            }
+            $cfg = $load.Config
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue "Disabled" -Force
             Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
         } catch {
@@ -248,7 +258,8 @@ function Adjust-Hour {
 
 # Resolve defaults from config.json if present
 $cfg = if (Test-Path -LiteralPath $configPath) {
-    try { Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null }
+    $cfgLoad = Get-SafeConfigFile -Path $configPath -IsInteractive $false -DefaultConfig $null
+    if (-not $cfgLoad.IsCorrupted) { $cfgLoad.Config } else { $null }
 } else { $null }
 
 $defaultType = if ($cfg -and $cfg.scheduleType -and $cfg.scheduleType -ne "Disabled") { $cfg.scheduleType } else { "Weekly" }

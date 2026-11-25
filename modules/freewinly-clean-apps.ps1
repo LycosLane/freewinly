@@ -150,7 +150,8 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [freewinly-clean-apps] Desktop App Cache Cleanup [$Action] ---" -ForegroundColor Cyan
 
-$globalMinAgeDays = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 3 }
+$parsedMinAge = 0
+$globalMinAgeDays = if ($null -ne $Settings -and [int]::TryParse([string]$Settings.minAgeDays, [ref]$parsedMinAge)) { [math]::Max(0, $parsedMinAge) } else { 3 }
 $globalCutoff = (Get-Date).AddDays(-$globalMinAgeDays)
 Write-Host "Age threshold: files older than $globalMinAgeDays days (before $($globalCutoff.ToString('yyyy-MM-dd HH:mm')))`n" -ForegroundColor Gray
 
@@ -176,7 +177,7 @@ foreach ($envVar in @($env:APPDATA, $env:LOCALAPPDATA, $env:TEMP)) {
                 $baseDirs += $resolved
             }
         } catch {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-apps target lookup warning ('$envVar'): $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 }
@@ -286,7 +287,7 @@ function Get-TargetDirectories {
                 }
             }
         } catch {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
     return $dirs
@@ -424,7 +425,7 @@ foreach ($app in $appsToProcess) {
                 }
             }
         } catch {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "clean-apps target lookup warning ('$pattern'): $($_.Exception.Message)" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-apps target lookup warning ('$($curDir.FullName)'): $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 
@@ -451,7 +452,7 @@ foreach ($app in $appsToProcess) {
             $totalFreedFiles += $appFreedCount
             $mb = [math]::Round($appFreedBytes / 1MB, 1)
             Write-Host "  [+] Cleaned $appName ($appFreedCount files) -> Freed $mb MB" -ForegroundColor Green
-            if ($LogFile) { Add-Content -Path $LogFile -Value "Cleaned $($appName): $appFreedCount files -> Freed $mb MB" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Cleaned $($appName): $appFreedCount files -> Freed $mb MB" -Encoding UTF8 }
         }
     } else {
         # Check / Preview mode
@@ -466,7 +467,7 @@ $summaryMb = [math]::Round($totalBytes / 1MB, 1)
 if ($Action -eq 'Run') {
     if ($totalBytes -gt 0) {
         Write-Host "`nTotal desktop app cache freed: $summaryMb MB ($totalFreedFiles files)." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Total desktop app cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Total desktop app cache freed: $summaryMb MB ($totalFreedFiles files)" -Encoding UTF8 }
     } else {
         Write-Host "`nNo expired desktop app cache files needed cleanup (threshold: >$globalMinAgeDays days)." -ForegroundColor Gray
     }

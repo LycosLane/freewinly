@@ -68,7 +68,7 @@ function Test-DebuggerTargetExists {
     try {
         if (Test-Path -LiteralPath $exeCandidate -PathType Leaf -ErrorAction SilentlyContinue) {
             $exists = $true
-        } elseif ([bool](Get-Command -Name $exeCandidate -ErrorAction SilentlyContinue)) {
+        } elseif ([bool](Get-Command -Name $exeCandidate -CommandType Application -ErrorAction SilentlyContinue)) {
             $exists = $true
         }
     } catch {
@@ -170,14 +170,14 @@ if ($activeHooks.Count -gt 0) {
         Write-Host "    Status:      File exists on disk (active tool installed - will be ignored and left untouched)`n" -ForegroundColor DarkGray
     }
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "App Launch Info: Active launch interceptors detected (ignored): $($activeApps -join ', ')" -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "App Launch Info: Active launch interceptors detected (ignored): $($activeApps -join ', ')" -Encoding UTF8
     }
 }
 
 # Broken pointers section
 if ($brokenHooks.Count -eq 0) {
     Write-Host "[OK] All application launch pointers are healthy. Zero broken launch interceptors found." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Check: Clean record. No broken launch pointers found." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Check: Clean record. No broken launch pointers found." -Encoding UTF8 }
     return
 }
 
@@ -199,7 +199,7 @@ if ($Action -eq 'Check') {
     }
 
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "App Launch Check: Found $($brokenHooks.Count) broken pointers affecting: $($brokenApps -join ', ')" -Encoding UTF8
+        Add-Content -LiteralPath $LogFile -Value "App Launch Check: Found $($brokenHooks.Count) broken pointers affecting: $($brokenApps -join ', ')" -Encoding UTF8
     }
     return
 }
@@ -208,35 +208,36 @@ if ($Action -eq 'Check') {
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "[ERROR] Removing registry launch pointers requires Administrator privileges." -ForegroundColor Red
-    if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Failed - requires Administrator privileges." -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Repair: Failed - requires Administrator privileges." -Encoding UTF8 }
     return
 }
 
 Write-Host "Restoring $($brokenApps.Count) application(s) with broken launch pointers..." -ForegroundColor Cyan
 
 # Export safety rollback backup before modifying any registry keys
-$backupDir = if ($LogFile) { Split-Path -Parent $LogFile } else { Join-Path (Split-Path -Parent $PSScriptRoot) "logs" }
-if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir -Force | Out-Null }
+$logDir = if ($LogFile) { Split-Path -Parent $LogFile } else { $null }
+$backupDir = if (-not [string]::IsNullOrWhiteSpace($logDir)) { $logDir } else { Join-Path (Split-Path -Parent $PSScriptRoot) "logs" }
+if (-not (Test-Path -LiteralPath $backupDir)) { New-Item -ItemType Directory -Path $backupDir -Force | Out-Null }
 $ts = (Get-Date).ToString("yyyyMMdd-HHmmss")
 $regBackupFile = Join-Path $backupDir "ifeo-rollback-$ts.reg"
 try {
     & reg.exe export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $regBackupFile /y 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: reg.exe export (64-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Repair: reg.exe export (64-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
     }
     if (Test-Path -LiteralPath "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options") {
         $reg32Backup = Join-Path $backupDir "ifeo32-rollback-$ts.reg"
         & reg.exe export "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $reg32Backup /y 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: reg.exe export (32-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
+            if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Repair: reg.exe export (32-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
         }
     }
     if (Test-Path -LiteralPath $regBackupFile) {
         Write-Host "Created registry safety rollback backup: $regBackupFile" -ForegroundColor Gray
-        if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Created registry rollback backup: $regBackupFile" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Repair: Created registry rollback backup: $regBackupFile" -Encoding UTF8 }
     }
 } catch {
-    if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Registry rollback backup failed: $($_.Exception.Message)" -Encoding UTF8 }
+    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "App Launch Repair: Registry rollback backup failed: $($_.Exception.Message)" -Encoding UTF8 }
 }
 
 $repairedCount = 0
@@ -261,7 +262,7 @@ foreach ($h in $brokenHooks) {
     } catch {
         $failedCount++
         Write-Host "Failed to remove $($h.RegistryPath): $($_.Exception.Message)" -ForegroundColor Red
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to remove $($h.RegistryPath): $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Failed to remove $($h.RegistryPath): $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
@@ -291,5 +292,5 @@ if ($repairedApps.Count -gt 0) {
 }
 
 if ($LogFile) {
-    Add-Content -Path $LogFile -Value "App Launch Repair: Removed $repairedCount broken pointer(s) ($failedCount failed) for: $($repairedApps -join ', ')." -Encoding UTF8
+    Add-Content -LiteralPath $LogFile -Value "App Launch Repair: Removed $repairedCount broken pointer(s) ($failedCount failed) for: $($repairedApps -join ', ')." -Encoding UTF8
 }

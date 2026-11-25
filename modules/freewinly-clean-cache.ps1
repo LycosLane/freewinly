@@ -28,7 +28,8 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays       = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 7 }
+$parsedMinAge     = 0
+$minAgeDays       = if ($null -ne $Settings -and [int]::TryParse([string]$Settings.minAgeDays, [ref]$parsedMinAge)) { [math]::Max(0, $parsedMinAge) } else { 7 }
 $cleanShaderCache = if ($null -ne $Settings -and $null -ne $Settings.cleanShaderCache) { [bool]$Settings.cleanShaderCache } else { $false }
 
 if ($Action -eq 'Info') {
@@ -113,7 +114,7 @@ foreach ($k in $targets.Keys) {
                     }
                 }
             } catch {
-                if ($LogFile) { Add-Content -Path $LogFile -Value "clean-cache enumeration warning ('$($curDir.FullName)'): $($_.Exception.Message)" -Encoding UTF8 }
+                if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "clean-cache enumeration warning ('$($curDir.FullName)'): $($_.Exception.Message)" -Encoding UTF8 }
             }
         }
         $count = ($files | Measure-Object).Count
@@ -136,7 +137,7 @@ foreach ($k in $targets.Keys) {
                     $totalBytes += $freedBytes
                     $mb = [math]::Round($freedBytes / 1MB, 1)
                     Write-Host "Cleaned $k ($freedCount files) -> Freed $mb MB" -ForegroundColor Green
-                    if ($LogFile) { Add-Content -Path $LogFile -Value "Cleaned $k ($p): $freedCount files -> Freed $mb MB" -Encoding UTF8 }
+                    if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Cleaned $k ($p): $freedCount files -> Freed $mb MB" -Encoding UTF8 }
                 }
             } else {
                 $totalBytes += $bytes
@@ -174,13 +175,13 @@ if ($Settings -and $Settings.cleanRecycleBin -eq $true) {
     try {
         Clear-RecycleBin -Force -ErrorAction Stop
         Write-Host "Recycle Bin emptied." -ForegroundColor Green
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Recycle Bin emptied." -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Recycle Bin emptied." -Encoding UTF8 }
     } catch {
         Write-Host "Recycle Bin cleanup failed (see log for details)." -ForegroundColor Yellow
-        if ($LogFile) { Add-Content -Path $LogFile -Value "Recycle Bin cleanup failed: $($_.Exception.Message)" -Encoding UTF8 }
+        if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Recycle Bin cleanup failed: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
 $totalMB = [math]::Round($totalBytes / 1MB, 1)
 Write-Host "Total Cache Freed: $totalMB MB" -ForegroundColor Green
-if ($LogFile) { Add-Content -Path $LogFile -Value "Total Cache Freed: $totalMB MB" -Encoding UTF8 }
+if ($LogFile) { Add-Content -LiteralPath $LogFile -Value "Total Cache Freed: $totalMB MB" -Encoding UTF8 }

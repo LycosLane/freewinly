@@ -47,6 +47,32 @@ Get-ChildItem -Path $stageDir -Filter "config*.json" -Recurse | Where-Object { $
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+function Set-CanonicalLineEndings {
+    param([Parameter(Mandatory = $true)][string]$RootDir)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    $crlfExts = @('.ps1', '.cmd')
+    $lfExts   = @('.json', '.md', '.svg')
+    $lfNames  = @('VERSION', 'LICENSE')
+    foreach ($f in (Get-ChildItem -LiteralPath $RootDir -Recurse -File)) {
+        $ext = $f.Extension.ToLowerInvariant()
+        $targetEol = if ($crlfExts -contains $ext) {
+            "`r`n"
+        } elseif (($lfExts -contains $ext) -or ($lfNames -contains $f.Name)) {
+            "`n"
+        } else {
+            $null
+        }
+        if ($null -ne $targetEol) {
+            $raw = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+            $normalized = ($raw -replace "`r`n", "`n") -replace "`r", "`n"
+            if ($targetEol -eq "`r`n") {
+                $normalized = $normalized -replace "`n", "`r`n"
+            }
+            [System.IO.File]::WriteAllText($f.FullName, $normalized, $utf8NoBom)
+        }
+    }
+}
+
 function New-DeterministicZip {
     param(
         [Parameter(Mandatory = $true)][string]$SourceDir,
@@ -57,15 +83,24 @@ function New-DeterministicZip {
     }
     $fullSource = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
     $fixedTime = [DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
-    $files = Get-ChildItem -LiteralPath $fullSource -Recurse -File | Sort-Object { $_.FullName.Substring($fullSource.Length + 1).Replace('\', '/') }
+    $fileItems = [System.Collections.Generic.List[object]]::new()
+    foreach ($f in (Get-ChildItem -LiteralPath $fullSource -Recurse -File)) {
+        $fileItems.Add([PSCustomObject]@{
+            RelPath  = $f.FullName.Substring($fullSource.Length + 1).Replace('\', '/')
+            FullName = $f.FullName
+        })
+    }
+    $fileItems.Sort([System.Comparison[object]]{
+        param($a, $b)
+        [System.StringComparer]::Ordinal.Compare($a.RelPath, $b.RelPath)
+    })
 
     $zip = [System.IO.Compression.ZipFile]::Open($DestinationZip, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
-        foreach ($f in $files) {
-            $relPath = $f.FullName.Substring($fullSource.Length + 1).Replace('\', '/')
-            $entry = $zip.CreateEntry($relPath, [System.IO.Compression.CompressionLevel]::Optimal)
+        foreach ($item in $fileItems) {
+            $entry = $zip.CreateEntry($item.RelPath, [System.IO.Compression.CompressionLevel]::Optimal)
             $entry.LastWriteTime = $fixedTime
-            $inStream = [System.IO.File]::OpenRead($f.FullName)
+            $inStream = [System.IO.File]::OpenRead($item.FullName)
             try {
                 $outStream = $entry.Open()
                 try {
@@ -83,6 +118,7 @@ function New-DeterministicZip {
 }
 
 # 1. Package FreeWinly.zip (core release package)
+Set-CanonicalLineEndings -RootDir $stageDir
 New-DeterministicZip -SourceDir $stageDir -DestinationZip $coreZip
 $coreSize = [math]::Round((Get-Item $coreZip).Length / 1KB, 1)
 
@@ -91,6 +127,7 @@ $skillSrc = Join-Path $projectRoot "SKILL.md"
 if (Test-Path $skillSrc) {
     Copy-Item -Path $skillSrc -Destination $stageDir -Force
 }
+Set-CanonicalLineEndings -RootDir $stageDir
 New-DeterministicZip -SourceDir $stageDir -DestinationZip $llmZip
 $llmSize = [math]::Round((Get-Item $llmZip).Length / 1KB, 1)
 
