@@ -157,7 +157,7 @@ if ($newPathStr.Length -ge 2048) {
     Write-Host "`n[ERROR] Cannot add FreeWinly to User PATH:" -ForegroundColor Red
     Write-Host "Target PATH length ($($newPathStr.Length) chars) exceeds safe Windows limit (2048 chars)." -ForegroundColor Red
     Write-Host "Modifying PATH would risk truncating environment variables. Please clean unused User PATH entries first.`n" -ForegroundColor Yellow
-    return
+    exit 1
 }
 
 Set-RawUserPath -NewPathValue $newPathStr

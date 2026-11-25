@@ -351,7 +351,8 @@ if ($null -ne $Settings) {
             $cEnabled = if ($null -ne $cDef.enabled) { [bool]$cDef.enabled } else { $true }
             $cProcess = if ($cDef.process) { @($cDef.process) } else { @() }
             $cPaths = if ($cDef.paths) { @($cDef.paths) } elseif ($cDef.path) { @($cDef.path) } else { @() }
-            $cMinAge = if ($null -ne $cDef.minAgeDays) { [int]$cDef.minAgeDays } else { $null }
+            $parsedCustomAge = 0
+            $cMinAge = if ([int]::TryParse([string]$cDef.minAgeDays, [ref]$parsedCustomAge)) { $parsedCustomAge } else { $null }
 
             $appsToProcess.Add(@{
                 Key        = $ck

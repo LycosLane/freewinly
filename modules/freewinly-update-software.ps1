@@ -158,7 +158,13 @@ if ($activeExcludes.Count -gt 0) {
 
 if ($Action -eq 'Run') {
     Write-Host "Syncing Winget package catalogs..." -ForegroundColor Gray
-    & winget source update --disable-interactivity 2>&1 | Out-Null
+    $origSyncEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        & winget source update --disable-interactivity 2>&1 | Out-Null
+    } finally {
+        [Console]::OutputEncoding = $origSyncEnc
+    }
 }
 
 $packages = Get-WingetAvailablePackages
@@ -214,9 +220,16 @@ foreach ($pkg in $toUpdate) {
     Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
 
     $swPkg = [System.Diagnostics.Stopwatch]::StartNew()
-    $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+    $origUpgEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $global:LASTEXITCODE = 0
+        $out = & winget upgrade --id $id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        [Console]::OutputEncoding = $origUpgEnc
+    }
     $swPkg.Stop()
-    $exitCode = $LASTEXITCODE
     $elapsed = [math]::Round($swPkg.Elapsed.TotalSeconds, 1)
 
     if ($env:FREEWINLY_OUTPUT_MODE -eq 'Advanced' -or ($Settings -and $Settings.outputMode -eq 'Advanced')) {

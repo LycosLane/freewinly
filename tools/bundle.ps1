@@ -41,8 +41,13 @@ Copy-Item -Path (Join-Path $projectRoot "assets") -Destination $stageDir -Recurs
 Copy-Item -Path (Join-Path $projectRoot "core") -Destination $stageDir -Recurse -Force
 Copy-Item -Path (Join-Path $projectRoot "modules") -Destination $stageDir -Recurse -Force
 
-# Ensure no local configuration files or backups are shipped
+# Ensure no local configuration files, backups, or gitignored local/custom modules are shipped
 Get-ChildItem -Path $stageDir -Filter "config*.json" -Recurse | Where-Object { $_.Name -ne "config.example.json" } | Remove-Item -Force -ErrorAction SilentlyContinue
+$stageModules = Join-Path $stageDir "modules"
+if (Test-Path -LiteralPath $stageModules) {
+    Get-ChildItem -LiteralPath $stageModules -Filter "*_local_*.ps1" -File | Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $stageModules -Filter "*_custom_*.ps1" -File | Remove-Item -Force -ErrorAction SilentlyContinue
+}
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem

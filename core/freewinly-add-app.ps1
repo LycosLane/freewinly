@@ -59,7 +59,11 @@ $cleanAppsModule = Join-Path $modulesDir "freewinly-clean-apps.ps1"
 $targetConfig = if ($ConfigPath -and (Test-Path -LiteralPath $ConfigPath)) {
     (Resolve-Path -LiteralPath $ConfigPath).Path
 } elseif ($ConfigPath) {
-    [System.IO.Path]::GetFullPath($ConfigPath)
+    if ([System.IO.Path]::IsPathRooted($ConfigPath)) {
+        [System.IO.Path]::GetFullPath($ConfigPath)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $ConfigPath))
+    }
 } else {
     Join-Path $projectRoot "config.json"
 }

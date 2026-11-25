@@ -144,7 +144,7 @@ $windowDesc = if ($days -gt 0) {
 }
 
 Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Action] ---" -ForegroundColor Cyan
-Write-Host "Time window: $windowDesc (Application & System error logs)" -ForegroundColor Gray
+Write-Host "Time window: $windowDesc (Application & System logs)" -ForegroundColor Gray
 
 $events = [System.Collections.Generic.List[object]]::new()
 $queryFailed = $false

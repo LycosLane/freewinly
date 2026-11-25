@@ -153,8 +153,15 @@ function Update-StandaloneInstall {
                 if (-not (Test-Path -LiteralPath $destSub)) {
                     New-Item -ItemType Directory -Path $destSub -Force | Out-Null
                 }
-                foreach ($subItem in (Get-ChildItem -LiteralPath $item.FullName -Force)) {
-                    Copy-Item -LiteralPath $subItem.FullName -Destination (Join-Path $destSub $subItem.Name) -Recurse -Force -ErrorAction Stop
+                $srcPrefix = $item.FullName.TrimEnd('\') + '\'
+                foreach ($f in (Get-ChildItem -LiteralPath $item.FullName -Recurse -File -Force)) {
+                    $rel = $f.FullName.Substring($srcPrefix.Length)
+                    $destFile = Join-Path $destSub $rel
+                    $destParent = Split-Path -Parent $destFile
+                    if (-not (Test-Path -LiteralPath $destParent)) {
+                        New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+                    }
+                    Copy-Item -LiteralPath $f.FullName -Destination $destFile -Force -ErrorAction Stop
                 }
             } else {
                 if ($preservedTopFiles -contains $item.Name.ToLowerInvariant()) { continue }

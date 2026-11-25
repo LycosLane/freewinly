@@ -209,8 +209,9 @@ foreach ($baseName in $orderedBaseNames) {
     $modulesExecutionOrder[$m.BaseName] = $modBlock
 }
 
+$parsedInitCountdown = 0
 $newConfig = [ordered]@{
-    countdownSeconds      = if ($existingConfig -and $null -ne $existingConfig.countdownSeconds) { [int]$existingConfig.countdownSeconds } else { 10 }
+    countdownSeconds      = if ($existingConfig -and [int]::TryParse([string]$existingConfig.countdownSeconds, [ref]$parsedInitCountdown)) { $parsedInitCountdown } else { 10 }
     submenuView           = if ($existingConfig -and $existingConfig.submenuView) { [string]$existingConfig.submenuView } else { "Hidden" }
     outputMode            = if ($existingConfig -and $existingConfig.outputMode -eq 'Advanced') { "Advanced" } else { "Standard" }
     expandedModules       = if ($existingConfig -and $existingConfig.expandedModules) { @($existingConfig.expandedModules) } else { @() }

@@ -33,8 +33,10 @@ function Save-AtomicConfigFile {
 
     $fullPath = if (Test-Path -LiteralPath $Path) {
         (Resolve-Path -LiteralPath $Path).Path
-    } else {
+    } elseif ([System.IO.Path]::IsPathRooted($Path)) {
         [System.IO.Path]::GetFullPath($Path)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $Path))
     }
 
     $dir = Split-Path -Parent $fullPath
@@ -154,8 +156,10 @@ function Get-SafeConfigFile {
 
     $fullPath = if (Test-Path -LiteralPath $Path) {
         (Resolve-Path -LiteralPath $Path).Path
-    } else {
+    } elseif ([System.IO.Path]::IsPathRooted($Path)) {
         [System.IO.Path]::GetFullPath($Path)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $Path))
     }
 
     $dir = Split-Path -Parent $fullPath

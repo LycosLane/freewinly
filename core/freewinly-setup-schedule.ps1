@@ -170,7 +170,10 @@ function Register-FreeWinlyTask {
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
         $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Action', $ScheduleType, '-At', $TimeStr, '-DayOfWeek', $Day)
         try {
-            Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
+            $proc = Start-Process -FilePath $psHost -Verb RunAs -Wait -PassThru -ArgumentList $elevArgs -ErrorAction Stop
+            if ($proc.ExitCode -ne 0) {
+                Write-Host "`nElevated schedule setup exited with code $($proc.ExitCode)." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "`nAdministrator elevation was cancelled or rejected by user. Schedule was not updated." -ForegroundColor Yellow
         }
@@ -190,7 +193,7 @@ function Register-FreeWinlyTask {
         }
         'Logon' {
             $tr = New-ScheduledTaskTrigger -AtLogon
-            $tr.RandomDelay = 'PT5M' # 5 minute delay after logon
+            $tr.Delay = 'PT5M' # 5 minute delay after logon
             $tr
         }
     }
@@ -227,7 +230,10 @@ function Remove-FreeWinlyTask {
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
         $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Action', 'Remove')
         try {
-            Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
+            $proc = Start-Process -FilePath $psHost -Verb RunAs -Wait -PassThru -ArgumentList $elevArgs -ErrorAction Stop
+            if ($proc.ExitCode -ne 0) {
+                Write-Host "`nElevated schedule removal exited with code $($proc.ExitCode)." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "`nAdministrator elevation was cancelled or rejected by user. Scheduled task was not removed." -ForegroundColor Yellow
         }
@@ -262,9 +268,9 @@ $cfg = if (Test-Path -LiteralPath $configPath) {
     if (-not $cfgLoad.IsCorrupted) { $cfgLoad.Config } else { $null }
 } else { $null }
 
-$defaultType = if ($cfg -and $cfg.scheduleType -and $cfg.scheduleType -ne "Disabled") { $cfg.scheduleType } else { "Weekly" }
-$defaultDay  = if ($cfg -and $cfg.scheduleDay) { $cfg.scheduleDay } else { "Sunday" }
-$defaultTime = if ($cfg -and $cfg.scheduleTime) { $cfg.scheduleTime } else { "12:00" }
+$defaultType = if ($cfg -and $cfg.scheduleType -in @('Weekly', 'Monthly', 'Logon')) { $cfg.scheduleType } else { "Weekly" }
+$defaultDay  = if ($cfg -and $cfg.scheduleDay -and ($weekdays -contains $cfg.scheduleDay)) { $cfg.scheduleDay } else { "Sunday" }
+$defaultTime = if ($cfg -and $cfg.scheduleTime -and ($cfg.scheduleTime -match '^([01]?\d|2[0-3]):[0-5]\d$')) { $cfg.scheduleTime } else { "12:00" }
 
 if ($At) {
     if ($At -notmatch '^([01]?\d|2[0-3]):[0-5]\d$') {

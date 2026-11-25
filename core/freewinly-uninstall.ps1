@@ -153,6 +153,8 @@ if ($shortcutsFound.Count -gt 0) {
     }
 }
 
+$shortcutsRemaining = @($shortcutsFound | Where-Object { Test-Path -LiteralPath $_.Path }).Count -gt 0
+
 Write-Host "`n============================================================" -ForegroundColor Green
 Write-Host "       FreeWinly Windows Cleanup Completed Successfully!    " -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Green
@@ -163,7 +165,11 @@ if ($taskRemaining) {
     Write-Host "  * Windows Scheduled Task: Unregistered" -ForegroundColor Gray
 }
 Write-Host "  * User PATH Environment:  Cleaned" -ForegroundColor Gray
-Write-Host "  * Shortcuts:              Removed (Start Menu, Desktop, Startup folder)" -ForegroundColor Gray
+if ($shortcutsRemaining) {
+    Write-Host "  * Shortcuts:              Still present (some files could not be removed)" -ForegroundColor Yellow
+} else {
+    Write-Host "  * Shortcuts:              Removed (Start Menu, Desktop, Startup folder)" -ForegroundColor Gray
+}
 Write-Host "`nThe FreeWinly folder itself has been left intact:" -ForegroundColor Yellow
 Write-Host "  $projectRoot" -ForegroundColor White
 Write-Host "You can now safely delete or archive this folder at any time.`n" -ForegroundColor Gray

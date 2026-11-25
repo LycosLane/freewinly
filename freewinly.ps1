@@ -156,10 +156,11 @@ $configLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive $isInteractive
 $config = $configLoad.Config
 $configWasCorrupted = [bool]$configLoad.IsCorrupted
 
+$parsedCountdown = 0
 $countdown = if ($CountdownSeconds -ge 0) {
     $CountdownSeconds
-} elseif ($config -and $null -ne $config.countdownSeconds) {
-    [int]$config.countdownSeconds
+} elseif ($config -and [int]::TryParse([string]$config.countdownSeconds, [ref]$parsedCountdown)) {
+    $parsedCountdown
 } else {
     10
 }
@@ -383,7 +384,7 @@ function Invoke-DryRunCheck {
                     if (-not [string]::IsNullOrWhiteSpace($outText)) {
                         Add-Content -LiteralPath $logFile -Value $outText.TrimEnd() -Encoding UTF8
                     }
-                    if ($outText -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
+                    if (($outText -match '(?<!0\s+)\b(Exception|Failed|Error)\b|Found [1-9]\d* (device|broken launch pointer|pending update|recurring error pattern)') -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
                         Write-Host "[ Notice ]" -ForegroundColor Yellow
                     } else {
                         Write-Host "[ OK ]" -ForegroundColor Green
@@ -467,7 +468,7 @@ function Invoke-SecuredCommandsHook {
             Write-Log "ERROR: $($_.Exception.Message)" "Red"
         }
     }
-    return , @($remaining)
+    return @($remaining)
 }
 
 # Security Gate: Package identifier validation & prompt injection protection for software onboarding
@@ -510,7 +511,7 @@ function Invoke-SecuredPackagesHook {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         $script:moduleErrors++
         Write-Log "ERROR: Winget CLI is not available on this system. Skipping $HookName hook." "Red"
-        return , @($PackageIds)
+        return @($PackageIds)
     }
     foreach ($id in $PackageIds) {
         if ($id -notmatch $packageIdRegex) {
@@ -547,7 +548,7 @@ function Invoke-SecuredPackagesHook {
             Write-Log "RESULT: $id => Failed (ExitCode $pkgExit)" "Red"
         }
     }
-    return , @($remaining)
+    return @($remaining)
 }
 
 # 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
@@ -649,7 +650,7 @@ if ($needsAdmin -and -not $isAdmin) {
 
 # 6. EXECUTION PIPELINE
 Initialize-ConsoleTheme
-Clear-Host
+if ($isInteractiveSession) { Clear-Host }
 "------------------------------------------------------------------" | Add-Content -LiteralPath $logFile -Encoding UTF8
 Write-Log "FreeWinly v$FreeWinlyVersion Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
 "------------------------------------------------------------------" | Add-Content -LiteralPath $logFile -Encoding UTF8
@@ -887,10 +888,9 @@ function Invoke-ModuleBatch {
                 }
 
                 if ($toUpdate.Count -eq 0) {
-                    $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
                     $sw.Stop()
-                    if (-not $isStd -and $modOutput) { $modOutput | Out-Host }
-                    if ($modOutput) { Add-Content -LiteralPath $logFile -Value ($modOutput | Out-String).TrimEnd() -Encoding UTF8 }
+                    if (-not $isStd) { Write-Host "All non-excluded packages are up to date." -ForegroundColor Green }
+                    if ($logFile) { Add-Content -LiteralPath $logFile -Value "All non-excluded packages are up to date." -Encoding UTF8 }
                     if ($isStd) {
                         Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
                         Write-Host "(All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
@@ -1002,6 +1002,7 @@ function Invoke-ModuleBatch {
                         Reason     = $noticeInfo.Reason
                         Retryable  = $noticeInfo.Retryable
                         NeedsAdmin = $noticeInfo.NeedsAdmin
+                        IsError    = [bool]($noticeInfo.PSObject.Properties['IsError'] -and $noticeInfo.IsError)
                     })
                 } else {
                     if ($isStd) {
@@ -1019,6 +1020,7 @@ function Invoke-ModuleBatch {
                     Reason     = $_.Exception.Message
                     Retryable  = ($m.BaseName -notmatch '^freewinly-check-')
                     NeedsAdmin = $false
+                    IsError    = $true
                 })
             }
         }
@@ -1102,8 +1104,9 @@ if ($isInteractiveSession) {
                 $retryBefore = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
                 $retryResult = Invoke-ModuleBatch -TargetModules $retryModules
                 $nonRetryNotices = @($currentNotices | Where-Object { -not $_.Retryable })
+                $nonRetryErrors = @($nonRetryNotices | Where-Object { $_.PSObject.Properties['IsError'] -and $_.IsError }).Count
                 $currentNotices = @($nonRetryNotices) + @($retryResult.Notices)
-                $moduleErrors = $hookErrors + $retryResult.Errors
+                $moduleErrors = $hookErrors + $nonRetryErrors + $retryResult.Errors
                 $retryAfter = ($discoveredModules | Select-Object BaseName, Enabled, Settings | ConvertTo-Json -Depth 6 -Compress)
                 if (-not $Settings -and ($retryBefore -ne $retryAfter) -and (Test-Path (Split-Path -Parent $ConfigPath))) {
                     Save-ConfigState

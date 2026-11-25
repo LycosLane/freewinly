@@ -84,7 +84,7 @@ foreach ($k in $targets.Keys) {
         Write-Warning "Safety violation: target path '$p' is a root volume directory. Skipping."
         continue
     }
-    if (Test-Path $p) {
+    if (Test-Path -LiteralPath $p) {
         $targetItem = Get-Item -LiteralPath $p -ErrorAction SilentlyContinue
         if ($targetItem -and ($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
             Write-Host "  [-] Skipped junction / reparse point target: $p" -ForegroundColor Gray
@@ -105,10 +105,11 @@ foreach ($k in $targets.Keys) {
                         $dirQueue.Enqueue($subDir)
                     }
                 }
+                $wingetCachePrefix = $wingetCachePath.TrimEnd('\') + '\'
                 foreach ($f in $curDir.GetFiles()) {
                     if (-not ($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
                         $f.LastWriteTime -lt $targetCutoff -and (
-                            $k -ne 'UserTemp' -or -not $f.FullName.StartsWith($wingetCachePath, [System.StringComparison]::OrdinalIgnoreCase)
+                            $k -ne 'UserTemp' -or -not $f.FullName.StartsWith($wingetCachePrefix, [System.StringComparison]::OrdinalIgnoreCase)
                         )) {
                         $files.Add($f)
                     }
