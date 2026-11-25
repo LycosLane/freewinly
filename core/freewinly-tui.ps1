@@ -224,7 +224,7 @@ function Invoke-InteractiveMenu {
         }
 
         $actions = @(
-            @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
+            @{ Label = "[   R   ]  Run All Checked Tasks [x]"; Key = "R" },
             @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
             @{ Label = "[   S   ]  Save Selection & Order as Default"; Key = "S" },
 
@@ -356,12 +356,10 @@ function Invoke-InteractiveMenu {
             }
         }
 
-        if ($cmdKey -eq "Enter") {
-            if ($selectedIndex -lt $visibleItems.Count) {
-                $cmdKey = "Spacebar"
-            } else {
-                $cmdKey = $actions[$selectedIndex - $visibleItems.Count].Key
-            }
+        if ($cmdKey -eq "Enter" -and $selectedIndex -lt $visibleItems.Count) {
+            $cmdKey = "Spacebar"
+        } elseif (($cmdKey -eq "Enter" -or $cmdKey -eq "Spacebar") -and $selectedIndex -ge $visibleItems.Count) {
+            $cmdKey = $actions[$selectedIndex - $visibleItems.Count].Key
         }
 
         switch ($cmdKey) {
@@ -464,7 +462,7 @@ function Invoke-InteractiveMenu {
                     }
                 }
             }
-            "Run" {
+            "R" {
                 $running = $false
             }
             { $_ -in @("C", "A") } {

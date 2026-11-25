@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.6.1 - Open Source Windows Engine      
+         FreeWinly v1.6.2 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -157,7 +157,7 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
             [x] Optimize Drive C: (OS - WD_BLACK SN770M 2TB, 1833.7 GB)
 
 ------------------------------------------------------------
-> [ Enter ]  Run All Checked Tasks [x]
+> [   R   ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
   [   S   ]  Save Selection & Order as Default
 
@@ -178,12 +178,12 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 | Key | Action |
 | :--- | :--- |
 | **`Up` / `Down`** | Navigate between modules, editable sub-options, and action items |
-| **`Space`** | Toggle module / boolean sub-option `[x]` / `[ ]`, cycle integer slider preset, or execute selected action |
+| **`Space` / `Enter`** | Toggle module / boolean sub-option `[x]` / `[ ]`, cycle integer slider preset, or execute highlighted action |
 | **`Tab`** | Expand or collapse sub-options `[+]` / `[-]` for the highlighted module |
 | **`Left` / `Right`** | Collapse / expand module tree, toggle sub-option, or step integer sliders down / up |
 | **`+` / `-`** | Move highlighted module up or down in the execution pipeline order |
 | **`Delete` / `Back`** | Remove highlighted custom application cache entry (prompts for confirmation; built-ins can only be toggled) |
-| **`Enter`** | Run all currently checked modules (prompts for UAC only if admin tasks are selected) |
+| **`R`** | Run all currently checked modules from anywhere in the menu (prompts for UAC only if admin tasks are selected) |
 | **`C` / `A`** | Run **Dry-Run Check / Diagnostic Audit** (inspects hardware, logs, updates, caches without modifying system) |
 | **`V`** | Toggle **Output Mode** (`Standard` clean single-line status vs `Advanced` verbose stream) |
 | **`E`** | Cycle **Sub-Options View Mode** (`Hidden` -> `Custom` -> `Expanded`) |
