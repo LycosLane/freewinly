@@ -51,6 +51,7 @@ function Get-InstalledFixedHDDs {
 
         $diskToLetters = @{}
         foreach ($p in $partitions) {
+            if ([string]$p.DiskNumber -notmatch '^\d+$') { continue }
             $dNum = [int]$p.DiskNumber
             $dLet = ([string]$p.DriveLetter).TrimEnd(':').ToUpper()
             if (-not $diskToLetters.ContainsKey($dNum)) {
@@ -67,6 +68,7 @@ function Get-InstalledFixedHDDs {
             $isHDD = ($mType -eq 3 -or $mType -eq 'HDD') -and ($bType -ne 7 -and $bType -ne 'USB')
 
             if (-not $isHDD) { continue }
+            if ([string]$pd.DeviceId -notmatch '^\d+$') { continue }
 
             $dNum = [int]$pd.DeviceId
             if ($diskToLetters.ContainsKey($dNum)) {
@@ -85,7 +87,9 @@ function Get-InstalledFixedHDDs {
                 }
             }
         }
-    } catch { }
+    } catch {
+        Write-Warning "CIM storage query failed in freewinly-defrag-hdd: $($_.Exception.Message)"
+    }
 
     return @($found)
 }
@@ -136,14 +140,15 @@ if ($Settings -and $Settings.excludedDrives) {
 }
 
 $targetLetters = if ($Settings -and $Settings.drives) {
-    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() } | Where-Object { $detectedLetters -contains $_ })
 } else {
     @($detectedLetters | Where-Object { $excludedLetters -notcontains $_.ToUpper() })
 }
 
 if ($Action -eq 'Check') {
     Write-Host "Detected Mechanical HDD Drives (Removable USB excluded):" -ForegroundColor Yellow
-    $detectedHDDs | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
+    $tableStr = ($detectedHDDs | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize | Out-String).TrimEnd()
+    Write-Host $tableStr
 
     if ($excludedLetters.Count -gt 0) {
         Write-Host "Excluded drives:   $($excludedLetters -join ', ')" -ForegroundColor Gray
@@ -196,19 +201,27 @@ if (-not $isDue) {
 
 Write-Host "Optimizing $($targetLetters.Count) HDD drive(s): $($targetLetters -join ', ')" -ForegroundColor Cyan
 
+$succeededCount = 0
+$failedCount = 0
+
 foreach ($dl in $targetLetters) {
     Write-Host "Analyzing and defragmenting Drive $dl`: (skips automatically if not fragmented)..." -ForegroundColor Cyan
     try {
         $out = Optimize-Volume -DriveLetter $dl -Defrag -Verbose -ErrorAction Stop 4>&1
         if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
-        if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
+        if ($LogFile) {
+            $outStr = ($out | Out-String).TrimEnd()
+            if ($outStr) { Add-Content -Path $LogFile -Value $outStr -Encoding UTF8 }
+        }
         Write-Host "Drive $dl`: Optimization completed." -ForegroundColor Green
+        $succeededCount++
     } catch {
+        $failedCount++
         Write-Host "Error optimizing Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
         if ($LogFile) { Add-Content -Path $LogFile -Value "Error optimizing Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
-if ($Settings -is [PSCustomObject]) {
+if ($Settings -is [PSCustomObject] -and $succeededCount -gt 0 -and $failedCount -eq 0) {
     $Settings | Add-Member -NotePropertyName lastRun -NotePropertyValue ((Get-Date).ToString("yyyy-MM-dd")) -Force
 }

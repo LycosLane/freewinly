@@ -43,6 +43,8 @@ $logFile   = Join-Path $logsDir "freewinly-$dateStamp.log"
 
 if (-not $ConfigPath) {
     $ConfigPath = Join-Path $projectRoot "config.json"
+} elseif (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
+    $ConfigPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $ConfigPath))
 }
 
 # Dot-source core services
@@ -68,7 +70,9 @@ function Get-ActiveWingetExclusions {
     if (-not $ExcludedSource) { return @() }
     foreach ($item in $ExcludedSource) {
         if ($item -is [string]) {
-            $res.Add($item)
+            if (-not [string]::IsNullOrWhiteSpace($item)) {
+                $res.Add($item)
+            }
         } elseif ($item -and $item.id) {
             $untilDate = if ($item.until) { try { [datetime]$item.until } catch { $null } } else { $null }
             if (-not $untilDate -or $today -le $untilDate) {
@@ -131,13 +135,18 @@ if ($Audit) {
     $Check = $true
 }
 
-$isInteractiveSession = (-not $Run) -or $Interactive
+$isInteractiveSession = ((-not $Run -and -not $Check) -or $Interactive) -and (-not $Json)
 
-# 1. First-Run Configuration Initialization (if config.json does not exist yet)
-if (-not (Test-Path $ConfigPath)) {
+# 1. First-Run Configuration Initialization (if config.json is missing or empty, skip during -Check)
+$configNeedsInit = (-not (Test-Path -LiteralPath $ConfigPath)) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction SilentlyContinue))
+if ($configNeedsInit -and -not $Check) {
     $initScript = Join-Path $coreDir "freewinly-init-config.ps1"
-    if (Test-Path $initScript) {
-        & $initScript -ConfigPath $ConfigPath
+    if (Test-Path -LiteralPath $initScript) {
+        if ($isInteractiveSession) {
+            & $initScript -ConfigPath $ConfigPath
+        } else {
+            & $initScript -ConfigPath $ConfigPath -NonInteractive
+        }
     }
 }
 
@@ -167,9 +176,27 @@ $submenuView       = $discovery.SubmenuView
 $outputMode        = if ($OutputMode) { $OutputMode } elseif ($config -and $config.outputMode -eq 'Advanced') { 'Advanced' } else { 'Standard' }
 
 function Save-ConfigState {
+    param(
+        [int]$NewCountdown = $script:countdown,
+        [string]$NewSubmenuView = $script:submenuView,
+        [string]$NewOutputMode = $script:outputMode
+    )
+
     if ($configWasCorrupted) {
         Write-Warning "Configuration was corrupted on launch; skipping save to avoid overwriting invalid syntax."
         return
+    }
+
+    $script:countdown   = $NewCountdown
+    $script:submenuView = $NewSubmenuView
+    $script:outputMode  = $NewOutputMode
+
+    # Reload latest non-corrupted config from disk so sub-tools (schedule, wizard, custom apps) are preserved
+    if (Test-Path -LiteralPath $ConfigPath) {
+        $freshLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive $false -DefaultConfig $defaultConfigTemplate
+        if (-not $freshLoad.IsCorrupted -and $null -ne $freshLoad.Config) {
+            $script:config = $freshLoad.Config
+        }
     }
 
     $modOrder = [ordered]@{}
@@ -237,20 +264,12 @@ function Invoke-DryRunCheck {
         $jsonResult = [ordered]@{
             tool      = "FreeWinly"
             version   = $FreeWinlyVersion
-            timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
+            timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             modules   = @()
         }
         foreach ($m in $TargetModules) {
             $rawOutput = try {
-                $checkOut = & {
-                    $origInfo = $InformationPreference
-                    $InformationPreference = 'SilentlyContinue'
-                    try {
-                        (& $m.Path -Action Check -Settings $m.Settings -LogFile $logFile 6>$null)
-                    } finally {
-                        $InformationPreference = $origInfo
-                    }
-                } 2>&1 | Out-String
+                $checkOut = (& $m.Path -Action Check -Settings $m.Settings -LogFile $logFile) *>&1 | Out-String
                 $checkOut.Trim()
             } catch {
                 "Error: $($_.Exception.Message)"
@@ -322,8 +341,10 @@ function Invoke-DryRunCheck {
                 try {
                     $outLines = & $m.Path -Action Check -Settings $m.Settings -LogFile $logFile *>&1
                     $outText = ($outLines | Out-String)
-                    $outLines | Add-Content -Path $logFile -Encoding UTF8
-                    if ($outText -match '(?<!0\s+)(Exception|Failed|Error)' -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
+                    if (-not [string]::IsNullOrWhiteSpace($outText)) {
+                        Add-Content -Path $logFile -Value $outText.TrimEnd() -Encoding UTF8
+                    }
+                    if ($outText -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $outText -notmatch 'Zero broken|0 errors|0 failed') {
                         Write-Host "[ Notice ]" -ForegroundColor Yellow
                     } else {
                         Write-Host "[ OK ]" -ForegroundColor Green
@@ -381,18 +402,33 @@ function Invoke-SecuredCommandsHook {
     }
 
     Write-Log "`n--- Running Authorized $HookName ($($Commands.Count)) ---" "Cyan"
+    $remaining = [System.Collections.Generic.List[string]]::new()
     foreach ($cmd in $Commands) {
         Write-Log "Running: $cmd" "Cyan"
         try {
+            $global:LASTEXITCODE = 0
             $cmdOut = Invoke-Expression $cmd 2>&1
+            $cmdOk = $?
+            $cmdExit = $LASTEXITCODE
             if ($outputMode -eq 'Advanced') { $cmdOut | Out-Host }
-            $cmdOut | Add-Content -Path $TargetLogFile -Encoding UTF8
-            Write-Log "RESULT: SUCCESS" "Green"
+            $cmdStr = ($cmdOut | Out-String)
+            if (-not [string]::IsNullOrWhiteSpace($cmdStr)) {
+                Add-Content -Path $TargetLogFile -Value $cmdStr.TrimEnd() -Encoding UTF8
+            }
+            if ($cmdOk -and ($null -eq $cmdExit -or $cmdExit -eq 0)) {
+                Write-Log "RESULT: SUCCESS" "Green"
+            } else {
+                $script:moduleErrors++
+                $remaining.Add($cmd)
+                Write-Log "RESULT: FAILED (ExitCode $cmdExit)" "Red"
+            }
         } catch {
+            $script:moduleErrors++
+            $remaining.Add($cmd)
             Write-Log "ERROR: $($_.Exception.Message)" "Red"
         }
     }
-    return @()
+    return @($remaining)
 }
 
 # Security Gate: Package identifier validation & prompt injection protection for software onboarding
@@ -431,23 +467,36 @@ function Invoke-SecuredPackagesHook {
 
     Write-Log "`n--- Running Authorized $HookName ($($PackageIds.Count)) ---" "Cyan"
     $actionVerb = if ($HookName -eq 'Uninstall') { 'uninstall' } else { 'install' }
+    $remaining = [System.Collections.Generic.List[string]]::new()
     foreach ($id in $PackageIds) {
         if ($id -notmatch $packageIdRegex) {
+            $script:moduleErrors++
+            $remaining.Add($id)
             Write-Log "WARNING: Invalid package identifier '$id'. Skipping for security." "Red"
             continue
         }
         Write-Log "$($HookName)ing: $id ..." "Cyan"
         $wingetArgs = if ($actionVerb -eq 'uninstall') {
-            @('uninstall', '--id', $id, '--silent', '--accept-source-agreements', '--disable-interactivity')
+            @('uninstall', '--id', $id, '--exact', '--silent', '--accept-source-agreements', '--disable-interactivity')
         } else {
-            @('install', '--id', $id, '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+            @('install', '--id', $id, '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
         }
         $procOut = & winget @wingetArgs 2>&1
+        $pkgExit = $LASTEXITCODE
         if ($OutputMode -eq 'Advanced') { $procOut | Out-Host }
-        $procOut | Add-Content -Path $TargetLogFile -Encoding UTF8
-        Write-Log "RESULT: $id => Completed" "Green"
+        $procStr = ($procOut | Out-String)
+        if (-not [string]::IsNullOrWhiteSpace($procStr)) {
+            Add-Content -Path $TargetLogFile -Value $procStr.TrimEnd() -Encoding UTF8
+        }
+        if ($pkgExit -eq 0) {
+            Write-Log "RESULT: $id => Completed" "Green"
+        } else {
+            $script:moduleErrors++
+            $remaining.Add($id)
+            Write-Log "RESULT: $id => Failed (ExitCode $pkgExit)" "Red"
+        }
     }
-    return @()
+    return @($remaining)
 }
 
 # 3. DRY-RUN CHECK / AUDIT MODE (-Check or -Audit)
@@ -464,6 +513,7 @@ if (-not $Run) {
         -Config $config `
         -ConfigPath $ConfigPath `
         -CoreDir $coreDir `
+        -ModulesDir $modulesDir `
         -LogFile $logFile `
         -Countdown $countdown `
         -SubmenuView $submenuView `
@@ -473,8 +523,8 @@ if (-not $Run) {
         -IsInteractiveSession $isInteractiveSession `
         -ConfigWasCorrupted $configWasCorrupted `
         -DefaultConfigTemplate $defaultConfigTemplate `
-        -SaveConfigCallback { Save-ConfigState } `
-        -DryRunCallback { param($TargetModules) Invoke-DryRunCheck -TargetModules $TargetModules -CurrentOutputMode $outputMode }
+        -SaveConfigCallback { param($Countdown, $SubmenuView, $OutputMode) Save-ConfigState -NewCountdown $Countdown -NewSubmenuView $SubmenuView -NewOutputMode $OutputMode } `
+        -DryRunCallback { param($TargetModules, $OutputMode) Invoke-DryRunCheck -TargetModules $TargetModules -CurrentOutputMode $OutputMode }
 
     $countdown   = $menuResult.Countdown
     $submenuView = $menuResult.SubmenuView
@@ -524,7 +574,7 @@ if ($needsAdmin -and -not $isAdmin) {
 # 6. EXECUTION PIPELINE
 Initialize-ConsoleTheme
 Clear-Host
-"------------------------------------------------------------------" | Out-File -FilePath $logFile -Encoding UTF8
+"------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 Write-Log "FreeWinly v$FreeWinlyVersion Maintenance Pipeline Started [$outputMode Mode]" "Cyan"
 "------------------------------------------------------------------" | Add-Content -Path $logFile -Encoding UTF8
 
@@ -575,14 +625,44 @@ if ($outputMode -eq 'Standard') {
         if ($m.BaseName -eq 'freewinly-update-software') {
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
             try {
+                if (Get-Command winget -ErrorAction SilentlyContinue) {
+                    & winget source update --disable-interactivity 2>&1 | Out-Null
+                }
                 $avail = & $m.Path -Action Scan
                 $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
+                # Clean expired postponements in Standard mode just like module Run mode
+                if ($cleanSettings.excluded) {
+                    $todayDate = (Get-Date).Date
+                    $keptExcl = [System.Collections.Generic.List[object]]::new()
+                    $exclChanged = $false
+                    foreach ($exItem in $cleanSettings.excluded) {
+                        if ($exItem -is [string]) {
+                            if (-not [string]::IsNullOrWhiteSpace($exItem)) { $keptExcl.Add($exItem) }
+                        } elseif ($exItem -and $exItem.id) {
+                            $uDate = if ($exItem.until) { try { [datetime]$exItem.until } catch { $null } } else { $null }
+                            if (-not $uDate -or $todayDate -le $uDate) {
+                                $keptExcl.Add($exItem)
+                            } else {
+                                $exclChanged = $true
+                                Add-Content -Path $logFile -Value "Expired postponement removed: $($exItem.id)" -Encoding UTF8
+                            }
+                        }
+                    }
+                    if ($exclChanged -and $m.Settings -is [PSCustomObject]) {
+                        $m.Settings | Add-Member -NotePropertyName excluded -NotePropertyValue @($keptExcl) -Force
+                    }
+                }
                 $activeExcludes = Get-ActiveWingetExclusions -ExcludedSource $cleanSettings.excluded
-                $toUpdate = @($avail | Where-Object {
-                    $id = $_.Id
-                    $name = $_.Name
-                    -not ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) })
-                })
+                $toUpdate = [System.Collections.Generic.List[PSCustomObject]]::new()
+                foreach ($pkg in $avail) {
+                    $id = $pkg.Id
+                    $name = $pkg.Name
+                    if ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) }) {
+                        Add-Content -Path $logFile -Value "SKIPPED: $name ($id)" -Encoding UTF8
+                    } else {
+                        $toUpdate.Add($pkg)
+                    }
+                }
 
                 if ($toUpdate.Count -eq 0) {
                     $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
@@ -650,9 +730,11 @@ if ($outputMode -eq 'Standard') {
             try {
                 $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
                 $sw.Stop()
-                $modOutput | Add-Content -Path $logFile -Encoding UTF8
                 $modStr = ($modOutput | Out-String)
-                if ($modStr -match '(?<!0\s+)(Exception|Failed|Error)' -and $modStr -notmatch 'Zero broken|0 errors|0 failed') {
+                if (-not [string]::IsNullOrWhiteSpace($modStr)) {
+                    Add-Content -Path $logFile -Value $modStr.TrimEnd() -Encoding UTF8
+                }
+                if ($modStr -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $modStr -notmatch 'Zero broken|0 errors|0 failed') {
                     Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
                     Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
                 } else {

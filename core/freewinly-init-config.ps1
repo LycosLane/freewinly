@@ -16,7 +16,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = $null
+    [string]$ConfigPath = $null,
+    [switch]$NonInteractive = $false
 )
 
 $ErrorActionPreference = "Continue"
@@ -31,16 +32,22 @@ if (-not $ConfigPath) {
 # Dot-source core services
 . (Join-Path $PSScriptRoot "freewinly-version.ps1")
 . (Join-Path $PSScriptRoot "freewinly-config-io.ps1")
+. (Join-Path $PSScriptRoot "freewinly-discovery.ps1")
 
-Clear-Host
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "     FreeWinly v$FreeWinlyVersion - Configuration & Exclusion Wizard    " -ForegroundColor White
-Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
-Write-Host "============================================================`n" -ForegroundColor Cyan
+if (-not $NonInteractive) {
+    Clear-Host
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "     FreeWinly v$FreeWinlyVersion - Configuration & Exclusion Wizard    " -ForegroundColor White
+    Write-Host "        Scanning for applications with version quirks       " -ForegroundColor Gray
+    Write-Host "============================================================`n" -ForegroundColor Cyan
+}
 
-$existingConfig = if (Test-Path $ConfigPath) {
-    try { Get-Content $ConfigPath -Raw | ConvertFrom-Json } catch { $null }
-} else { $null }
+$cfgLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive (-not $NonInteractive) -DefaultConfig $null
+if ($cfgLoad.IsCorrupted) {
+    Write-Warning "Existing configuration '$ConfigPath' is corrupted. Aborting wizard to preserve file."
+    exit 1
+}
+$existingConfig = $cfgLoad.Config
 
 $detectedExcludes = [System.Collections.Generic.List[object]]::new()
 
@@ -56,7 +63,7 @@ foreach ($ex in $existingExcludedList) {
 }
 
 $updateModule = Join-Path $modulesDir "freewinly-update-software.ps1"
-if (Test-Path $updateModule) {
+if (-not $NonInteractive -and (Test-Path $updateModule)) {
     try {
         $availablePackages = & $updateModule -Action Scan -ErrorAction Stop
         foreach ($pkg in $availablePackages) {
@@ -64,7 +71,10 @@ if (Test-Path $updateModule) {
             $hasVersionQuirk = ($pkg.InstalledVersion -and $pkg.InstalledVersion -notmatch '\d')
 
             if ($hasVersionQuirk) {
-                if (-not ($detectedExcludes -contains $pkg.Id)) {
+                $alreadyExcluded = ($detectedExcludes | Where-Object {
+                    ($_ -is [string] -and $_ -eq $pkg.Id) -or ($_ -and $_.id -eq $pkg.Id)
+                }).Count -gt 0
+                if (-not $alreadyExcluded) {
                     Write-Host "Detected app with version quirk: $($pkg.Name) (ID: $($pkg.Id))" -ForegroundColor Yellow
                     $choice = Read-Host "Exclude '$($pkg.Id)' from automated Winget upgrades? (Y/n) [Default: Y]"
                     if ($choice -notmatch '^[Nn]$') {
@@ -79,20 +89,19 @@ if (Test-Path $updateModule) {
     }
 }
 
-# Discover modules and sort by their communicated Order property
+# Discover modules via AST contract check and sort by their communicated Order property
 $rawModules = [System.Collections.Generic.List[PSCustomObject]]::new()
 foreach ($mf in (Get-ChildItem (Join-Path $modulesDir "*.ps1") -ErrorAction SilentlyContinue)) {
-    try {
-        $info = & $mf.FullName -Action Info -ErrorAction Stop
-        if ($info -and $info.Name) {
-            $rawModules.Add([PSCustomObject]@{
-                BaseName        = $mf.BaseName
-                Order           = if ($null -ne $info.Order) { [int]$info.Order } else { 99 }
-                Default         = if ($null -ne $info.Default) { [bool]$info.Default } else { $false }
-                DefaultSettings = if ($info.DefaultSettings) { $info.DefaultSettings } else { [ordered]@{} }
-            })
-        }
-    } catch { }
+    $validation = Test-ModuleContract -FilePath $mf.FullName
+    if ($validation.IsValid) {
+        $info = $validation.Info
+        $rawModules.Add([PSCustomObject]@{
+            BaseName        = $mf.BaseName
+            Order           = if ($null -ne $info.Order) { [int]$info.Order } else { 99 }
+            Default         = if ($null -ne $info.Default) { [bool]$info.Default } else { $false }
+            DefaultSettings = if ($info.DefaultSettings) { $info.DefaultSettings } else { [ordered]@{} }
+        })
+    }
 }
 
 $sortedModules = $rawModules | Sort-Object Order, BaseName
@@ -171,7 +180,11 @@ foreach ($baseName in $orderedBaseNames) {
         if ($m.DefaultSettings) {
             $keys = if ($m.DefaultSettings -is [System.Collections.IDictionary]) { $m.DefaultSettings.Keys } else { $m.DefaultSettings.PSObject.Properties.Name }
             foreach ($k in $keys) {
-                $modBlock[$k] = $m.DefaultSettings[$k]
+                $modBlock[$k] = if ($m.DefaultSettings -is [System.Collections.IDictionary]) {
+                    $m.DefaultSettings[$k]
+                } else {
+                    $m.DefaultSettings.$k
+                }
             }
         }
 
@@ -212,5 +225,7 @@ $newConfig = [ordered]@{
 }
 
 Save-AtomicConfigFile -Path $ConfigPath -Config $newConfig -Depth 6
-Write-Host "`nConfiguration saved to: $ConfigPath" -ForegroundColor Green
-Start-Sleep -Seconds 2
+if (-not $NonInteractive) {
+    Write-Host "`nConfiguration saved to: $ConfigPath" -ForegroundColor Green
+    Start-Sleep -Seconds 2
+}

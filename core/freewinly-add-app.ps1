@@ -81,7 +81,11 @@ $defaultConfigTemplate = [PSCustomObject]@{
 
 # 1. Removal workflow
 if ($Remove) {
-    $cfgRes = Get-SafeConfigFile -Path $targetConfig -DefaultConfig $defaultConfigTemplate
+    $cfgRes = Get-SafeConfigFile -Path $targetConfig -IsInteractive ([string]::IsNullOrWhiteSpace($Name)) -DefaultConfig $defaultConfigTemplate
+    if ($cfgRes.IsCorrupted) {
+        Write-Warning "Configuration '$targetConfig' is corrupted. Aborting to avoid overwriting user data."
+        exit 1
+    }
     $cfg = $cfgRes.Config
 
     if ($cfg -and $cfg.modulesExecutionOrder -and $cfg.modulesExecutionOrder.'freewinly-clean-apps') {
@@ -208,10 +212,15 @@ if ($MinAgeDays -ge 0) {
 
 Write-Host "`nValidating '$Name' against FreeWinly safety rules..." -ForegroundColor Cyan
 
-# 5. Invoke freewinly-clean-apps.ps1 -Action Check with candidate custom app to validate safety rules
+# 5. Invoke freewinly-clean-apps.ps1 -Action Check with candidate custom app (empty process list so path rules always run)
+$validationDef = [ordered]@{
+    enabled = $true
+    process = @()
+    paths   = $candidateDef.paths
+}
 $testSettings = @{
     customApps = @{
-        $Name = $candidateDef
+        $Name = $validationDef
     }
 }
 foreach ($k in $builtinKeys) {
@@ -252,8 +261,21 @@ if ($isInteractive) {
     }
 }
 
+# Ensure config.json exists with full module defaults before adding a custom app
+$needsInit = (-not (Test-Path -LiteralPath $targetConfig)) -or [string]::IsNullOrWhiteSpace((Get-Content -LiteralPath $targetConfig -Raw -ErrorAction SilentlyContinue))
+if ($needsInit) {
+    $initScript = Join-Path $PSScriptRoot "freewinly-init-config.ps1"
+    if (Test-Path -LiteralPath $initScript) {
+        & $initScript -ConfigPath $targetConfig -NonInteractive
+    }
+}
+
 # Load current config
-$cfgRes = Get-SafeConfigFile -Path $targetConfig -DefaultConfig $defaultConfigTemplate
+$cfgRes = Get-SafeConfigFile -Path $targetConfig -IsInteractive $isInteractive -DefaultConfig $defaultConfigTemplate
+if ($cfgRes.IsCorrupted) {
+    Write-Warning "Configuration '$targetConfig' is corrupted. Aborting to avoid overwriting user data."
+    exit 1
+}
 $cfg = $cfgRes.Config
 
 if (-not $cfg.modulesExecutionOrder) {
@@ -264,12 +286,13 @@ $modOrder = $cfg.modulesExecutionOrder
 $cleanAppsEntry = if ($modOrder -is [System.Collections.IDictionary]) {
     $modOrder['freewinly-clean-apps']
 } else {
-    $modOrder.PSObject.Properties['freewinly-clean-apps']
+    $modOrder.PSObject.Properties['freewinly-clean-apps'].Value
 }
 
-if (-not $cleanAppsEntry) {
+if (-not $cleanAppsEntry -or ($cleanAppsEntry -is [bool])) {
+    $preservedEnabled = if ($cleanAppsEntry -is [bool]) { [bool]$cleanAppsEntry } else { $true }
     $newEntry = [ordered]@{
-        enabled    = $true
+        enabled    = $preservedEnabled
         minAgeDays = 3
     }
     foreach ($k in $builtinKeys) {

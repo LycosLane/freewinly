@@ -32,7 +32,13 @@ function Get-WingetAvailablePackages {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         return @()
     }
-    $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
+    $origEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $lines = & winget upgrade --include-unknown --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
+    } finally {
+        [Console]::OutputEncoding = $origEncoding
+    }
     $sepIdx = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -match '^-{20,}' })
     $packages = [System.Collections.Generic.List[PSCustomObject]]::new()
     if ($sepIdx -ge 1) {
@@ -102,17 +108,27 @@ $excludesModified = $false
 
 foreach ($item in $excludedSource) {
     if ($item -is [string]) {
-        $activeExcludes.Add($item)
-        $cleanExcludes.Add($item)
-    } elseif ($item.id -and $item.until) {
-        $untilDate = try { [datetime]$item.until } catch { $null }
-        if ($untilDate -and $today -le $untilDate) {
-            $activeExcludes.Add($item.id)
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $activeExcludes.Add($item)
             $cleanExcludes.Add($item)
-            Write-Host "Exclusion active (postponed until $($item.until)): $($item.id)" -ForegroundColor Gray
+        }
+    } elseif ($item -and $item.id) {
+        if ($item.until) {
+            $untilDate = try { [datetime]$item.until } catch { $null }
+            if ($untilDate -and $today -le $untilDate) {
+                $activeExcludes.Add([string]$item.id)
+                $cleanExcludes.Add($item)
+                Write-Host "Exclusion active (postponed until $($item.until)): $($item.id)" -ForegroundColor Gray
+            } elseif (-not $untilDate) {
+                $activeExcludes.Add([string]$item.id)
+                $cleanExcludes.Add($item)
+            } else {
+                Write-Host "Expired postponement removed: $($item.id)" -ForegroundColor Yellow
+                $excludesModified = $true
+            }
         } else {
-            Write-Host "Expired postponement removed: $($item.id)" -ForegroundColor Yellow
-            $excludesModified = $true
+            $activeExcludes.Add([string]$item.id)
+            $cleanExcludes.Add($item)
         }
     }
 }

@@ -115,11 +115,18 @@ if (-not $Force) {
 Write-Host "`nProceeding with system cleanup..." -ForegroundColor Cyan
 
 # 3. Remove Scheduled Task
+$taskRemaining = $false
 if ($taskFound) {
     Write-Host "Removing scheduled task..." -ForegroundColor Gray
     $taskInstaller = Join-Path $PSScriptRoot "freewinly-setup-schedule.ps1"
     if (Test-Path $taskInstaller) {
         & $taskInstaller -Action Remove
+    }
+    try {
+        $null = Get-ScheduledTask -TaskName "FreeWinly" -ErrorAction Stop
+        $taskRemaining = $true
+    } catch {
+        $taskRemaining = $false
     }
 }
 
@@ -150,7 +157,11 @@ Write-Host "`n============================================================" -For
 Write-Host "       FreeWinly Windows Cleanup Completed Successfully!    " -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "All external Windows registrations have been completely removed:" -ForegroundColor Cyan
-Write-Host "  * Windows Scheduled Task: Unregistered" -ForegroundColor Gray
+if ($taskRemaining) {
+    Write-Host "  * Windows Scheduled Task: Still registered (elevation cancelled or failed)" -ForegroundColor Yellow
+} else {
+    Write-Host "  * Windows Scheduled Task: Unregistered" -ForegroundColor Gray
+}
 Write-Host "  * User PATH Environment:  Cleaned" -ForegroundColor Gray
 Write-Host "  * Shortcuts:              Removed (Start Menu, Desktop, Startup folder)" -ForegroundColor Gray
 Write-Host "`nThe FreeWinly folder itself has been left intact:" -ForegroundColor Yellow

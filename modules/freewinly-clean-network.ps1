@@ -128,12 +128,16 @@ if ($flushDns) {
             if (Get-Command Clear-DnsClientCache -ErrorAction SilentlyContinue) {
                 Clear-DnsClientCache -ErrorAction Stop
             } else {
-                ipconfig /flushdns 2>&1 | Out-Null
+                $flushOut = ipconfig /flushdns 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ipconfig /flushdns exited with code $LASTEXITCODE"
+                }
             }
             Write-Host "  [+] DNS Resolver Cache flushed successfully." -ForegroundColor Green
             if ($LogFile) { Add-Content -Path $LogFile -Value "Flushed DNS Resolver Cache" -Encoding UTF8 }
         } catch {
             Write-Host "  [-] Failed to flush DNS cache: $($_.Exception.Message)" -ForegroundColor Red
+            if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to flush DNS cache: $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 }
@@ -148,9 +152,14 @@ if ($clearArpCache) {
         if ($isAdmin) {
             $count = $staleNeighbors.Count
             if ($count -gt 0) {
-                $staleNeighbors | Remove-NetNeighbor -Confirm:$false -ErrorAction SilentlyContinue
-                Write-Host "  [+] Stale ARP/Neighbor cache cleared ($count entries removed)." -ForegroundColor Green
-                if ($LogFile) { Add-Content -Path $LogFile -Value "Cleared $count stale ARP entries" -Encoding UTF8 }
+                try {
+                    $staleNeighbors | Remove-NetNeighbor -Confirm:$false -ErrorAction Stop
+                    Write-Host "  [+] Stale ARP/Neighbor cache cleared ($count entries removed)." -ForegroundColor Green
+                    if ($LogFile) { Add-Content -Path $LogFile -Value "Cleared $count stale ARP entries" -Encoding UTF8 }
+                } catch {
+                    Write-Host "  [-] Failed to clear ARP cache: $($_.Exception.Message)" -ForegroundColor Red
+                    if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to clear ARP cache: $($_.Exception.Message)" -Encoding UTF8 }
+                }
             } else {
                 Write-Host "  [+] ARP cache is clean (no stale or unreachable neighbor entries)." -ForegroundColor Green
             }
@@ -168,10 +177,14 @@ if ($clearNetBios) {
         if ($isAdmin) {
             try {
                 $out = nbtstat.exe -R 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "nbtstat -R exited with code $LASTEXITCODE"
+                }
                 Write-Host "  [+] NetBIOS name cache purged and reloaded." -ForegroundColor Green
                 if ($LogFile) { Add-Content -Path $LogFile -Value "Purged and reloaded NetBIOS name cache" -Encoding UTF8 }
             } catch {
                 Write-Host "  [-] Failed to purge NetBIOS cache: $($_.Exception.Message)" -ForegroundColor Yellow
+                if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to purge NetBIOS cache: $($_.Exception.Message)" -Encoding UTF8 }
             }
         } else {
             Write-Host "  [-] NetBIOS purge skipped (Requires Administrator privileges)." -ForegroundColor Yellow
@@ -187,10 +200,14 @@ if ($resetWinsock) {
         if ($isAdmin) {
             try {
                 $out = netsh.exe winsock reset 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "netsh winsock reset exited with code $LASTEXITCODE"
+                }
                 Write-Host "  [!] Windows Socket catalog reset successfully. A system restart is required to take effect." -ForegroundColor Yellow
                 if ($LogFile) { Add-Content -Path $LogFile -Value "Reset Windows Socket catalog (system restart required)" -Encoding UTF8 }
             } catch {
                 Write-Host "  [-] Failed to reset Winsock catalog: $($_.Exception.Message)" -ForegroundColor Red
+                if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to reset Winsock catalog: $($_.Exception.Message)" -Encoding UTF8 }
             }
         } else {
             Write-Host "  [-] Winsock reset skipped (Requires Administrator privileges)." -ForegroundColor Yellow

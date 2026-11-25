@@ -51,6 +51,14 @@ function Get-TaskStatusInfo {
     try {
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
         $state = $task.State
+        if (-not $task.Triggers -or $task.Triggers.Count -eq 0) {
+            return [PSCustomObject]@{
+                Installed = $true
+                State     = [string]$state
+                Schedule  = "No trigger configured"
+                Summary   = "[Installed] State: $state | Schedule: No trigger configured"
+            }
+        }
         $trigger = $task.Triggers[0]
         $triggerClass = $trigger.CimClass.CimClassName
         
@@ -112,24 +120,28 @@ function Save-ScheduleToConfig {
         [string]$Day,
         [string]$Time
     )
-    if (Test-Path $configPath) {
+    if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+            $cfg = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue $Type -Force
             $cfg | Add-Member -NotePropertyName scheduleDay -NotePropertyValue $Day -Force
             $cfg | Add-Member -NotePropertyName scheduleTime -NotePropertyValue $Time -Force
             Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
-        } catch { }
+        } catch {
+            Write-Warning "Could not save schedule to config.json: $($_.Exception.Message)"
+        }
     }
 }
 
 function Remove-ScheduleFromConfig {
-    if (Test-Path $configPath) {
+    if (Test-Path -LiteralPath $configPath) {
         try {
-            $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+            $cfg = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             $cfg | Add-Member -NotePropertyName scheduleType -NotePropertyValue "Disabled" -Force
             Save-AtomicConfigFile -Path $configPath -Config $cfg -Depth 6
-        } catch { }
+        } catch {
+            Write-Warning "Could not update schedule removal in config.json: $($_.Exception.Message)"
+        }
     }
 }
 
@@ -147,7 +159,11 @@ function Register-FreeWinlyTask {
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
         $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', $ScheduleType, '-At', $TimeStr, '-DayOfWeek', $Day)
-        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs
+        try {
+            Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
+        } catch {
+            Write-Host "`nAdministrator elevation was cancelled or rejected by user. Schedule was not updated." -ForegroundColor Yellow
+        }
         return
     }
 
@@ -200,7 +216,11 @@ function Remove-FreeWinlyTask {
         $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
         if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
         $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Action', 'Remove')
-        Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs
+        try {
+            Start-Process -FilePath $psHost -Verb RunAs -Wait -ArgumentList $elevArgs -ErrorAction Stop
+        } catch {
+            Write-Host "`nAdministrator elevation was cancelled or rejected by user. Scheduled task was not removed." -ForegroundColor Yellow
+        }
         return
     }
 
@@ -235,8 +255,22 @@ $defaultType = if ($cfg -and $cfg.scheduleType -and $cfg.scheduleType -ne "Disab
 $defaultDay  = if ($cfg -and $cfg.scheduleDay) { $cfg.scheduleDay } else { "Sunday" }
 $defaultTime = if ($cfg -and $cfg.scheduleTime) { $cfg.scheduleTime } else { "12:00" }
 
-if ($At) { $defaultTime = $At }
-if ($DayOfWeek) { $defaultDay = $DayOfWeek }
+if ($At) {
+    if ($At -notmatch '^([01]?\d|2[0-3]):[0-5]\d$') {
+        Write-Host "[ERROR] Invalid -At time '$At'. Expected 24-hour HH:mm format (e.g. 14:30)." -ForegroundColor Red
+        exit 1
+    }
+    $parts = $At.Split(':')
+    $defaultTime = ("{0:D2}:{1:D2}" -f [int]$parts[0], [int]$parts[1])
+}
+if ($DayOfWeek) {
+    $matchedDay = $weekdays | Where-Object { $_.Equals($DayOfWeek, [System.StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+    if (-not $matchedDay) {
+        Write-Host "[ERROR] Invalid -DayOfWeek '$DayOfWeek'. Valid values: $($weekdays -join ', ')." -ForegroundColor Red
+        exit 1
+    }
+    $defaultDay = $matchedDay
+}
 
 if ($Action -eq 'Status') {
     $info = Get-TaskStatusInfo
@@ -388,7 +422,6 @@ while ($running) {
             }
         }
         "S" {
-            Save-ScheduleToConfig -Type $selectedMode -Day $selectedDay -Time $selectedTime
             Register-FreeWinlyTask -ScheduleType $selectedMode -TimeStr $selectedTime -Day $selectedDay
             Start-Sleep -Seconds 2
             $running = $false

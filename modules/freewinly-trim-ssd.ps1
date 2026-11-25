@@ -37,10 +37,15 @@ function Get-InstalledFixedSSDs {
         16 = 'Storage Spaces'; 17 = 'NVMe'; 18 = 'Microsoft Reserved'
     }
 
+    $cimQuerySucceeded = $false
+    $fixedDiskCount = 0
+
     try {
         $pDisks = @(Get-CimInstance -Namespace 'root\Microsoft\Windows\Storage' -ClassName MSFT_PhysicalDisk -ErrorAction Stop)
         $partitions = @(Get-CimInstance -Namespace 'root\Microsoft\Windows\Storage' -ClassName MSFT_Partition -ErrorAction Stop | Where-Object { $_.DriveLetter })
         $logicalDisks = @(Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop)
+        $cimQuerySucceeded = $true
+        $fixedDiskCount = $pDisks.Count
 
         $logMap = @{}
         foreach ($ld in $logicalDisks) {
@@ -51,6 +56,7 @@ function Get-InstalledFixedSSDs {
 
         $diskToLetters = @{}
         foreach ($p in $partitions) {
+            if ([string]$p.DiskNumber -notmatch '^\d+$') { continue }
             $dNum = [int]$p.DiskNumber
             $dLet = ([string]$p.DriveLetter).TrimEnd(':').ToUpper()
             if (-not $diskToLetters.ContainsKey($dNum)) {
@@ -68,6 +74,7 @@ function Get-InstalledFixedSSDs {
                      (($mType -in @(0, 'Unspecified')) -and ($bType -in @(15, 'Virtual') -or $pd.FriendlyName -match 'Virtual|VBOX|VMware|QEMU|VirtIO|Msft'))
 
             if (-not $isSSD) { continue }
+            if ([string]$pd.DeviceId -notmatch '^\d+$') { continue }
 
             $dNum = [int]$pd.DeviceId
             if ($diskToLetters.ContainsKey($dNum)) {
@@ -86,9 +93,11 @@ function Get-InstalledFixedSSDs {
                 }
             }
         }
-    } catch { }
+    } catch {
+        Write-Warning "CIM storage query failed in freewinly-trim-ssd: $($_.Exception.Message)"
+    }
 
-    if ($found.Count -eq 0 -and (Test-Path 'C:\')) {
+    if ($found.Count -eq 0 -and (-not $cimQuerySucceeded -or $fixedDiskCount -eq 0) -and (Test-Path 'C:\')) {
         try {
             $cVol = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='C:'" -ErrorAction SilentlyContinue
             if ($cVol -and $cVol.DriveType -eq 3) {
@@ -143,7 +152,7 @@ if ($Settings -and $Settings.excludedDrives) {
 }
 
 $targetDriveLetters = if ($Settings -and $Settings.drives) {
-    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() })
+    @($Settings.drives | ForEach-Object { ([string]$_).TrimEnd(':').ToUpper() } | Where-Object { $detectedDriveLetters -contains $_ })
 } else {
     @($detectedDriveLetters | Where-Object { $excludedLetters -notcontains $_.ToUpper() })
 }
@@ -164,7 +173,8 @@ if ($Action -eq 'Check') {
     }
 
     Write-Host "`nDetected SSD Physical Drives & Partitions (Removable USB excluded):" -ForegroundColor Yellow
-    $detectedDrives | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize
+    $tableStr = ($detectedDrives | Format-Table DriveLetter, Label, Model, BusType, SizeGB, FreeGB -AutoSize | Out-String).TrimEnd()
+    Write-Host $tableStr
 
     if ($excludedLetters.Count -gt 0) {
         Write-Host "Excluded drives: $($excludedLetters -join ', ')" -ForegroundColor Gray
@@ -200,25 +210,34 @@ if (-not $isDue) {
 
 Write-Host "Executing TRIM on $($targetDriveLetters.Count) drive(s): $($targetDriveLetters -join ', ')" -ForegroundColor Cyan
 
+$succeededCount = 0
+$failedCount = 0
+
 foreach ($dl in $targetDriveLetters) {
     Write-Host "Sending TRIM hint to Drive $dl`: ..." -ForegroundColor White
     try {
         $out = Optimize-Volume -DriveLetter $dl -ReTrim -Verbose -ErrorAction Stop 4>&1
         if ($Settings -and $Settings.outputMode -eq 'Advanced') { $out | Out-Host }
-        if ($LogFile) { $out | Add-Content -Path $LogFile -Encoding UTF8 }
+        if ($LogFile) {
+            $outStr = ($out | Out-String).TrimEnd()
+            if ($outStr) { Add-Content -Path $LogFile -Value $outStr -Encoding UTF8 }
+        }
         Write-Host "Drive $dl`: TRIM completed successfully." -ForegroundColor Green
         if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: TRIM completed successfully." -Encoding UTF8 }
+        $succeededCount++
     } catch {
         if ($_.Exception.Message -match '0x8900002A|not supported by the hardware') {
             Write-Host "[Info] Drive $dl`: Storage controller (or virtual disk) does not require hardware TRIM. Skipping." -ForegroundColor Gray
             if ($LogFile) { Add-Content -Path $LogFile -Value "Drive $dl`: Hardware TRIM not required/supported by storage controller." -Encoding UTF8 }
+            $succeededCount++
         } else {
+            $failedCount++
             Write-Host "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -ForegroundColor Red
             if ($LogFile) { Add-Content -Path $LogFile -Value "Error during TRIM for Drive $dl`: $($_.Exception.Message)" -Encoding UTF8 }
         }
     }
 }
 
-if ($Settings -is [PSCustomObject]) {
+if ($Settings -is [PSCustomObject] -and $succeededCount -gt 0 -and $failedCount -eq 0) {
     $Settings | Add-Member -NotePropertyName lastRun -NotePropertyValue ((Get-Date).ToString("yyyy-MM-dd")) -Force
 }

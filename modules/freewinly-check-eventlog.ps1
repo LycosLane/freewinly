@@ -117,13 +117,14 @@ $end = ConvertTo-DateTimeOrNull $rawEnd
 # 3. If no explicit StartDate, resolve LookbackDays (default: 7)
 $days = 0
 if (-not $start) {
-    $days = if ($LookbackDays -gt 0) {
+    $rawDays = if ($LookbackDays -gt 0) {
         $LookbackDays
-    } elseif ($Settings -and $Settings.lookbackDays) {
+    } elseif ($Settings -and $null -ne $Settings.lookbackDays) {
         [int]$Settings.lookbackDays
     } else {
         7
     }
+    $days = if ($rawDays -ge 1) { $rawDays } else { 7 }
     $start = (Get-Date).AddDays(-$days)
     if (-not $end) {
         $end = (Get-Date)
@@ -145,6 +146,7 @@ Write-Host "`n--- [freewinly-check-eventlog] System Stability & Event Logs [$Act
 Write-Host "Time window: $windowDesc (Application & System error logs)" -ForegroundColor Gray
 
 $events = [System.Collections.Generic.List[object]]::new()
+$queryFailed = $false
 
 try {
     $filter = @{
@@ -154,7 +156,7 @@ try {
         EndTime   = $end
     }
 
-    $rawEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue |
+    $rawEvents = Get-WinEvent -FilterHashtable $filter -ErrorAction Stop |
                  Where-Object { $_.ProviderName -ne 'Microsoft-Windows-DistributedCOM' }
 
     if ($rawEvents) {
@@ -199,7 +201,15 @@ try {
         }
     }
 } catch {
-    Write-Host "Could not query Windows Event Logs: $($_.Exception.Message)" -ForegroundColor Yellow
+    if ($_.Exception.Message -notmatch 'No events were found') {
+        $queryFailed = $true
+        Write-Host "Failed to query Windows Event Logs (see log for details)." -ForegroundColor Yellow
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Event Log query failed: $($_.Exception.Message)" -Encoding UTF8 }
+    }
+}
+
+if ($queryFailed) {
+    return
 }
 
 if ($events.Count -eq 0) {

@@ -20,9 +20,11 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Install', 'Remove', 'Toggle', 'Status')]
+    [ValidateSet('Install', 'Add', 'Remove', 'Toggle', 'Status')]
     [string]$Action = 'Install'
 )
+
+if ($Action -eq 'Add') { $Action = 'Install' }
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -33,13 +35,17 @@ $targetDirs = @($projectRoot, $coreDir, $modulesDir)
 
 $userPathRaw = [Environment]::GetEnvironmentVariable("Path", "User")
 $userPaths   = if ($userPathRaw) {
-    @($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim().TrimEnd('\') })
+    @($userPathRaw.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 } else {
     @()
 }
 
-$normalizedRoot = $projectRoot.TrimEnd('\')
-$isInstalled = ($userPaths | Where-Object { $_.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+function Compare-PathEntry {
+    param([string]$A, [string]$B)
+    return $A.Trim().TrimEnd('\').Equals($B.Trim().TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+$isInstalled = ($userPaths | Where-Object { Compare-PathEntry $_ $projectRoot }).Count -gt 0
 
 if ($Action -eq 'Status') {
     if ($isInstalled) {
@@ -55,13 +61,17 @@ if ($Action -eq 'Toggle') {
 }
 
 if ($Action -eq 'Remove') {
-    $normTargets = @($targetDirs | ForEach-Object { $_.TrimEnd('\') })
     $filtered = @($userPaths | Where-Object {
         $p = $_
-        ($normTargets | Where-Object { $p.Equals($_, [System.StringComparison]::OrdinalIgnoreCase) }).Count -eq 0
+        ($targetDirs | Where-Object { Compare-PathEntry $p $_ }).Count -eq 0
     })
     $newPathStr = $filtered -join ';'
     [Environment]::SetEnvironmentVariable("Path", $newPathStr, "User")
+    $envEntries = @($env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object {
+        $ep = $_
+        ($targetDirs | Where-Object { Compare-PathEntry $ep $_ }).Count -eq 0
+    })
+    $env:Path = $envEntries -join ';'
     Write-Host "`nRemoved FreeWinly from User PATH." -ForegroundColor Yellow
     return
 }
@@ -73,10 +83,9 @@ foreach ($p in $userPaths) {
 }
 
 foreach ($td in $targetDirs) {
-    $norm = $td.TrimEnd('\')
-    $exists = ($updatedPaths | Where-Object { $_.Equals($norm, [System.StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+    $exists = ($updatedPaths | Where-Object { Compare-PathEntry $_ $td }).Count -gt 0
     if (-not $exists) {
-        $updatedPaths.Add($norm)
+        $updatedPaths.Add($td.TrimEnd('\'))
     }
 }
 
@@ -91,7 +100,16 @@ if ($newPathStr.Length -ge 2048) {
 }
 
 [Environment]::SetEnvironmentVariable("Path", $newPathStr, "User")
-$env:Path = "$env:Path;$($targetDirs -join ';')"
+$envList = [System.Collections.Generic.List[string]]::new()
+foreach ($ep in $env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+    $envList.Add($ep)
+}
+foreach ($td in $targetDirs) {
+    if (($envList | Where-Object { Compare-PathEntry $_ $td }).Count -eq 0) {
+        $envList.Add($td.TrimEnd('\'))
+    }
+}
+$env:Path = $envList -join ';'
 
 Write-Host "`n============================================================" -ForegroundColor Cyan
 Write-Host "       FreeWinly Added to User PATH Successfully!           " -ForegroundColor White

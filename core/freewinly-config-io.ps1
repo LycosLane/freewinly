@@ -159,95 +159,115 @@ function Get-SafeConfigFile {
 
     if (Test-Path -LiteralPath $fullPath) {
         $raw = Get-Content -LiteralPath $fullPath -Raw -ErrorAction SilentlyContinue
-        if ($raw) {
-            try {
-                $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
-                return [PSCustomObject]@{
-                    Config       = $parsed
-                    IsCorrupted  = $false
-                    ParseError   = $null
-                    RestoredFrom = $null
-                }
-            } catch {
-                $errMsg = $_.Exception.Message
-                # Attempt to extract line number or offset if present
-                $lineHint = ""
-                if ($errMsg -match 'line (\d+)') {
-                    $lineHint = " (near line $($matches[1]))"
-                } elseif ($errMsg -match 'offset (\d+)') {
-                    $lineHint = " (near offset $($matches[1]))"
-                }
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            return [PSCustomObject]@{
+                Config       = $DefaultConfig
+                IsCorrupted  = $false
+                ParseError   = $null
+                RestoredFrom = $null
+            }
+        }
+        try {
+            $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
+            if ($null -eq $parsed) {
+                throw "Configuration JSON evaluated to null."
+            }
+            return [PSCustomObject]@{
+                Config       = $parsed
+                IsCorrupted  = $false
+                ParseError   = $null
+                RestoredFrom = $null
+            }
+        } catch {
+            $errMsg = $_.Exception.Message
+            # Attempt to extract line number or offset if present
+            $lineHint = ""
+            if ($errMsg -match 'line (\d+)') {
+                $lineHint = " (near line $($matches[1]))"
+            } elseif ($errMsg -match 'offset (\d+)') {
+                $lineHint = " (near offset $($matches[1]))"
+            }
 
-                # Find available backup
-                $backupToUse = $null
-                $backupName  = $null
-                if (Test-Path -LiteralPath $lastGoodPath) {
-                    $backupToUse = $lastGoodPath
-                    $backupName  = "config.last-good.json"
-                } elseif (Test-Path -LiteralPath $prevPath) {
-                    $backupToUse = $prevPath
-                    $backupName  = "config.previous.json"
-                }
-
-                if ($IsInteractive) {
-                    Write-Host ""
-                    Write-Host "============================================================" -ForegroundColor Red
-                    Write-Host " [Config Error] Corrupted Configuration File Detected" -ForegroundColor Yellow
-                    Write-Host "============================================================" -ForegroundColor Red
-                    Write-Host "File: $fullPath" -ForegroundColor White
-                    Write-Host "Error: $errMsg$lineHint" -ForegroundColor Red
-                    Write-Host ""
-                    Write-Host "Safety Guarantee: The broken configuration file has NOT been" -ForegroundColor Gray
-                    Write-Host "overwritten or deleted." -ForegroundColor Gray
-                    Write-Host ""
-
-                    if ($backupToUse) {
-                        Write-Host "Available backup found: $backupName" -ForegroundColor Green
-                        $choice = Read-Host "Restore from '$backupName' [R] or Quit without changes [Q]? (R/q)"
-                        if ($choice -match '^[Rr]$' -or [string]::IsNullOrWhiteSpace($choice)) {
-                            try {
-                                $backupRaw = Get-Content -LiteralPath $backupToUse -Raw -ErrorAction Stop
-                                $backupParsed = $backupRaw | ConvertFrom-Json -ErrorAction Stop
-                                Save-AtomicConfigFile -Path $fullPath -Config $backupRaw
-                                Write-Host "`nSuccessfully restored configuration from $backupName!" -ForegroundColor Green
-                                Start-Sleep -Milliseconds 900
-                                return [PSCustomObject]@{
-                                    Config       = $backupParsed
-                                    IsCorrupted  = $false
-                                    ParseError   = $null
-                                    RestoredFrom = $backupName
-                                }
-                            } catch {
-                                Write-Host "Failed to restore backup '$backupName': $($_.Exception.Message)" -ForegroundColor Red
+            # Find first valid non-null backup
+            $backupToUse   = $null
+            $backupName    = $null
+            $backupRaw     = $null
+            $backupParsed  = $null
+            $backupCandidates = @(
+                @{ Path = $lastGoodPath; Name = "config.last-good.json" },
+                @{ Path = $prevPath;     Name = "config.previous.json" }
+            )
+            foreach ($cand in $backupCandidates) {
+                if (Test-Path -LiteralPath $cand.Path) {
+                    try {
+                        $candRaw = Get-Content -LiteralPath $cand.Path -Raw -ErrorAction Stop
+                        if (-not [string]::IsNullOrWhiteSpace($candRaw)) {
+                            $candParsed = $candRaw | ConvertFrom-Json -ErrorAction Stop
+                            if ($null -ne $candParsed) {
+                                $backupToUse  = $cand.Path
+                                $backupName   = $cand.Name
+                                $backupRaw    = $candRaw
+                                $backupParsed = $candParsed
+                                break
                             }
                         }
-                    } else {
-                        Write-Host "No backup configuration file (config.last-good.json / config.previous.json) was found." -ForegroundColor Yellow
-                        Read-Host "Press Enter to exit FreeWinly safely"
-                    }
-                    exit 1
-                } else {
-                    # Headless / Scheduled / -Run / -Check
-                    Write-Warning "[Config Warning] Failed to parse '$fullPath'$($lineHint): $errMsg. Corrupted file left untouched."
-                    if ($backupToUse) {
+                    } catch { }
+                }
+            }
+
+            if ($IsInteractive) {
+                Write-Host ""
+                Write-Host "============================================================" -ForegroundColor Red
+                Write-Host " [Config Error] Corrupted Configuration File Detected" -ForegroundColor Yellow
+                Write-Host "============================================================" -ForegroundColor Red
+                Write-Host "File: $fullPath" -ForegroundColor White
+                Write-Host "Error: $errMsg$lineHint" -ForegroundColor Red
+                Write-Host ""
+                Write-Host "Safety Guarantee: The broken configuration file has NOT been" -ForegroundColor Gray
+                Write-Host "overwritten or deleted." -ForegroundColor Gray
+                Write-Host ""
+
+                if ($backupToUse) {
+                    Write-Host "Available backup found: $backupName" -ForegroundColor Green
+                    $choice = Read-Host "Restore from '$backupName' [R] or Quit without changes [Q]? (R/q)"
+                    if ($choice -match '^[Rr]$' -or [string]::IsNullOrWhiteSpace($choice)) {
                         try {
-                            $backupParsed = (Get-Content -LiteralPath $backupToUse -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop)
-                            Write-Warning "[Config Warning] Using $backupName in memory for this session."
+                            Save-AtomicConfigFile -Path $fullPath -Config $backupRaw
+                            Write-Host "`nSuccessfully restored configuration from $backupName!" -ForegroundColor Green
+                            Start-Sleep -Milliseconds 900
                             return [PSCustomObject]@{
                                 Config       = $backupParsed
-                                IsCorrupted  = $true
-                                ParseError   = $errMsg
-                                RestoredFrom = "Memory:$backupName"
+                                IsCorrupted  = $false
+                                ParseError   = $null
+                                RestoredFrom = $backupName
                             }
-                        } catch { }
+                        } catch {
+                            Write-Host "Failed to restore backup '$backupName': $($_.Exception.Message)" -ForegroundColor Red
+                        }
                     }
-                    Write-Warning "[Config Warning] Using safe in-memory defaults for this session."
+                } else {
+                    Write-Host "No valid backup configuration file (config.last-good.json / config.previous.json) was found." -ForegroundColor Yellow
+                    Read-Host "Press Enter to exit FreeWinly safely"
+                }
+                exit 1
+            } else {
+                # Headless / Scheduled / -Run / -Check
+                Write-Warning "[Config Warning] Failed to parse '$fullPath'$($lineHint): $errMsg. Corrupted file left untouched."
+                if ($backupToUse) {
+                    Write-Warning "[Config Warning] Using $backupName in memory for this session."
                     return [PSCustomObject]@{
-                        Config       = $DefaultConfig
+                        Config       = $backupParsed
                         IsCorrupted  = $true
                         ParseError   = $errMsg
-                        RestoredFrom = "Memory:Defaults"
+                        RestoredFrom = "Memory:$backupName"
                     }
+                }
+                Write-Warning "[Config Warning] Using safe in-memory defaults for this session."
+                return [PSCustomObject]@{
+                    Config       = $DefaultConfig
+                    IsCorrupted  = $true
+                    ParseError   = $errMsg
+                    RestoredFrom = "Memory:Defaults"
                 }
             }
         }

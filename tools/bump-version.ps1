@@ -62,8 +62,16 @@ if (Test-Path -LiteralPath $scoopFile) {
 
 Write-Host "`nFreeWinly canonical version successfully bumped to v$NewVersion!" -ForegroundColor Green
 
-# 6. Automatically refresh release bundles
+# 6. Automatically refresh release bundles and sync Scoop hash
 $bundleScript = Join-Path $PSScriptRoot "bundle.ps1"
 if (Test-Path -LiteralPath $bundleScript) {
     & $bundleScript
+    $coreZip = Join-Path (Join-Path $projectRoot "dist") "FreeWinly.zip"
+    if ((Test-Path -LiteralPath $scoopFile) -and (Test-Path -LiteralPath $coreZip)) {
+        $zipHash = (Get-FileHash -LiteralPath $coreZip -Algorithm SHA256).Hash
+        $scoopContent = [System.IO.File]::ReadAllText($scoopFile, [System.Text.Encoding]::UTF8)
+        $scoopContent = $scoopContent -replace '"hash":\s*"[A-Fa-f0-9]+"', "`"hash`": `"$zipHash`""
+        [System.IO.File]::WriteAllText($scoopFile, $scoopContent, $utf8NoBom)
+        Write-Host "Updated Scoop manifest SHA256 hash: $zipHash" -ForegroundColor Cyan
+    }
 }

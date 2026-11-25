@@ -61,6 +61,8 @@ function Create-ShortcutFile {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
+    $WshShell = $null
+    $sc = $null
     try {
         $WshShell = New-Object -ComObject WScript.Shell
         $sc = $WshShell.CreateShortcut($Path)
@@ -71,8 +73,16 @@ function Create-ShortcutFile {
         $customIcon = Join-Path $projectRoot "assets\icons\freewinly.ico"
         $sc.IconLocation     = if (Test-Path -LiteralPath $customIcon) { $customIcon } else { "$env:SystemRoot\System32\shell32.dll,238" }
         $sc.Save()
+        return $true
     } catch {
         Write-Warning "Could not create shortcut at '$Path': $($_.Exception.Message)"
+        return $false
+    } finally {
+        foreach ($comObj in @($sc, $WshShell)) {
+            if ($null -ne $comObj) {
+                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObj) | Out-Null } catch { }
+            }
+        }
     }
 }
 
@@ -104,8 +114,12 @@ if ($Action -in @('Install', 'Remove')) {
     foreach ($k in $keysToProcess) {
         $entry = $shortcutMap[$k]
         if ($Action -eq 'Install') {
-            Create-ShortcutFile -Path $entry.Path
-            Write-Host "[OK] Created shortcut for $($entry.Name): $($entry.Path)" -ForegroundColor Green
+            $created = Create-ShortcutFile -Path $entry.Path
+            if ($created) {
+                Write-Host "[OK] Created shortcut for $($entry.Name): $($entry.Path)" -ForegroundColor Green
+            } else {
+                Write-Host "[ERROR] Failed to create shortcut for $($entry.Name): $($entry.Path)" -ForegroundColor Red
+            }
         } else {
             $removed = Remove-ShortcutFile -Path $entry.Path
             if ($removed) {
@@ -151,10 +165,10 @@ while ($true) {
         if (Test-Path $entry.Path) {
             Remove-ShortcutFile -Path $entry.Path | Out-Null
         } else {
-            Create-ShortcutFile -Path $entry.Path
+            Create-ShortcutFile -Path $entry.Path | Out-Null
         }
     } elseif ($choice -eq '4') {
-        foreach ($k in $keys) { Create-ShortcutFile -Path $shortcutMap[$k].Path }
+        foreach ($k in $keys) { Create-ShortcutFile -Path $shortcutMap[$k].Path | Out-Null }
     } elseif ($choice -eq '5') {
         foreach ($k in $keys) { Remove-ShortcutFile -Path $shortcutMap[$k].Path | Out-Null }
     } elseif ($choice -in @('Q', [char]27)) {

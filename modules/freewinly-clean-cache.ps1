@@ -28,7 +28,7 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays       = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 7 }
+$minAgeDays       = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 7 }
 $cleanShaderCache = if ($null -ne $Settings -and $null -ne $Settings.cleanShaderCache) { [bool]$Settings.cleanShaderCache } else { $false }
 
 if ($Action -eq 'Info') {
@@ -90,11 +90,29 @@ foreach ($k in $targets.Keys) {
             continue
         }
         $targetCutoff = if ($k -eq 'WindowsUpdateCache') { $wuCutoff } else { $cutoff }
-        $files = Get-ChildItem -LiteralPath $p -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
-            (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
-            $_.LastWriteTime -lt $targetCutoff -and (
-                $k -ne 'UserTemp' -or -not $_.FullName.StartsWith($wingetCachePath, [System.StringComparison]::OrdinalIgnoreCase)
-            )
+        $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+        $dirQueue = [System.Collections.Generic.Queue[System.IO.DirectoryInfo]]::new()
+        if ($targetItem -and $targetItem.PSIsContainer) {
+            $dirQueue.Enqueue([System.IO.DirectoryInfo]$targetItem)
+        }
+        while ($dirQueue.Count -gt 0) {
+            $curDir = $dirQueue.Dequeue()
+            if ($curDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
+            try {
+                foreach ($subDir in $curDir.GetDirectories()) {
+                    if (-not ($subDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                        $dirQueue.Enqueue($subDir)
+                    }
+                }
+                foreach ($f in $curDir.GetFiles()) {
+                    if (-not ($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
+                        $f.LastWriteTime -lt $targetCutoff -and (
+                            $k -ne 'UserTemp' -or -not $f.FullName.StartsWith($wingetCachePath, [System.StringComparison]::OrdinalIgnoreCase)
+                        )) {
+                        $files.Add($f)
+                    }
+                }
+            } catch { }
         }
         $count = ($files | Measure-Object).Count
         $bytes = ($files | Measure-Object Length -Sum).Sum
@@ -136,10 +154,14 @@ if ($Action -eq 'Check') {
     if ($results.Count -eq 0) {
         Write-Host "No temporary or cache files older than $minAgeDays days were found." -ForegroundColor Green
     } else {
-        $results | Format-Table Category, FileCount, SizeMB, Path -AutoSize
+        $tableStr = ($results | Format-Table Category, FileCount, SizeMB, Path -AutoSize | Out-String).TrimEnd()
+        Write-Host $tableStr
         $totalMB = [math]::Round($totalBytes / 1MB, 1)
         Write-Host "Check preview: $totalMB MB across $($results.Count) categories eligible for cleanup." -ForegroundColor Yellow
         Write-Host "Dry run complete. No files were deleted." -ForegroundColor Green
+    }
+    if ($Settings -and $Settings.cleanRecycleBin -eq $true) {
+        Write-Host "Recycle Bin: Will be emptied during Run." -ForegroundColor Gray
     }
     return
 }
@@ -147,9 +169,14 @@ if ($Action -eq 'Check') {
 # Optional Recycle Bin Emptying (if explicitly enabled in config)
 if ($Settings -and $Settings.cleanRecycleBin -eq $true) {
     Write-Host "Emptying Recycle Bin..." -ForegroundColor Gray
-    Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-    Write-Host "Recycle Bin emptied." -ForegroundColor Green
-    if ($LogFile) { Add-Content -Path $LogFile -Value "Recycle Bin emptied." -Encoding UTF8 }
+    try {
+        Clear-RecycleBin -Force -ErrorAction Stop
+        Write-Host "Recycle Bin emptied." -ForegroundColor Green
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Recycle Bin emptied." -Encoding UTF8 }
+    } catch {
+        Write-Host "Recycle Bin cleanup failed (see log for details)." -ForegroundColor Yellow
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Recycle Bin cleanup failed: $($_.Exception.Message)" -Encoding UTF8 }
+    }
 }
 
 $totalMB = [math]::Round($totalBytes / 1MB, 1)

@@ -90,11 +90,11 @@ function Get-LaunchInterceptors {
     $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     foreach ($root in $ifeoRoots) {
-        if (Test-Path $root) {
-            $keys = Get-ChildItem -Path $root -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $root) {
+            $keys = Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue
             foreach ($k in $keys) {
                 # 1. Check direct Debugger value on the image key
-                $directProp = Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue
+                $directProp = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
                 if ($directProp -and $directProp.Debugger) {
                     $targetCheck = Test-DebuggerTargetExists -RawDebugger $directProp.Debugger
 
@@ -113,9 +113,9 @@ function Get-LaunchInterceptors {
                 }
 
                 # 2. Check filtered subkeys (used by modern sleep tools)
-                $subKeys = Get-ChildItem -Path $k.PSPath -ErrorAction SilentlyContinue
+                $subKeys = Get-ChildItem -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
                 foreach ($sk in $subKeys) {
-                    $p = Get-ItemProperty -Path $sk.PSPath -ErrorAction SilentlyContinue
+                    $p = Get-ItemProperty -LiteralPath $sk.PSPath -ErrorAction SilentlyContinue
                     if ($p -and $p.Debugger) {
                         $targetCheck = Test-DebuggerTargetExists -RawDebugger $p.Debugger
 
@@ -221,52 +221,75 @@ $ts = (Get-Date).ToString("yyyyMMdd-HHmmss")
 $regBackupFile = Join-Path $backupDir "ifeo-rollback-$ts.reg"
 try {
     & reg.exe export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $regBackupFile /y 2>&1 | Out-Null
-    if (Test-Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options") {
+    if ($LASTEXITCODE -ne 0) {
+        if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: reg.exe export (64-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
+    }
+    if (Test-Path -LiteralPath "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options") {
         $reg32Backup = Join-Path $backupDir "ifeo32-rollback-$ts.reg"
         & reg.exe export "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options" $reg32Backup /y 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: reg.exe export (32-bit) returned exit code $LASTEXITCODE" -Encoding UTF8 }
+        }
     }
-    if (Test-Path $regBackupFile) {
+    if (Test-Path -LiteralPath $regBackupFile) {
         Write-Host "Created registry safety rollback backup: $regBackupFile" -ForegroundColor Gray
         if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Created registry rollback backup: $regBackupFile" -Encoding UTF8 }
     }
-} catch { }
+} catch {
+    if ($LogFile) { Add-Content -Path $LogFile -Value "App Launch Repair: Registry rollback backup failed: $($_.Exception.Message)" -Encoding UTF8 }
+}
 
 $repairedCount = 0
+$failedCount = 0
+$repairedApps = [System.Collections.Generic.List[string]]::new()
 $parentsToClean = [System.Collections.Generic.HashSet[string]]::new()
 
 foreach ($h in $brokenHooks) {
     try {
-        if ($h.SubKey -and (Test-Path $h.RegistryPath)) {
+        if ($h.SubKey -and (Test-Path -LiteralPath $h.RegistryPath)) {
             # Subkey filter entry
-            Remove-Item -Path $h.RegistryPath -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $h.RegistryPath -Recurse -Force -ErrorAction Stop
             $parentsToClean.Add($h.ParentPath) | Out-Null
             $repairedCount++
-        } elseif (-not $h.SubKey -and (Test-Path $h.RegistryPath)) {
+            if (-not $repairedApps.Contains($h.AppName)) { $repairedApps.Add($h.AppName) }
+        } elseif (-not $h.SubKey -and (Test-Path -LiteralPath $h.RegistryPath)) {
             # Direct Debugger value
-            Remove-ItemProperty -Path $h.RegistryPath -Name "Debugger" -ErrorAction Stop
+            Remove-ItemProperty -LiteralPath $h.RegistryPath -Name "Debugger" -ErrorAction Stop
             $repairedCount++
+            if (-not $repairedApps.Contains($h.AppName)) { $repairedApps.Add($h.AppName) }
         }
     } catch {
+        $failedCount++
         Write-Host "Failed to remove $($h.RegistryPath): $($_.Exception.Message)" -ForegroundColor Red
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Failed to remove $($h.RegistryPath): $($_.Exception.Message)" -Encoding UTF8 }
     }
 }
 
 # Clean up empty parent UseFilter properties if no remaining subkeys exist
 foreach ($parent in $parentsToClean) {
-    if (Test-Path $parent) {
-        $remaining = Get-ChildItem -Path $parent -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $parent) {
+        $remaining = Get-ChildItem -LiteralPath $parent -ErrorAction SilentlyContinue
         if ($remaining.Count -eq 0) {
-            Remove-ItemProperty -Path $parent -Name "UseFilter" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -LiteralPath $parent -Name "UseFilter" -ErrorAction SilentlyContinue
         }
     }
 }
 
-Write-Host "`n[SUCCESS] Successfully removed $repairedCount broken launch pointer(s)!" -ForegroundColor Green
-Write-Host "Direct launching restored for:" -ForegroundColor Cyan
-foreach ($app in $brokenApps) {
-    Write-Host "  -> $app" -ForegroundColor Green
+if ($failedCount -eq 0 -and $repairedCount -gt 0) {
+    Write-Host "`n[SUCCESS] Successfully removed $repairedCount broken launch pointer(s)!" -ForegroundColor Green
+} elseif ($repairedCount -gt 0) {
+    Write-Host "`n[Notice] Removed $repairedCount broken launch pointer(s), $failedCount failed (see log)." -ForegroundColor Yellow
+} else {
+    Write-Host "`n[ERROR] Failed to remove broken launch pointer(s) ($failedCount error(s))." -ForegroundColor Red
+}
+
+if ($repairedApps.Count -gt 0) {
+    Write-Host "Direct launching restored for:" -ForegroundColor Cyan
+    foreach ($app in $repairedApps) {
+        Write-Host "  -> $app" -ForegroundColor Green
+    }
 }
 
 if ($LogFile) {
-    Add-Content -Path $LogFile -Value "App Launch Repair: Removed $repairedCount broken pointer(s) for $($brokenApps -join ', ')." -Encoding UTF8
+    Add-Content -Path $LogFile -Value "App Launch Repair: Removed $repairedCount broken pointer(s) ($failedCount failed) for: $($repairedApps -join ', ')." -Encoding UTF8
 }

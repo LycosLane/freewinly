@@ -84,9 +84,14 @@ function Refresh-CleanAppsSubOptions {
         }
         foreach ($sk in $descKeys) {
             $valType = if ($sk -match 'Days') { 'int' } else { 'bool' }
+            $descLabel = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
+                [string]$info.SettingsDescriptions[$sk]
+            } else {
+                [string]$info.SettingsDescriptions.$sk
+            }
             $newSubs.Add([PSCustomObject]@{
                 Key       = $sk
-                Label     = [string]$info.SettingsDescriptions[$sk]
+                Label     = $descLabel
                 ValueType = $valType
             })
         }
@@ -319,7 +324,11 @@ function Get-DiscoveredModules {
                 $info.DefaultSettings.PSObject.Properties.Name
             }
             foreach ($dk in $defKeys) {
-                $modSettings[$dk] = $info.DefaultSettings[$dk]
+                $modSettings[$dk] = if ($info.DefaultSettings -is [System.Collections.IDictionary]) {
+                    $info.DefaultSettings[$dk]
+                } else {
+                    $info.DefaultSettings.$dk
+                }
             }
         }
 
@@ -401,8 +410,12 @@ function Get-DiscoveredModules {
             foreach ($sk in $descKeys) {
                 $curVal = if ($modSettings.Contains($sk)) {
                     $modSettings[$sk]
-                } elseif ($info.DefaultSettings -and $info.DefaultSettings.Contains($sk)) {
-                    $info.DefaultSettings[$sk]
+                } elseif ($info.DefaultSettings) {
+                    if ($info.DefaultSettings -is [System.Collections.IDictionary] -and $info.DefaultSettings.Contains($sk)) {
+                        $info.DefaultSettings[$sk]
+                    } elseif ($info.DefaultSettings.PSObject.Properties[$sk]) {
+                        $info.DefaultSettings.$sk
+                    } else { $null }
                 } else { $null }
 
                 $valType = if ($curVal -is [bool]) {
@@ -413,9 +426,15 @@ function Get-DiscoveredModules {
                     if ($sk -match 'Days') { 'int' } else { 'bool' }
                 }
 
+                $descLabel = if ($info.SettingsDescriptions -is [System.Collections.IDictionary]) {
+                    [string]$info.SettingsDescriptions[$sk]
+                } else {
+                    [string]$info.SettingsDescriptions.$sk
+                }
+
                 $subOptions.Add([PSCustomObject]@{
                     Key       = $sk
-                    Label     = [string]$info.SettingsDescriptions[$sk]
+                    Label     = $descLabel
                     ValueType = $valType
                 })
             }

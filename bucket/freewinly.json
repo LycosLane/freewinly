@@ -1,10 +1,10 @@
 {
-    "version": "1.5.4",
+    "version": "1.5.5",
     "description": "Native, zero-dependency Windows 11 PC maintenance engine in pure PowerShell.",
     "homepage": "https://github.com/LycosLane/freewinly",
     "license": "MIT",
-    "url": "https://github.com/LycosLane/freewinly/releases/download/v1.5.4/FreeWinly.zip",
-    "hash": "CD563FD121A3FDAC9B1E1973B7425AA49B255FDE50025C2F93EE286D472FCB78",
+    "url": "https://github.com/LycosLane/freewinly/releases/download/v1.5.5/FreeWinly.zip",
+    "hash": "DA654CAE67A310E6375901060F57FE6D7B499EF5FB9F22DC7C24C500B5B0791A",
     "bin": [
         [
             "freewinly.cmd",

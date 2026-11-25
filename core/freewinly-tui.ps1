@@ -98,6 +98,8 @@ function Invoke-InteractiveMenu {
         [string]$ConfigPath,
         [Parameter(Mandatory = $true)]
         [string]$CoreDir,
+        [Parameter()]
+        [string]$ModulesDir = $null,
         [Parameter(Mandatory = $true)]
         [string]$LogFile,
         [Parameter()]
@@ -266,7 +268,14 @@ function Invoke-InteractiveMenu {
             } else {
                 $m = $item.Module
                 if ($item.ValueType -eq 'bool') {
-                    $subVal = [bool]$m.Settings.$($item.SubKey)
+                    $rawVal = $m.Settings.$($item.SubKey)
+                    $subVal = if ($rawVal -is [bool]) {
+                        $rawVal
+                    } elseif ($null -ne $rawVal -and $null -ne $rawVal.enabled) {
+                        [bool]$rawVal.enabled
+                    } else {
+                        [bool]$rawVal
+                    }
                     $subCheck = if ($subVal) { "[x]" } else { "[ ]" }
                     $line = "$pointer      $subCheck $($item.Label)"
                     $color = if ($isSelected) { "Cyan" } elseif ($m.Enabled -and $subVal) { "Green" } else { "DarkGray" }
@@ -456,7 +465,7 @@ function Invoke-InteractiveMenu {
             { $_ -in @("C", "A") } {
                 Clear-Host
                 $targetModules = @($DiscoveredModules | Where-Object { $_.Enabled })
-                & $DryRunCallback -TargetModules $targetModules
+                & $DryRunCallback -TargetModules $targetModules -OutputMode $OutputMode
                 Read-Host "`nPress Enter to return to menu"
             }
             "E" {
@@ -490,13 +499,13 @@ function Invoke-InteractiveMenu {
                 } else {
                     $Config | Add-Member -NotePropertyName outputMode -NotePropertyValue $OutputMode -Force
                 }
-                & $SaveConfigCallback
+                & $SaveConfigCallback -Countdown $Countdown -SubmenuView $SubmenuView -OutputMode $OutputMode
             }
             "T" {
                 $curIdx = $timerPresets.IndexOf($Countdown)
                 $nextIdx = if ($curIdx -ge 0 -and $curIdx -lt ($timerPresets.Count - 1)) { $curIdx + 1 } else { 0 }
                 $Countdown = $timerPresets[$nextIdx]
-                & $SaveConfigCallback
+                & $SaveConfigCallback -Countdown $Countdown -SubmenuView $SubmenuView -OutputMode $OutputMode
             }
             "W" {
                 Clear-Host
@@ -509,7 +518,7 @@ function Invoke-InteractiveMenu {
                 Start-Sleep -Milliseconds 900
             }
             "S" {
-                & $SaveConfigCallback
+                & $SaveConfigCallback -Countdown $Countdown -SubmenuView $SubmenuView -OutputMode $OutputMode
                 Write-Host "`n  -> Module selection, order, sub-options, and view saved to config.json!" -ForegroundColor Green
                 Start-Sleep -Milliseconds 800
             }
@@ -517,6 +526,16 @@ function Invoke-InteractiveMenu {
                 & (Join-Path $CoreDir "freewinly-init-config.ps1") -ConfigPath $ConfigPath
                 $configLoad = Get-SafeConfigFile -Path $ConfigPath -IsInteractive $IsInteractiveSession -DefaultConfig $DefaultConfigTemplate
                 $Config = $configLoad.Config
+                if ($ModulesDir -and (Test-Path -LiteralPath $ModulesDir)) {
+                    $refreshed = Get-DiscoveredModules -ModulesDir $ModulesDir -Config $Config
+                    $DiscoveredModules.Clear()
+                    foreach ($rm in $refreshed.DiscoveredModules) { $DiscoveredModules.Add($rm) }
+                    if ($OrderedBaseNames) {
+                        $OrderedBaseNames.Clear()
+                        foreach ($ob in $refreshed.OrderedBaseNames) { $OrderedBaseNames.Add($ob) }
+                    }
+                    $SubmenuView = $refreshed.SubmenuView
+                }
             }
             "I" {
                 & (Join-Path $CoreDir "freewinly-setup-launcher.ps1")

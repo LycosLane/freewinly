@@ -61,10 +61,11 @@ function Get-ProblemAdvice {
 }
 
 $problemDevices = [System.Collections.Generic.List[PSCustomObject]]::new()
+$queryFailed = $false
 
 try {
-    $entities = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-                Where-Object { $_.ConfigManagerErrorCode -ne 0 -and $_.ConfigManagerErrorCode -ne 22 }
+    $entities = Get-CimInstance Win32_PnPEntity -ErrorAction Stop |
+                Where-Object { $null -ne $_.ConfigManagerErrorCode -and $_.ConfigManagerErrorCode -ne 0 -and $_.ConfigManagerErrorCode -ne 22 }
 
     foreach ($e in $entities) {
         $problemDevices.Add([PSCustomObject]@{
@@ -76,16 +77,27 @@ try {
         })
     }
 } catch {
-    $pnp = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'OK' }
-    foreach ($p in $pnp) {
-        $problemDevices.Add([PSCustomObject]@{
-            Name        = $p.FriendlyName
-            Class       = $p.Class
-            ErrorCode   = 0
-            Actionable  = "Status: $($p.Status). Check Device Manager properties."
-            DeviceId    = $p.InstanceId
-        })
+    if ($LogFile) { Add-Content -Path $LogFile -Value "Hardware Check CIM query failed: $($_.Exception.Message)" -Encoding UTF8 }
+    try {
+        $pnp = Get-PnpDevice -ErrorAction Stop | Where-Object { $_.Status -ne 'OK' }
+        foreach ($p in $pnp) {
+            $problemDevices.Add([PSCustomObject]@{
+                Name        = $p.FriendlyName
+                Class       = $p.Class
+                ErrorCode   = 0
+                Actionable  = "Status: $($p.Status). Check Device Manager properties."
+                DeviceId    = $p.InstanceId
+            })
+        }
+    } catch {
+        $queryFailed = $true
+        Write-Host "Failed to query hardware status (see log for details)." -ForegroundColor Red
+        if ($LogFile) { Add-Content -Path $LogFile -Value "Hardware Check Get-PnpDevice fallback failed: $($_.Exception.Message)" -Encoding UTF8 }
     }
+}
+
+if ($queryFailed) {
+    return
 }
 
 if ($problemDevices.Count -eq 0) {

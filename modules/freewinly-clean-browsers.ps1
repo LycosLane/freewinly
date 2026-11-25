@@ -39,7 +39,7 @@ param(
     [string]$LogFile = $null
 )
 
-$minAgeDays   = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 3 }
+$minAgeDays   = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 3 }
 $cleanEdge    = if ($null -ne $Settings -and $null -ne $Settings.cleanEdge) { [bool]$Settings.cleanEdge } else { $true }
 $cleanChrome  = if ($null -ne $Settings -and $null -ne $Settings.cleanChrome) { [bool]$Settings.cleanChrome } else { $true }
 $cleanFirefox = if ($null -ne $Settings -and $null -ne $Settings.cleanFirefox) { [bool]$Settings.cleanFirefox } else { $true }
@@ -190,7 +190,6 @@ $targets = @(
 
 $totalBytes = 0
 $totalFreedFiles = 0
-$reportedAny = $false
 
 foreach ($target in $targets) {
     if (-not $target.Enabled) { continue }
@@ -206,23 +205,29 @@ foreach ($target in $targets) {
     $dirs = Get-TargetDirectories -PathPatterns $target.Paths
     if ($dirs.Count -eq 0) { continue }
 
-    # Find files older than threshold (skipping symlinks / reparse points)
+    # Find files older than threshold (iterative walk skipping reparse-point directories at any depth)
     $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-    foreach ($d in $dirs) {
-        if ($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
-        $found = Get-ChildItem -LiteralPath $d.FullName -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
-            (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
-            (($_.Directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) -and
-            $_.LastWriteTime -lt $cutoff
-        }
-        if ($found) {
-            foreach ($f in $found) { $files.Add($f) }
-        }
+    $dirQueue = [System.Collections.Generic.Queue[System.IO.DirectoryInfo]]::new()
+    foreach ($d in $dirs) { $dirQueue.Enqueue($d) }
+    while ($dirQueue.Count -gt 0) {
+        $curDir = $dirQueue.Dequeue()
+        if ($curDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
+        try {
+            foreach ($subDir in $curDir.GetDirectories()) {
+                if (-not ($subDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                    $dirQueue.Enqueue($subDir)
+                }
+            }
+            foreach ($f in $curDir.GetFiles()) {
+                if (-not ($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and $f.LastWriteTime -lt $cutoff) {
+                    $files.Add($f)
+                }
+            }
+        } catch { }
     }
 
     if ($files.Count -eq 0) { continue }
 
-    $reportedAny = $true
     $appBytes = ($files | Measure-Object -Property Length -Sum).Sum
     $appCount = $files.Count
 

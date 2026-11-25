@@ -42,6 +42,13 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [freewinly-update-windows] Windows OS & Security Updates [$Action] ---" -ForegroundColor Cyan
 
+$Session = $null
+$Searcher = $null
+$SearchResult = $null
+$UpdatesToDownload = $null
+$Downloader = $null
+$Installer = $null
+
 try {
     $cbsReboot = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
     $wuReboot  = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
@@ -93,18 +100,43 @@ try {
     Write-Host "Downloading $($UpdatesToDownload.Count) update(s)..." -ForegroundColor Cyan
     $Downloader = $Session.CreateUpdateDownloader()
     $Downloader.Updates = $UpdatesToDownload
-    $Downloader.Download() | Out-Null
+    $DownloadResult = $Downloader.Download()
+    if ($DownloadResult.ResultCode -notin @(2, 3)) {
+        Write-Host "Windows Update download failed (ResultCode: $($DownloadResult.ResultCode); see log for details)." -ForegroundColor Red
+        if ($LogFile) {
+            Add-Content -Path $LogFile -Value "Windows Update download failed: ResultCode $($DownloadResult.ResultCode) | HResult $($DownloadResult.HResult)" -Encoding UTF8
+        }
+        return
+    }
 
     Write-Host "Installing update(s)..." -ForegroundColor Cyan
     $Installer = $Session.CreateUpdateInstaller()
     $Installer.Updates = $UpdatesToDownload
     $InstallResult = $Installer.Install()
 
-    Write-Host "Windows Update ResultCode: $($InstallResult.ResultCode) (RebootRequired: $($InstallResult.RebootRequired))" -ForegroundColor Green
+    $resColor = switch ($InstallResult.ResultCode) {
+        2 { "Green" }
+        3 { "Yellow" }
+        default { "Red" }
+    }
+    $resLabel = switch ($InstallResult.ResultCode) {
+        2 { "Succeeded" }
+        3 { "SucceededWithErrors" }
+        4 { "Failed" }
+        5 { "Aborted" }
+        default { "ResultCode $($InstallResult.ResultCode)" }
+    }
+    Write-Host "Windows Update $resLabel (ResultCode: $($InstallResult.ResultCode), RebootRequired: $($InstallResult.RebootRequired))" -ForegroundColor $resColor
     if ($LogFile) {
-        Add-Content -Path $LogFile -Value "Windows Update ResultCode: $($InstallResult.ResultCode) | RebootRequired: $($InstallResult.RebootRequired)" -Encoding UTF8
+        Add-Content -Path $LogFile -Value "Windows Update $resLabel (ResultCode: $($InstallResult.ResultCode) | RebootRequired: $($InstallResult.RebootRequired))" -Encoding UTF8
     }
 } catch {
     Write-Host "Error during Windows Update: $($_.Exception.Message)" -ForegroundColor Red
     if ($LogFile) { Add-Content -Path $LogFile -Value "Error during Windows Update: $($_.Exception.Message)" -Encoding UTF8 }
+} finally {
+    foreach ($comObj in @($Installer, $Downloader, $UpdatesToDownload, $SearchResult, $Searcher, $Session)) {
+        if ($null -ne $comObj) {
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObj) | Out-Null } catch { }
+        }
+    }
 }

@@ -129,8 +129,8 @@ try {
         Write-Host "  [+] DISM Component Store cleanup completed successfully." -ForegroundColor Green
         if ($LogFile) { Add-Content -Path $LogFile -Value "DISM Component Store cleanup completed successfully (ResetBase: $resetBase)" -Encoding UTF8 }
     } else {
-        Write-Host "  [-] DISM completed with exit code $dismExit. Review 'C:\Windows\Logs\DISM\dism.log' for diagnostic details." -ForegroundColor Yellow
-        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM finished with exit code $dismExit (See C:\Windows\Logs\DISM\dism.log)" -Encoding UTF8 }
+        Write-Host "  [-] DISM failed with exit code $dismExit. Review 'C:\Windows\Logs\DISM\dism.log' for diagnostic details." -ForegroundColor Yellow
+        if ($LogFile) { Add-Content -Path $LogFile -Value "DISM failed with exit code $dismExit (See C:\Windows\Logs\DISM\dism.log)" -Encoding UTF8 }
     }
 } catch {
     Write-Host "  [-] Failed to start DISM: $($_.Exception.Message)" -ForegroundColor Red
@@ -146,8 +146,8 @@ if ($verifySystemFiles) {
             Write-Host "  [+] System file verification completed. No integrity violations found." -ForegroundColor Green
             if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification passed: No integrity violations." -Encoding UTF8 }
         } else {
-            Write-Host "  [-] System file verification finished with code $sfcExit. Review 'C:\Windows\Logs\CBS\cbs.log' for details." -ForegroundColor Yellow
-            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification finished with exit code $sfcExit (See C:\Windows\Logs\CBS\cbs.log)" -Encoding UTF8 }
+            Write-Host "  [-] System file verification failed with exit code $sfcExit. Review 'C:\Windows\Logs\CBS\cbs.log' for details." -ForegroundColor Yellow
+            if ($LogFile) { Add-Content -Path $LogFile -Value "SFC verification failed with exit code $sfcExit (See C:\Windows\Logs\CBS\cbs.log)" -Encoding UTF8 }
         }
     } catch {
         Write-Host "  [-] Failed to start SFC: $($_.Exception.Message)" -ForegroundColor Red

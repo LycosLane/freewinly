@@ -150,7 +150,7 @@ if ($Action -eq 'Info') {
 
 Write-Host "`n--- [freewinly-clean-apps] Desktop App Cache Cleanup [$Action] ---" -ForegroundColor Cyan
 
-$globalMinAgeDays = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [int]$Settings.minAgeDays } else { 3 }
+$globalMinAgeDays = if ($null -ne $Settings -and $null -ne $Settings.minAgeDays) { [math]::Max(0, [int]$Settings.minAgeDays) } else { 3 }
 $globalCutoff = (Get-Date).AddDays(-$globalMinAgeDays)
 Write-Host "Age threshold: files older than $globalMinAgeDays days (before $($globalCutoff.ToString('yyyy-MM-dd HH:mm')))`n" -ForegroundColor Gray
 
@@ -159,7 +159,9 @@ function Test-AppRunning {
     if (-not $ProcessNames -or $ProcessNames.Count -eq 0) { return $false }
     foreach ($p in $ProcessNames) {
         if ([string]::IsNullOrWhiteSpace($p)) { continue }
-        $procs = Get-Process -Name $p -ErrorAction SilentlyContinue
+        $cleanProc = $p.Trim() -replace '\.exe$', ''
+        if ([string]::IsNullOrWhiteSpace($cleanProc)) { continue }
+        $procs = Get-Process -Name $cleanProc -ErrorAction SilentlyContinue
         if ($procs) { return $true }
     }
     return $false
@@ -202,8 +204,9 @@ function Test-CleanAppPathSafety {
         return @{ IsValid = $false; Reason = "Drive roots are strictly forbidden" }
     }
 
-    # Reject invalid path characters (excluding wildcard *)
-    if ($p -match '[\<\>\"\|\?\:]' -and $p -notmatch '^[a-zA-Z]:') {
+    # Reject invalid path characters (excluding wildcard * and drive-letter colon)
+    $noDrive = $p -replace '^[a-zA-Z]:', ''
+    if ($noDrive -match '[\<\>\"\|\?\:]') {
         return @{ IsValid = $false; Reason = "Path contains invalid characters" }
     }
 
@@ -327,7 +330,7 @@ if ($null -ne $Settings) {
         }
 
         foreach ($ck in $customKeys) {
-            $cDef = $customAppsObj.$ck
+            $cDef = if ($customAppsObj -is [System.Collections.IDictionary]) { $customAppsObj[$ck] } else { $customAppsObj.$ck }
             if (-not $cDef) { continue }
 
             $cName = if ($cDef.name) { [string]$cDef.name } else { [string]$ck }
@@ -351,20 +354,13 @@ if ($null -ne $Settings) {
 
 $totalBytes = 0
 $totalFreedFiles = 0
-$reportedAny = $false
 
 foreach ($app in $appsToProcess) {
     if (-not $app.Enabled) { continue }
 
     $appName = $app.Name
 
-    # 1. Skip if application is currently open
-    if (Test-AppRunning -ProcessNames $app.Process) {
-        Write-Host "  [-] [Skipped] $appName is currently running." -ForegroundColor Yellow
-        continue
-    }
-
-    # 2. Strict path safety enforcement
+    # 1. Strict path safety enforcement (always validate paths before skipping running processes)
     $safePaths = [System.Collections.Generic.List[string]]::new()
     $isAppIgnored = $false
 
@@ -382,30 +378,43 @@ foreach ($app in $appsToProcess) {
         continue
     }
 
+    # 2. Skip if application is currently open
+    if (Test-AppRunning -ProcessNames $app.Process) {
+        Write-Host "  [-] [Skipped] $appName is currently running." -ForegroundColor Yellow
+        continue
+    }
+
     # 3. Locate target cache directories
     $dirs = Get-TargetDirectories -PathPatterns $safePaths
     if ($dirs.Count -eq 0) { continue }
 
-    # 4. Effective age cutoff calculation (respecting 0)
-    $effectiveDays = if ($null -ne $app.MinAgeDays) { [int]$app.MinAgeDays } else { $globalMinAgeDays }
+    # 4. Effective age cutoff calculation (clamped >= 0)
+    $effectiveDays = if ($null -ne $app.MinAgeDays) { [math]::Max(0, [int]$app.MinAgeDays) } else { $globalMinAgeDays }
     $effectiveCutoff = (Get-Date).AddDays(-$effectiveDays)
 
-    # 5. Enumerate eligible cache files (fast recursive pass; skipping reparse points)
+    # 5. Enumerate eligible cache files (iterative walk skipping reparse-point directories at any depth)
     $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-    foreach ($d in $dirs) {
-        $found = Get-ChildItem -LiteralPath $d.FullName -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object {
-            (-not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) -and
-            (($_.Directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) -and
-            ($_.LastWriteTime -lt $effectiveCutoff)
-        }
-        if ($found) {
-            foreach ($f in $found) { $files.Add($f) }
-        }
+    $dirQueue = [System.Collections.Generic.Queue[System.IO.DirectoryInfo]]::new()
+    foreach ($d in $dirs) { $dirQueue.Enqueue($d) }
+    while ($dirQueue.Count -gt 0) {
+        $curDir = $dirQueue.Dequeue()
+        if ($curDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
+        try {
+            foreach ($subDir in $curDir.GetDirectories()) {
+                if (-not ($subDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                    $dirQueue.Enqueue($subDir)
+                }
+            }
+            foreach ($f in $curDir.GetFiles()) {
+                if (-not ($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and $f.LastWriteTime -lt $effectiveCutoff) {
+                    $files.Add($f)
+                }
+            }
+        } catch { }
     }
 
     if ($files.Count -eq 0) { continue }
 
-    $reportedAny = $true
     $appBytes = ($files | Measure-Object -Property Length -Sum).Sum
     $appCount = $files.Count
 

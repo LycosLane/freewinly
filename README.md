@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.5.4 - Open Source Windows Engine      
+         FreeWinly v1.5.5 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -239,7 +239,7 @@ powershell -ExecutionPolicy Bypass -File .\core\freewinly-uninstall.ps1
 
 ## Command-Line Usage
 
-FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom shortcuts. If you toggle **`[ P ]`** in the menu (or run `.\core\freewinly-setup-path.ps1 -Action Add`), you can type `freewinly-` and press `Tab` from any terminal to auto-complete any tool or module:
+FreeWinly can be run directly from PowerShell scripts, CI workflows, or custom shortcuts. If you toggle **`[ P ]`** in the menu (or run `.\core\freewinly-setup-path.ps1 -Action Install`), you can type `freewinly-` and press `Tab` from any terminal to auto-complete any tool or module:
 
 ```powershell
 # Interactive mode (unelevated start, 10s countdown, menu)
