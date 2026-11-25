@@ -226,16 +226,19 @@ function Invoke-InteractiveMenu {
         $actions = @(
             @{ Label = "[ Enter ]  Run All Checked Tasks [x]"; Key = "Run" },
             @{ Label = "[   C   ]  Dry-Run Check / Diagnostic Audit (No changes)"; Key = "C" },
-            @{ Label = "[   V   ]  Output Mode: [ $OutputMode ] (Press V: Standard, Advanced)"; Key = "V" },
-            @{ Label = "[   E   ]  Sub-Options View: [ $submenuViewText ] (Press E: Hidden, Custom, Expanded)"; Key = "E" },
-            @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
-            @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
-            @{ Label = "[   P   ]  User PATH CLI Auto-Complete: [ $pathStatus ] (Press P to toggle)"; Key = "P" },
             @{ Label = "[   S   ]  Save Selection & Order as Default"; Key = "S" },
-            @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O" },
+
+            @{ Label = "[   E   ]  Sub-Options View: [ $submenuViewText ] (Press E: Hidden, Custom, Expanded)"; Key = "E"; GroupBreak = $true },
+            @{ Label = "[   V   ]  Output Mode: [ $OutputMode ] (Press V: Standard, Advanced)"; Key = "V" },
+            @{ Label = "[   T   ]  Auto-Start Countdown: [ $timerText ] (Press T to cycle)"; Key = "T" },
+
+            @{ Label = "[   O   ]  Run Configuration & Exclusion Wizard"; Key = "O"; GroupBreak = $true },
+            @{ Label = "[   W   ]  Task Scheduler: [ $schedSummary ] (Press W to configure)"; Key = "W" },
             @{ Label = "[   I   ]  Install / Update Start Menu Launcher"; Key = "I" },
-            @{ Label = "[   U   ]  Clean Windows Integrations & Shortcuts"; Key = "U" },
+            @{ Label = "[   P   ]  User PATH CLI Auto-Complete: [ $pathStatus ] (Press P to toggle)"; Key = "P" },
             @{ Label = "[   G   ]  Check for FreeWinly Updates (Opt-in)"; Key = "G" },
+
+            @{ Label = "[   U   ]  Clean Windows Integrations & Shortcuts"; Key = "U"; GroupBreak = $true },
             @{ Label = "[   Q   ]  Quit Without Running"; Key = "Q" }
         )
         $totalOptions = $visibleItems.Count + $actions.Count
@@ -318,6 +321,7 @@ function Invoke-InteractiveMenu {
         Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkGray
 
         for ($j = 0; $j -lt $actions.Count; $j++) {
+            if ($actions[$j].GroupBreak) { Write-Host "" }
             $actionIdx = $visibleItems.Count + $j
             $pointer = if ($actionIdx -eq $selectedIndex) { "> " } else { "  " }
             $color   = if ($actionIdx -eq $selectedIndex) { "Yellow" } else { "White" }

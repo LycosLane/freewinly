@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.6.0 - Open Source Windows Engine      
+         FreeWinly v1.6.1 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:
@@ -159,16 +159,19 @@ Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-
 ------------------------------------------------------------
 > [ Enter ]  Run All Checked Tasks [x]
   [   C   ]  Dry-Run Check / Diagnostic Audit (No changes)
-  [   V   ]  Output Mode: [ Standard ] (Press V: Standard, Advanced)
-  [   E   ]  Sub-Options View: [ Custom ] (Press E: Hidden, Custom, Expanded)
-  [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle)
-  [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
-  [   P   ]  User PATH CLI Auto-Complete: [ Disabled ] (Press P to toggle)
   [   S   ]  Save Selection & Order as Default
+
+  [   E   ]  Sub-Options View: [ Custom ] (Press E: Hidden, Custom, Expanded)
+  [   V   ]  Output Mode: [ Standard ] (Press V: Standard, Advanced)
+  [   T   ]  Auto-Start Countdown: [ 10s ] (Press T to cycle)
+
   [   O   ]  Run Configuration & Exclusion Wizard
+  [   W   ]  Task Scheduler: [ Weekly on Sunday at 12:00 ] (Press W to configure)
   [   I   ]  Install / Update Start Menu Launcher
-  [   U   ]  Clean Windows Integrations & Shortcuts
+  [   P   ]  User PATH CLI Auto-Complete: [ Disabled ] (Press P to toggle)
   [   G   ]  Check for FreeWinly Updates (Opt-in)
+
+  [   U   ]  Clean Windows Integrations & Shortcuts
   [   Q   ]  Quit Without Running
 ```
 
