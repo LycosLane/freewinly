@@ -217,9 +217,18 @@ foreach ($pkg in $toUpdate) {
     if ($exitCode -eq 0) {
         Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
         Write-Host "(${elapsed}s)" -ForegroundColor Gray
+    } elseif ($exitCode -eq -2147009240 -or $outStr -match '0x80073d28|administrator privileges are required|elevation required') {
+        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+        Write-Host "(Requires Admin) (${elapsed}s)" -ForegroundColor Gray
     } elseif ($outStr -match 'different from the current version installed|different install technology') {
         Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
         Write-Host "(Manual install needed) (${elapsed}s)" -ForegroundColor Gray
+    } elseif ($exitCode -eq -1978335212) {
+        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+        Write-Host "(App in use - close and retry) (${elapsed}s)" -ForegroundColor Gray
+    } elseif ($exitCode -eq 3010) {
+        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+        Write-Host "(Restart required) (${elapsed}s)" -ForegroundColor Gray
     } else {
         Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
         Write-Host "(ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Gray

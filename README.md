@@ -122,7 +122,7 @@ Download **`FreeWinly4LLM.zip`** from [Releases](https://github.com/LycosLane/fr
 
 ```text
 ============================================================
-         FreeWinly v1.6.3 - Open Source Windows Engine      
+         FreeWinly v1.7.0 - Open Source Windows Engine      
         Freeing Windows from bloatware, caches & fees       
 ============================================================
 Use [Up/Down] to navigate, [Space] to toggle, [Tab/Arrows] for sub-options, [+/-] to reorder:

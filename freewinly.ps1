@@ -556,7 +556,7 @@ foreach ($m in $activeModules) {
 }
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-$needsAdmin = ($activeModules | Where-Object { $_.RequiresAdmin -eq $true }).Count -gt 0
+$needsAdmin = @($activeModules | Where-Object { $_.RequiresAdmin -eq $true }).Count -gt 0
 
 if ($needsAdmin -and -not $isAdmin) {
     Save-ConfigState
@@ -621,157 +621,306 @@ if ($config -and $config.install -and $config.install.Count -gt 0) {
     }
 }
 
-# 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
-if ($outputMode -eq 'Standard') {
-    Write-Host "`nExecuting $($activeModules.Count) active maintenance module(s) [Standard Mode]:`n" -ForegroundColor Cyan
-    $totalCount = $activeModules.Count
-    $totalDigits = "$totalCount".Length
-    $step = 0
-    foreach ($m in $activeModules) {
-        $step++
-        $stepStr = "$step".PadLeft($totalDigits)
-        $stepPrefix = "[ $stepStr/$totalCount ]"
-        $paddedName = "$($m.Name)".PadRight(35, '.')
-        Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+function Get-WingetNoticeInfo {
+    param([int]$ExitCode, [string]$OutputText)
+    if ($ExitCode -eq -2147009240 -or $OutputText -match '0x80073d28|administrator privileges are required|elevation required') {
+        return @{ Text = 'Requires Admin'; NeedsAdmin = $true }
+    } elseif ($OutputText -match 'different from the current version installed|different install technology') {
+        return @{ Text = 'Manual install needed'; NeedsAdmin = $false }
+    } elseif ($ExitCode -eq -1978335189) {
+        return @{ Text = 'No applicable update'; NeedsAdmin = $false }
+    } elseif ($ExitCode -eq -1978335212) {
+        return @{ Text = 'App in use - close and retry'; NeedsAdmin = $false }
+    } elseif ($ExitCode -eq 1618) {
+        return @{ Text = 'Another installer running'; NeedsAdmin = $false }
+    } elseif ($ExitCode -eq 3010) {
+        return @{ Text = 'Restart required'; NeedsAdmin = $false }
+    }
+    return @{ Text = "ExitCode $ExitCode"; NeedsAdmin = $false }
+}
 
-        if ($m.BaseName -eq 'freewinly-update-software') {
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            try {
-                if (Get-Command winget -ErrorAction SilentlyContinue) {
-                    & winget source update --disable-interactivity 2>&1 | Out-Null
-                }
-                $avail = & $m.Path -Action Scan
-                $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
-                # Clean expired postponements in Standard mode just like module Run mode
-                if ($cleanSettings.excluded) {
-                    $todayDate = (Get-Date).Date
-                    $keptExcl = [System.Collections.Generic.List[object]]::new()
-                    $exclChanged = $false
-                    foreach ($exItem in $cleanSettings.excluded) {
-                        if ($exItem -is [string]) {
-                            if (-not [string]::IsNullOrWhiteSpace($exItem)) { $keptExcl.Add($exItem) }
-                        } elseif ($exItem -and $exItem.id) {
-                            $uDate = if ($exItem.until) { try { [datetime]$exItem.until } catch { $null } } else { $null }
-                            if (-not $uDate -or $todayDate -le $uDate) {
-                                $keptExcl.Add($exItem)
-                            } else {
-                                $exclChanged = $true
-                                Add-Content -Path $logFile -Value "Expired postponement removed: $($exItem.id)" -Encoding UTF8
-                            }
-                        }
-                    }
-                    if ($exclChanged -and $m.Settings -is [PSCustomObject]) {
-                        $m.Settings | Add-Member -NotePropertyName excluded -NotePropertyValue @($keptExcl) -Force
-                    }
-                }
-                $activeExcludes = Get-ActiveWingetExclusions -ExcludedSource $cleanSettings.excluded
-                $toUpdate = [System.Collections.Generic.List[PSCustomObject]]::new()
-                foreach ($pkg in $avail) {
-                    $id = $pkg.Id
-                    $name = $pkg.Name
-                    if ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) }) {
-                        Add-Content -Path $logFile -Value "SKIPPED: $name ($id)" -Encoding UTF8
-                    } else {
-                        $toUpdate.Add($pkg)
-                    }
-                }
+function Get-ModuleNoticeSummary {
+    param([PSCustomObject]$Module, [string]$OutputText)
+    if (-not $OutputText) {
+        return [PSCustomObject]@{ HasNotice = $false; Reason = $null; Retryable = $false; NeedsAdmin = $false }
+    }
 
-                if ($toUpdate.Count -eq 0) {
-                    $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
-                    $sw.Stop()
-                    if ($modOutput) { $modOutput | Add-Content -Path $logFile -Encoding UTF8 }
-                    Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
-                    Write-Host "(All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
-                } else {
-                    Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Cyan
-                    $updatedCount = 0
-                    $noticeCount  = 0
-                    $subIndent = "  " + "".PadRight($stepPrefix.Length + 1)
-                    foreach ($pkg in $toUpdate) {
-                        $appName = $pkg.Name
-                        if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
-                        $padApp = "$subIndent- $appName".PadRight(35 + $subIndent.Length)
-                        $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
-                        $newVer = "$($pkg.AvailableVersion)".PadRight(12)
-                        Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
-
-                        $pkgSw = [System.Diagnostics.Stopwatch]::StartNew()
-                        $out = & winget upgrade --id $pkg.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
-                        $pkgSw.Stop()
-                        $exitCode = $LASTEXITCODE
-                        $elapsed = [math]::Round($pkgSw.Elapsed.TotalSeconds, 1)
-
-                        if ($logFile) {
-                            $out | Add-Content -Path $logFile -Encoding UTF8
-                            Add-Content -Path $logFile -Value "RESULT: $($pkg.Id) => ExitCode $exitCode" -Encoding UTF8
-                        }
-
-                        $outStr = ($out | Out-String)
-                        if ($exitCode -eq 0) {
-                            $updatedCount++
-                            Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
-                            Write-Host "(${elapsed}s)" -ForegroundColor Gray
-                        } elseif ($outStr -match 'different from the current version installed|different install technology') {
-                            $noticeCount++
-                            Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
-                            Write-Host "(Manual install needed) (${elapsed}s)" -ForegroundColor Gray
-                        } else {
-                            $noticeCount++
-                            Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
-                            Write-Host "(ExitCode $exitCode) (${elapsed}s)" -ForegroundColor Gray
-                        }
-                    }
-                    $sw.Stop()
-                    $totalElapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
-                    $summaryDetails = "$updatedCount updated"
-                    if ($noticeCount -gt 0) { $summaryDetails += ", $noticeCount notice$(if ($noticeCount -gt 1) { 's' })" }
-                    $statusColor = if ($noticeCount -gt 0) { "Yellow" } else { "Green" }
-                    $statusTag   = if ($noticeCount -gt 0) { "[ Notice ]" } else { "[ OK ]" }
-                    Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
-                    Write-Host "$statusTag " -NoNewline -ForegroundColor $statusColor
-                    Write-Host "($summaryDetails) (${totalElapsed}s)" -ForegroundColor Gray
-                }
-            } catch {
-                $sw.Stop()
-                $moduleErrors++
-                Write-Host "[ Error ]" -ForegroundColor Red
-                Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+    if ($Module.BaseName -in @('freewinly-clean-browsers', 'freewinly-clean-apps')) {
+        $skippedApps = [System.Collections.Generic.List[string]]::new()
+        foreach ($line in ($OutputText -split '\r?\n')) {
+            if ($line -match 'Skipped\s+(.+?)\s*\(Application is open') {
+                $skippedApps.Add($matches[1].Trim())
+            } elseif ($line -match '\[Skipped\]\s+(.+?)\s+is currently running') {
+                $skippedApps.Add($matches[1].Trim())
             }
-        } else {
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            try {
-                $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
-                $sw.Stop()
-                $modStr = ($modOutput | Out-String)
-                if (-not [string]::IsNullOrWhiteSpace($modStr)) {
-                    Add-Content -Path $logFile -Value $modStr.TrimEnd() -Encoding UTF8
-                }
-                if ($modStr -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $modStr -notmatch 'Zero broken|0 errors|0 failed') {
-                    Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
-                    Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
-                } else {
-                    Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
-                    Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
-                }
-            } catch {
-                $sw.Stop()
-                $moduleErrors++
-                Write-Host "[ Error ]" -ForegroundColor Red
-                Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+        }
+        if ($skippedApps.Count -gt 0) {
+            return [PSCustomObject]@{
+                HasNotice  = $true
+                Reason     = "Skipped (open): $($skippedApps -join ', ') - close and press R to retry"
+                Retryable  = $true
+                NeedsAdmin = $false
             }
         }
     }
-} else {
-    Write-Log "`nExecuting $($activeModules.Count) active maintenance module(s)..." "Cyan"
-    foreach ($m in $activeModules) {
-        try {
-            & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile
-        } catch {
-            $moduleErrors++
-            Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+
+    if ($Module.BaseName -eq 'freewinly-check-eventlog' -and $OutputText -match 'Found\s+(\d+)\s+recurring error pattern') {
+        $evCount = $matches[1]
+        $examples = [System.Collections.Generic.List[string]]::new()
+        foreach ($line in ($OutputText -split '\r?\n')) {
+            if ($line -match "Application\s+'([^']+)'\s+is crashing") {
+                if (-not $examples.Contains($matches[1])) { $examples.Add($matches[1]) }
+            } elseif ($line -match 'Sample:\s+The\s+(.+?)\s+service failed') {
+                if (-not $examples.Contains($matches[1])) { $examples.Add($matches[1]) }
+            }
+            if ($examples.Count -ge 2) { break }
         }
+        $exStr = if ($examples.Count -gt 0) { " ($($examples -join ', '))" } else { "" }
+        return [PSCustomObject]@{
+            HasNotice  = $true
+            Reason     = "$evCount recurring event(s)$exStr - press L for details"
+            Retryable  = $false
+            NeedsAdmin = $false
+        }
+    }
+
+    if ($Module.BaseName -eq 'freewinly-check-hardware' -and $OutputText -match 'Found\s+(\d+)\s+device') {
+        return [PSCustomObject]@{
+            HasNotice  = $true
+            Reason     = "$($matches[1]) device warning(s) - press L for details"
+            Retryable  = $false
+            NeedsAdmin = $false
+        }
+    }
+
+    if ($OutputText -match '(?<!0\s+)\b(Exception|Failed|Error)\b' -and $OutputText -notmatch 'Zero broken|0 errors|0 failed') {
+        $needsElev = ($OutputText -match 'Access denied|Administrator privileges|elevation required|0x80073d28')
+        $reasonLine = ($OutputText -split '\r?\n' | Where-Object { $_ -match '(?<!0\s+)\b(Exception|Failed|Error)\b' } | Select-Object -First 1)
+        if ($reasonLine) {
+            $reasonLine = $reasonLine.Trim()
+            if ($reasonLine.Length -gt 95) { $reasonLine = $reasonLine.Substring(0, 92) + '...' }
+        } else {
+            $reasonLine = 'Completed with warnings (press L for log)'
+        }
+        return [PSCustomObject]@{
+            HasNotice  = $true
+            Reason     = if ($needsElev) { "$reasonLine (requires Admin)" } else { $reasonLine }
+            Retryable  = ($Module.BaseName -notmatch '^freewinly-check-')
+            NeedsAdmin = $needsElev
+        }
+    }
+
+    return [PSCustomObject]@{ HasNotice = $false; Reason = $null; Retryable = $false; NeedsAdmin = $false }
+}
+
+function Show-RunSummary {
+    param([array]$Notices)
+    if (-not $Notices -or $Notices.Count -eq 0) { return }
+    Write-Host "`n--- Summary / Attention Needed ---" -ForegroundColor Yellow
+    foreach ($n in $Notices) {
+        Write-Host "  * $($n.Module.Name): " -NoNewline -ForegroundColor White
+        Write-Host $n.Reason -ForegroundColor Yellow
     }
 }
+
+function Invoke-ModuleBatch {
+    param([array]$TargetModules)
+    $batchNotices = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $batchErrors  = 0
+
+    if ($outputMode -eq 'Standard') {
+        Write-Host "`nExecuting $($TargetModules.Count) active maintenance module(s) [Standard Mode]:`n" -ForegroundColor Cyan
+        $totalCount = $TargetModules.Count
+        $totalDigits = "$totalCount".Length
+        $step = 0
+        foreach ($m in $TargetModules) {
+            $step++
+            $stepStr = "$step".PadLeft($totalDigits)
+            $stepPrefix = "[ $stepStr/$totalCount ]"
+            $paddedName = "$($m.Name)".PadRight(35, '.')
+            Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+
+            if ($m.BaseName -eq 'freewinly-update-software') {
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                try {
+                    if (Get-Command winget -ErrorAction SilentlyContinue) {
+                        & winget source update --disable-interactivity 2>&1 | Out-Null
+                    }
+                    $avail = & $m.Path -Action Scan
+                    $cleanSettings = if ($m.Settings) { $m.Settings } else { @{} }
+                    if ($cleanSettings.excluded) {
+                        $todayDate = (Get-Date).Date
+                        $keptExcl = [System.Collections.Generic.List[object]]::new()
+                        $exclChanged = $false
+                        foreach ($exItem in $cleanSettings.excluded) {
+                            if ($exItem -is [string]) {
+                                if (-not [string]::IsNullOrWhiteSpace($exItem)) { $keptExcl.Add($exItem) }
+                            } elseif ($exItem -and $exItem.id) {
+                                $uDate = if ($exItem.until) { try { [datetime]$exItem.until } catch { $null } } else { $null }
+                                if (-not $uDate -or $todayDate -le $uDate) {
+                                    $keptExcl.Add($exItem)
+                                } else {
+                                    $exclChanged = $true
+                                    Add-Content -Path $logFile -Value "Expired postponement removed: $($exItem.id)" -Encoding UTF8
+                                }
+                            }
+                        }
+                        if ($exclChanged -and $m.Settings -is [PSCustomObject]) {
+                            $m.Settings | Add-Member -NotePropertyName excluded -NotePropertyValue @($keptExcl) -Force
+                        }
+                    }
+                    $activeExcludes = Get-ActiveWingetExclusions -ExcludedSource $cleanSettings.excluded
+                    $toUpdate = [System.Collections.Generic.List[PSCustomObject]]::new()
+                    foreach ($pkg in $avail) {
+                        $id = $pkg.Id
+                        $name = $pkg.Name
+                        if ($activeExcludes | Where-Object { $id -eq $_ -or $name -match [regex]::Escape($_) }) {
+                            Add-Content -Path $logFile -Value "SKIPPED: $name ($id)" -Encoding UTF8
+                        } else {
+                            $toUpdate.Add($pkg)
+                        }
+                    }
+
+                    if ($toUpdate.Count -eq 0) {
+                        $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
+                        $sw.Stop()
+                        if ($modOutput) { Add-Content -Path $logFile -Value ($modOutput | Out-String).TrimEnd() -Encoding UTF8 }
+                        Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                        Write-Host "(All packages up to date) ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
+                    } else {
+                        Write-Host "[ $($toUpdate.Count) Pending Update$(if ($toUpdate.Count -gt 1) { 's' }) ]" -ForegroundColor Cyan
+                        $updatedCount = 0
+                        $noticeCount  = 0
+                        $failedPkgReasons = [System.Collections.Generic.List[string]]::new()
+                        $pkgNeedsAdmin = $false
+                        $subIndent = "  " + "".PadRight($stepPrefix.Length + 1)
+                        foreach ($pkg in $toUpdate) {
+                            $appName = $pkg.Name
+                            if ($appName.Length -gt 24) { $appName = $appName.Substring(0, 21) + "..." }
+                            $padApp = "$subIndent- $appName".PadRight(35 + $subIndent.Length)
+                            $oldVer = "$($pkg.InstalledVersion)".PadRight(10)
+                            $newVer = "$($pkg.AvailableVersion)".PadRight(12)
+                            Write-Host "$padApp $oldVer -> $newVer " -NoNewline -ForegroundColor White
+
+                            $pkgSw = [System.Diagnostics.Stopwatch]::StartNew()
+                            $out = & winget upgrade --id $pkg.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+                            $pkgSw.Stop()
+                            $exitCode = $LASTEXITCODE
+                            $elapsed = [math]::Round($pkgSw.Elapsed.TotalSeconds, 1)
+
+                            if ($logFile) {
+                                $out | Add-Content -Path $logFile -Encoding UTF8
+                                Add-Content -Path $logFile -Value "RESULT: $($pkg.Id) => ExitCode $exitCode" -Encoding UTF8
+                            }
+
+                            $outStr = ($out | Out-String)
+                            if ($exitCode -eq 0) {
+                                $updatedCount++
+                                Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                                Write-Host "(${elapsed}s)" -ForegroundColor Gray
+                            } else {
+                                $noticeCount++
+                                $wInfo = Get-WingetNoticeInfo -ExitCode $exitCode -OutputText $outStr
+                                if ($wInfo.NeedsAdmin) { $pkgNeedsAdmin = $true }
+                                $failedPkgReasons.Add("$($pkg.Id) ($($wInfo.Text))")
+                                Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+                                Write-Host "($($wInfo.Text)) (${elapsed}s)" -ForegroundColor Gray
+                            }
+                        }
+                        $sw.Stop()
+                        $totalElapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+                        $summaryDetails = "$updatedCount updated"
+                        if ($noticeCount -gt 0) {
+                            $summaryDetails += ", $noticeCount notice$(if ($noticeCount -gt 1) { 's' })"
+                            $batchNotices.Add([PSCustomObject]@{
+                                Module     = $m
+                                Reason     = $failedPkgReasons -join '; '
+                                Retryable  = $true
+                                NeedsAdmin = $pkgNeedsAdmin
+                            })
+                        }
+                        $statusColor = if ($noticeCount -gt 0) { "Yellow" } else { "Green" }
+                        $statusTag   = if ($noticeCount -gt 0) { "[ Notice ]" } else { "[ OK ]" }
+                        Write-Host "  $stepPrefix $paddedName " -NoNewline -ForegroundColor White
+                        Write-Host "$statusTag " -NoNewline -ForegroundColor $statusColor
+                        Write-Host "($summaryDetails) (${totalElapsed}s)" -ForegroundColor Gray
+                    }
+                } catch {
+                    $sw.Stop()
+                    $batchErrors++
+                    Write-Host "[ Error ]" -ForegroundColor Red
+                    Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+                    $batchNotices.Add([PSCustomObject]@{
+                        Module     = $m
+                        Reason     = $_.Exception.Message
+                        Retryable  = $true
+                        NeedsAdmin = $false
+                    })
+                }
+            } else {
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                try {
+                    $modOutput = & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile *>&1
+                    $sw.Stop()
+                    $modStr = ($modOutput | Out-String)
+                    if (-not [string]::IsNullOrWhiteSpace($modStr)) {
+                        Add-Content -Path $logFile -Value $modStr.TrimEnd() -Encoding UTF8
+                    }
+                    $noticeInfo = Get-ModuleNoticeSummary -Module $m -OutputText $modStr
+                    if ($noticeInfo.HasNotice) {
+                        Write-Host "[ Notice ] " -NoNewline -ForegroundColor Yellow
+                        Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
+                        $batchNotices.Add([PSCustomObject]@{
+                            Module     = $m
+                            Reason     = $noticeInfo.Reason
+                            Retryable  = $noticeInfo.Retryable
+                            NeedsAdmin = $noticeInfo.NeedsAdmin
+                        })
+                    } else {
+                        Write-Host "[ OK ] " -NoNewline -ForegroundColor Green
+                        Write-Host "($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
+                    }
+                } catch {
+                    $sw.Stop()
+                    $batchErrors++
+                    Write-Host "[ Error ]" -ForegroundColor Red
+                    Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+                    $batchNotices.Add([PSCustomObject]@{
+                        Module     = $m
+                        Reason     = $_.Exception.Message
+                        Retryable  = ($m.BaseName -notmatch '^freewinly-check-')
+                        NeedsAdmin = $false
+                    })
+                }
+            }
+        }
+    } else {
+        Write-Log "`nExecuting $($TargetModules.Count) active maintenance module(s)..." "Cyan"
+        foreach ($m in $TargetModules) {
+            try {
+                & $m.Path -Action Run -Settings $m.Settings -LogFile $logFile
+            } catch {
+                $batchErrors++
+                Write-Log "Module Error ($($m.Name)): $($_.Exception.Message)" "Red"
+                $batchNotices.Add([PSCustomObject]@{
+                    Module     = $m
+                    Reason     = $_.Exception.Message
+                    Retryable  = ($m.BaseName -notmatch '^freewinly-check-')
+                    NeedsAdmin = $false
+                })
+            }
+        }
+    }
+
+    return [PSCustomObject]@{
+        Notices = @($batchNotices)
+        Errors  = $batchErrors
+    }
+}
+
+# 6.3 RUN ENABLED MODULES IN CONFIGURED SEQUENCE
+$batchResult = Invoke-ModuleBatch -TargetModules $activeModules
+$moduleErrors += $batchResult.Errors
 
 # 6.4 POST-COMMANDS HOOK (With Prompt Injection Security Firewall)
 if ($config -and $config.postCommands -and $config.postCommands.Count -gt 0) {
@@ -793,6 +942,9 @@ if ($configModified -and (Test-Path (Split-Path -Parent $ConfigPath))) {
     Write-Log "Configuration updated." "Green"
 }
 
+$currentNotices = @($batchResult.Notices)
+Show-RunSummary -Notices $currentNotices
+
 if ($moduleErrors -eq 0) {
     Write-Log "`n=== FreeWinly Finished Successfully ===" "Green"
 } else {
@@ -806,9 +958,18 @@ if (-not $configWasCorrupted -and $moduleErrors -eq 0) {
 }
 
 if ($isInteractiveSession) {
-    Write-Host "Press [L] to open log file, or [Enter / Esc] to close this window..." -ForegroundColor Cyan
     try {
         while ($true) {
+            $retryModules = @($currentNotices | Where-Object { $_.Retryable } | ForEach-Object { $_.Module } | Select-Object -Unique)
+            $canElevateRetry = (-not $isAdmin) -and ($retryModules.Count -gt 0)
+
+            $promptParts = [System.Collections.Generic.List[string]]::new()
+            if ($retryModules.Count -gt 0) { $promptParts.Add('[R] retry affected') }
+            if ($canElevateRetry)        { $promptParts.Add('[E] retry as Admin') }
+            $promptParts.Add('[L] open log')
+            $promptParts.Add('[Enter / Esc] close')
+            Write-Host ("Press " + ($promptParts -join ', ') + "...") -ForegroundColor Cyan
+
             $k = [Console]::ReadKey($true)
             if ($k.Key -in @('Enter', 'Escape', 'Q')) {
                 break
@@ -819,9 +980,31 @@ if ($isInteractiveSession) {
                     } catch {
                         Start-Process -FilePath "notepad.exe" -ArgumentList @($logFile) -ErrorAction SilentlyContinue
                     }
-                    Write-Host "Opened log file. Press [Enter / Esc] when ready to close." -ForegroundColor Gray
+                    Write-Host "Opened log file." -ForegroundColor Gray
                 } else {
                     Write-Host "Log file not found at '$logFile'." -ForegroundColor Yellow
+                }
+            } elseif ($k.Key -eq 'R' -and $retryModules.Count -gt 0) {
+                $retryResult = Invoke-ModuleBatch -TargetModules $retryModules
+                $nonRetryNotices = @($currentNotices | Where-Object { -not $_.Retryable })
+                $currentNotices = @($nonRetryNotices) + @($retryResult.Notices)
+                $moduleErrors = $retryResult.Errors
+                if ($retryResult.Notices.Count -eq 0 -and $retryResult.Errors -eq 0) {
+                    Write-Host "`n[OK] All retried items completed cleanly!" -ForegroundColor Green
+                }
+                Show-RunSummary -Notices $currentNotices
+            } elseif ($k.Key -eq 'E' -and $canElevateRetry) {
+                $retryNames = ($retryModules | Select-Object -ExpandProperty BaseName) -join ','
+                $psHost = try { (Get-Process -Id $PID).Path } catch { $null }
+                if (-not $psHost -or -not (Test-Path $psHost)) { $psHost = 'powershell.exe' }
+                $elevArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Run', '-Interactive', '-Modules', $retryNames)
+                if ($ConfigPath) { $elevArgs += @('-ConfigPath', $ConfigPath) }
+                if ($outputMode) { $elevArgs += @('-OutputMode', $outputMode) }
+                try {
+                    Start-Process -FilePath $psHost -Verb RunAs -ArgumentList $elevArgs -ErrorAction Stop
+                    exit 0
+                } catch {
+                    Write-Host "Administrator elevation was cancelled by user." -ForegroundColor Yellow
                 }
             }
         }
